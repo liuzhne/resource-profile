@@ -589,6 +589,22 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   Bean 仍绕过重试。现已补齐 error handler/retry template 注入与配置级回归测试；YAML 解析通过，
   `SpringAiConfigTest` 与原 AgentLoop 定向测试共 8 项通过；新实现的部署复验待完成。
 
+### GROQ-JSON-MODE-20260904：GPT-OSS 返回不可解析的 ReAct 轮次
+
+- 复现：部署 `e736507` 后，在没有其他任务并发时触发一条真实 Agent 任务；若日志显示连续两轮
+  `parse error` 且终态为 `PARSE_ERROR`/FAILED，同时无 429，则属于输出协议问题。
+- 修复步骤：在 Render agent-service 设置
+  `SPRING_AI_OPENAI_CHAT_OPTIONS_RESPONSE_FORMAT_TYPE=JSON_OBJECT`、
+  `SPRING_AI_OPENAI_CHAT_OPTIONS_REASONING_EFFORT=low`、`LLM_MAX_TOKENS=1200`；确认自定义
+  `SpringAiConfig` 将 response format 和 reasoning effort 写入 `OpenAiChatOptions` 后重新部署。
+- 通过判据：同一学生只触发一条任务；日志不再出现连续 parse error；任务最终为 COMPLETED 或业务允许的
+  REJECTED，且任务详情中的风险分析与干预方案非空。429 可按既有退避恢复，但不得并发重复触发验收任务。
+- 排错：先查任务列表排除重复任务，再分别搜索 `Retry error` 与 `parse error`。若 JSON 仍不可解析，核对
+  Render 环境变量是否随 Blueprint 生效；若输出截断，检查最终 JSON 长度后再调整 token 预算。
+- 回滚：移除三个 Render 环境变量并重新部署即可恢复 TEXT、默认 reasoning 与 2048 tokens；无数据库迁移。
+- 验证状态：2026-09-04 已在线复现任务 7 的单线程 PARSE_ERROR，并核对 Groq 官方 JSON Object Mode
+  能力；配置和测试已更新，部署后线上复验待完成。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -619,3 +635,4 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-03 / GROQ-RUNTIME-CONFIG-20260903 | 增加服务级覆盖、Groq Allowed Models、验证与回滚步骤 | 新 Key 与允许模型均经 Groq 官方接口验证；线上端到端部署验收进行中 |
 | 2026-09-04 / AIVEN-DNS-20260904 | 增加 Aiven DNS 故障复现、凭据核验、验证与回滚步骤 | 原免费服务已恢复 Running；DNS、聚合 health、登录与数据库回读通过 |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
+| 2026-09-04 / GROQ-JSON-MODE-20260904 | 增加 GPT-OSS JSON Object Mode、配额预算与复验步骤 | 线上 PARSE_ERROR 已复现；配置级测试和部署复验待完成 |

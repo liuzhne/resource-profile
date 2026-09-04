@@ -316,6 +316,24 @@
   error handler 先按 `on-http-codes` 把 429 转为 `TransientAiException`，chat model 再由 RetryTemplate 执行
   退避。配置级测试固定两个依赖必须注入；修复后线上复验待完成。
 
+## ADR-025：Groq ReAct 使用 JSON Object Mode
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-04 / GROQ-JSON-MODE-20260904
+- 背景：`e736507` 上线后已确认 429 会进入 Spring AI RetryTemplate；在无并发的任务 7 中，Groq 请求
+  成功但 GPT-OSS 连续两轮未产生可解析的 ReAct JSON，任务以 `PARSE_ERROR` 结束。自由文本提示不足以
+  保证协议语法，同时 2048 最大输出与默认 reasoning 会增加 8,000 TPM 免费额度压力。
+- 选择：仅在 Render Blueprint 为 agent-service 设置 `response_format=json_object`、reasoning effort `low`
+  和 1200 最大输出 tokens；自定义 `SpringAiConfig` 显式把这两个 Spring AI 选项传给 chat model。
+- 原因：Groq 官方声明 GPT-OSS 120B 支持 JSON Object Mode，且项目提示已明确要求 JSON；使用供应商约束
+  解码比继续扩展宽松字符串解析更可靠，降低 reasoning/output 预算也为多轮工具调用保留 TPM 空间。
+- 放弃方案：记录或持久化完整原始模型输出会扩大敏感数据面；切换已下线的 Llama 模型不可行；在解析器
+  猜测并修补任意非 JSON 文本无法提供稳定协议保证；升级付费层不符合当前部署目标。
+- 后果：Render 上的每轮输出必须是 JSON 对象，复杂最终方案受 1200-token 上限约束；本地端点默认保持
+  TEXT 兼容。若最终方案被截断，应先压缩 prompt/schema，再审慎调高预算并重新核算 TPM。
+- 证据：线上任务 7 单线程执行、无 429，却连续两轮 parse error；Groq 官方 API 文档与 GPT-OSS 模型页
+  明确列出 JSON Object Mode。配置级测试覆盖 response format 与 reasoning effort；线上复验待部署后执行。
+
 ## 新决策模板
 
 ```markdown
@@ -346,3 +364,4 @@
 | 2026-09-03 / GROQ-RUNTIME-CONFIG-20260903 | 新增 ADR-022，修正服务级凭据覆盖并采用组织允许模型 | 不扩大 Groq 组织权限；保持 Java/Python 模型一致并固化 Blueprint |
 | 2026-09-04 / AIVEN-DNS-20260904 | 新增 ADR-023，以 Aiven 当前连接信息修复失效 DNS | 不猜测端点、不绕过健康检查，数据库凭据继续仅存 Render secret |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 新增 ADR-024，对 Groq TPM 429 使用有界退避 | 保留完整 AgentLoop 质量；401/403 继续 fail-fast |
+| 2026-09-04 / GROQ-JSON-MODE-20260904 | 新增 ADR-025，Render GPT-OSS 改用 JSON Object Mode 与低推理预算 | 保留 ReAct 主路径；本地 OpenAI 兼容端点维持 TEXT 默认值 |

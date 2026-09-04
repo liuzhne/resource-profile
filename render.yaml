@@ -257,6 +257,12 @@ services:
         value: https://api.groq.com/openai
       - key: SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL
         value: openai/gpt-oss-120b
+      - key: SPRING_AI_OPENAI_CHAT_OPTIONS_RESPONSE_FORMAT_TYPE
+        value: JSON_OBJECT
+      - key: SPRING_AI_OPENAI_CHAT_OPTIONS_REASONING_EFFORT
+        value: low
+      - key: LLM_MAX_TOKENS
+        value: "1200"
       - key: LLM_CACHE_PROMPT_ENABLED
         value: "false"
       - key: SPRING_DATA_REDIS_URL

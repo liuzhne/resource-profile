@@ -246,6 +246,9 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
   15 秒起始、30 秒上限、最多 3 次的指数退避。自定义 `OpenAiApi`/`OpenAiChatModel` Bean 必须显式接入
   自动配置的 `ResponseErrorHandler`/`RetryTemplate`，否则会绕过该策略。AgentLoop、MCP、数据库和安全
   边界均不改变；401/403 仍立即失败，避免掩盖无效凭据或模型权限错误。
+- `GROQ-JSON-MODE-20260904` 为 Render 上的 GPT-OSS ReAct 调用启用 Groq JSON Object Mode，并将
+  reasoning effort 固定为 `low`、单次最大输出限制为 1200 tokens。该配置只约束 LLM 输出协议和免费配额
+  消耗，不改变 AgentLoop、MCP、数据库或安全边界；本地 OpenAI 兼容端点仍默认 TEXT 且不发送 Groq 专用值。
 
 ## 6. 变更原则
 
@@ -269,3 +272,4 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 | 2026-09-03 / GROQ-RUNTIME-CONFIG-20260903 | 修正 Render 服务级占位密钥覆盖，并切换到组织允许的 Groq 模型 | 无架构影响；仅校准外部 LLM 运行配置及环境变量优先级 |
 | 2026-09-04 / AIVEN-DNS-20260904 | 记录 Render 当前 Aiven MySQL 主机名不可解析及端点校验要求 | 无架构影响；数据库仍位于 Aiven，仅外部连接配置待修复 |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 为 Groq 免费层 TPM 429 增加有界重试退避 | 无架构影响；仅增强 agent-service 外部 LLM 调用韧性 |
+| 2026-09-04 / GROQ-JSON-MODE-20260904 | Render GPT-OSS 启用 JSON Object Mode 并收紧推理/输出预算 | 无架构影响；仅强化 ReAct 输出契约并降低免费 TPM 压力 |

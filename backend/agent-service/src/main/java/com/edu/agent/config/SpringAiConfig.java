@@ -4,6 +4,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,6 +34,12 @@ public class SpringAiConfig {
 
     @Value("${spring.ai.openai.chat.options.max-tokens:2048}")
     private Integer maxTokens;
+
+    @Value("${spring.ai.openai.chat.options.response-format.type:TEXT}")
+    private ResponseFormat.Type responseFormatType;
+
+    @Value("${spring.ai.openai.chat.options.reasoning-effort:#{null}}")
+    private String reasoningEffort;
 
     @Value("${educare.llm.cache-prompt.enabled:${LLM_CACHE_PROMPT_ENABLED:true}}")
     private boolean cachePromptEnabled;
@@ -72,11 +79,17 @@ public class SpringAiConfig {
     @Bean
     @Primary
     public OpenAiChatModel openAiChatModel(OpenAiApi openAiApi, RetryTemplate retryTemplate) {
-        OpenAiChatOptions options = OpenAiChatOptions.builder()
+        OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
                 .model(model)
                 .temperature(temperature)
-                .maxTokens(maxTokens)
-                .build();
+                .maxTokens(maxTokens);
+        if (responseFormatType != ResponseFormat.Type.TEXT) {
+            optionsBuilder.responseFormat(ResponseFormat.builder().type(responseFormatType).build());
+        }
+        if (reasoningEffort != null && !reasoningEffort.isBlank()) {
+            optionsBuilder.reasoningEffort(reasoningEffort);
+        }
+        OpenAiChatOptions options = optionsBuilder.build();
         return OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(options)
