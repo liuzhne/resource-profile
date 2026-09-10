@@ -145,3 +145,5 @@ backend/agent-service/src/main/resources/fonts/*.otf
 师生画像系统/
 # 防御性兜底：知识库原始访谈语料目录（若被移动到别处）
 知识库数据/
+# 本地比赛交付材料（计划书 docx / 架构图 / 生成脚本），不纳入版本库
+deliverables/
