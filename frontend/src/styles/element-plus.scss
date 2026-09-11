@@ -110,3 +110,38 @@
 .el-popper.is-light {
   border-radius: var(--radius-lg);
 }
+
+// 分页器：对齐原型的 30px 方块药丸
+.el-pagination {
+  --el-pagination-button-color: var(--text-color-secondary);
+  --el-pagination-hover-color: var(--primary-color);
+  font-weight: 500;
+
+  .el-pager li,
+  .btn-prev,
+  .btn-next {
+    min-width: 30px;
+    height: 30px;
+    line-height: 30px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    transition: all 0.14s ease;
+
+    &:hover {
+      background: var(--fill-hover);
+    }
+
+    &.is-active {
+      background: var(--primary-color);
+      color: #fff;
+      font-weight: 600;
+    }
+  }
+
+  .btn-prev,
+  .btn-next {
+    background: rgba(255, 255, 255, 0.55);
+  }
+}

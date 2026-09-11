@@ -1,173 +1,215 @@
 <template>
-  <div class="page-container">
-    <el-page-header title="教师详情" @back="goBack" />
+  <div>
+    <div class="detail-head">
+      <span class="back-btn" @click="goBack">
+        <el-icon :size="12"><ArrowLeft /></el-icon>返回
+      </span>
+      <span class="detail-title">教师详情</span>
+    </div>
 
-    <el-row :gutter="20" class="detail-content">
-      <el-col :xs="24" :lg="8">
-        <el-card v-loading="loading">
-          <div class="profile-header">
-            <el-avatar :size="100" :src="teacherInfo.avatar" />
-            <h3>{{ teacherInfo.name }}</h3>
-            <p class="subtitle">{{ teacherInfo.dept }} · {{ teacherInfo.title }}</p>
-            <el-tag :type="teacherInfo.status === '在职' ? 'success' : 'info'">
-              {{ teacherInfo.status }}
-            </el-tag>
+    <ChartState
+      :loading="loading"
+      :error="loadError"
+      :empty="!loading && !loadError && !teacherInfo.employeeId"
+      empty-text="未找到该教师"
+      height="320px"
+      @retry="fetchDetail"
+    >
+      <div class="detail-grid">
+        <!-- 左：档案卡 -->
+        <aside class="glass-panel profile-card">
+          <div class="profile-top">
+            <span class="avatar-lg teacher-avatar">{{ initialOf(teacherInfo.name) }}</span>
+            <h3 class="profile-name">{{ teacherInfo.name || '—' }}</h3>
+            <p class="profile-sub">{{ deptTitle }}</p>
+            <span class="profile-tag" :style="statusStyle">{{ teacherInfo.status }}</span>
           </div>
 
-          <el-divider />
-
-          <div class="info-list">
-            <div class="info-item">
-              <span class="label">工号：</span>
-              <span class="value">{{ teacherInfo.employeeId }}</span>
+          <!-- 评教三项后端均未提供，统一显示占位 -->
+          <div class="mini-stats">
+            <div class="mini-stat">
+              <div class="mini-value accent">{{ teacherInfo.evaluationScore }}</div>
+              <div class="mini-label">综合评分</div>
             </div>
-            <div class="info-item">
-              <span class="label">入职时间：</span>
-              <span class="value">{{ teacherInfo.joinDate }}</span>
+            <div class="mini-stat">
+              <div class="mini-value">{{ teacherInfo.evaluationCount }}</div>
+              <div class="mini-label">评价次数</div>
             </div>
-            <div class="info-item">
-              <span class="label">联系电话：</span>
-              <span class="value">{{ teacherInfo.phone }}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">电子邮箱：</span>
-              <span class="value">{{ teacherInfo.email }}</span>
+            <div class="mini-stat">
+              <div class="mini-value">{{ teacherInfo.satisfaction }}</div>
+              <div class="mini-label">满意度</div>
             </div>
           </div>
-        </el-card>
-      </el-col>
 
-      <el-col :xs="24" :lg="16">
-        <el-card v-loading="loading">
-          <el-tabs v-model="activeTab">
-            <el-tab-pane label="基本信息" name="basic">
-              <el-descriptions :column="2" border>
-                <el-descriptions-item label="姓名">{{ teacherInfo.name }}</el-descriptions-item>
-                <el-descriptions-item label="性别">{{ teacherInfo.gender }}</el-descriptions-item>
-                <el-descriptions-item label="出生日期">{{
-                  teacherInfo.birthDate
-                }}</el-descriptions-item>
-                <el-descriptions-item label="政治面貌">{{
-                  teacherInfo.political
-                }}</el-descriptions-item>
-                <el-descriptions-item label="学历" :span="2">{{
-                  teacherInfo.education
-                }}</el-descriptions-item>
-                <el-descriptions-item label="毕业院校" :span="2">{{
-                  teacherInfo.school
-                }}</el-descriptions-item>
-                <el-descriptions-item label="专业方向" :span="2">{{
-                  teacherInfo.major
-                }}</el-descriptions-item>
-                <el-descriptions-item label="研究方向" :span="2">{{
-                  teacherInfo.researchArea
-                }}</el-descriptions-item>
-              </el-descriptions>
-            </el-tab-pane>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="k">工号</span>
+              <span class="v tnum">{{ teacherInfo.employeeId || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="k">入职时间</span>
+              <span class="v tnum">{{ teacherInfo.joinDate || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="k">联系电话</span><span class="v">{{ teacherInfo.phone }}</span>
+            </div>
+            <div class="info-row">
+              <span class="k">电子邮箱</span><span class="v">{{ teacherInfo.email }}</span>
+            </div>
+          </div>
+        </aside>
 
-            <el-tab-pane label="教学成果" name="teaching">
-              <el-timeline>
-                <el-timeline-item
-                  v-for="(item, index) in teachingAchievements"
-                  :key="index"
-                  :timestamp="item.year"
-                  type="primary"
-                >
-                  <h4>{{ item.title }}</h4>
-                  <p>{{ item.description }}</p>
-                </el-timeline-item>
-              </el-timeline>
-            </el-tab-pane>
+        <!-- 右：分页签内容 -->
+        <section class="glass-panel detail-main">
+          <div class="detail-tabs">
+            <div class="seg-control">
+              <button
+                v-for="t in tabs"
+                :key="t.key"
+                type="button"
+                class="seg-item"
+                :class="{ 'is-active': activeTab === t.key }"
+                @click="activeTab = t.key"
+              >
+                {{ t.label }}
+              </button>
+            </div>
+          </div>
 
-            <el-tab-pane label="科研项目" name="research">
-              <el-table :data="researchProjects" stripe>
-                <el-table-column prop="name" label="项目名称" min-width="200" />
-                <el-table-column prop="level" label="级别" width="120" />
-                <el-table-column prop="role" label="角色" width="100" />
-                <el-table-column prop="amount" label="经费" width="120">
-                  <template #default="{ row }"> ¥{{ row.amount }}万 </template>
-                </el-table-column>
-                <el-table-column prop="period" label="周期" width="180" />
-              </el-table>
-            </el-tab-pane>
-
-            <el-tab-pane label="教学评价" name="evaluation">
-              <div class="evaluation-stats">
-                <el-row :gutter="20">
-                  <el-col :span="8">
-                    <div class="stat-item">
-                      <div class="stat-value">{{ teacherInfo.evaluationScore }}</div>
-                      <div class="stat-label">综合评分</div>
-                    </div>
-                  </el-col>
-                  <el-col :span="8">
-                    <div class="stat-item">
-                      <div class="stat-value">{{ teacherInfo.evaluationCount }}</div>
-                      <div class="stat-label">评价次数</div>
-                    </div>
-                  </el-col>
-                  <el-col :span="8">
-                    <div class="stat-item">
-                      <div class="stat-value">{{ teacherInfo.satisfaction }}%</div>
-                      <div class="stat-label">满意度</div>
-                    </div>
-                  </el-col>
-                </el-row>
+          <div class="detail-tab-body">
+            <!-- 基本信息：字段均来自 /teacher/{id} -->
+            <template v-if="activeTab === 'basic'">
+              <div class="section-title">基本信息</div>
+              <div class="basic-grid">
+                <div v-for="f in basicFields" :key="f.k" class="basic-item">
+                  <span class="k">{{ f.k }}</span>
+                  <span class="v">{{ f.v || '—' }}</span>
+                </div>
               </div>
-            </el-tab-pane>
-          </el-tabs>
-        </el-card>
-      </el-col>
-    </el-row>
+              <p v-if="hasMissingBasic" class="no-source missing-note">
+                <el-icon :size="14"><WarningFilled /></el-icon>
+                <span>「政治面貌」在 `teacher_info` 表中无对应字段，接口不返回该项。</span>
+              </p>
+            </template>
+
+            <!-- 教学成果 -->
+            <template v-else-if="activeTab === 'teaching'">
+              <div class="section-title">教学成果</div>
+              <p class="no-source">
+                <el-icon :size="14"><WarningFilled /></el-icon>
+                <span
+                  >教学成果暂无数据来源：`teacher_info` 表与 `/teacher/{id}`
+                  接口均不含该类记录，需后端新增表与接口。</span
+                >
+              </p>
+            </template>
+
+            <!-- 科研项目 -->
+            <template v-else-if="activeTab === 'research'">
+              <div class="section-title">科研项目</div>
+              <p class="no-source">
+                <el-icon :size="14"><WarningFilled /></el-icon>
+                <span>科研项目暂无数据来源，同上。</span>
+              </p>
+            </template>
+
+            <!-- 教学评价 -->
+            <template v-else>
+              <div class="section-title">教学评价</div>
+              <p class="no-source">
+                <el-icon :size="14"><WarningFilled /></el-icon>
+                <span
+                  >评教数据（综合评分 / 评价次数 /
+                  满意度）暂无数据来源，左侧三项统计同样为占位。</span
+                >
+              </p>
+            </template>
+          </div>
+        </section>
+      </div>
+    </ChartState>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ArrowLeft, WarningFilled } from '@element-plus/icons-vue'
 import { getTeacherDetail } from '@/api/teacher'
+import { initialOf } from '@/utils/avatar'
+import ChartState from '@/views/dashboard/components/ChartState.vue'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const route = useRoute()
+
+const tabs = [
+  { key: 'basic', label: '基本信息' },
+  { key: 'teaching', label: '教学成果' },
+  { key: 'research', label: '科研项目' },
+  { key: 'eval', label: '教学评价' }
+]
+
 const activeTab = ref('basic')
 const loading = ref(false)
+const loadError = ref(false)
 
 const teacherInfo = ref({
   name: '',
-  avatar: '',
   dept: '',
   title: '',
-  status: '',
+  status: '—',
   employeeId: '',
   joinDate: '',
-  phone: '',
-  email: '',
-  gender: '',
+  phone: '—',
+  email: '—',
+  gender: '—',
   birthDate: '',
-  political: '',
+  political: '—',
   education: '',
   school: '',
   major: '',
   researchArea: '',
-  evaluationScore: '-',
-  evaluationCount: '-',
-  satisfaction: '-'
+  evaluationScore: '—',
+  evaluationCount: '—',
+  satisfaction: '—'
 })
 
-const teachingAchievements = ref([])
-const researchProjects = ref([])
+const deptTitle = computed(
+  () =>
+    [teacherInfo.value.dept, teacherInfo.value.title].filter((v) => v && v !== '-').join(' · ') ||
+    '—'
+)
+
+const statusStyle = computed(() =>
+  teacherInfo.value.status === '在职'
+    ? { background: 'var(--success-tint)', color: 'var(--success-deep)' }
+    : { background: 'var(--fill-grey)', color: 'var(--fill-grey-fg)' }
+)
+
+const basicFields = computed(() => [
+  { k: '姓名', v: teacherInfo.value.name },
+  { k: '性别', v: teacherInfo.value.gender },
+  { k: '出生日期', v: teacherInfo.value.birthDate },
+  { k: '政治面貌', v: teacherInfo.value.political },
+  { k: '学历', v: teacherInfo.value.education },
+  { k: '毕业院校', v: teacherInfo.value.school },
+  { k: '专业方向', v: teacherInfo.value.major },
+  { k: '研究方向', v: teacherInfo.value.researchArea }
+])
+
+const hasMissingBasic = computed(() => teacherInfo.value.political === '—')
 
 const formatGender = (val) => {
   if (val === 0) return '女'
   if (val === 1) return '男'
-  return '-'
+  return '—'
 }
 
 const formatStatus = (val) => {
   if (val === 0) return '离职'
   if (val === 1) return '在职'
-  return '-'
+  return '—'
 }
 
 const fetchDetail = async () => {
@@ -177,6 +219,7 @@ const fetchDetail = async () => {
     return
   }
   loading.value = true
+  loadError.value = false
   try {
     const res = await getTeacherDetail(id)
     const data = res.data
@@ -186,93 +229,66 @@ const fetchDetail = async () => {
     }
     teacherInfo.value = {
       ...data,
-      dept: data.deptName || '-',
+      dept: data.deptName || '—',
       gender: formatGender(data.gender),
       status: formatStatus(data.status),
-      political: '-',
-      phone: '-',
-      email: '-',
-      evaluationScore: '-',
-      evaluationCount: '-',
-      satisfaction: '-'
+      // 以下字段 teacher_info 表均无，保持占位而非编造
+      political: '—',
+      phone: '—',
+      email: '—',
+      evaluationScore: '—',
+      evaluationCount: '—',
+      satisfaction: '—'
     }
   } catch (error) {
+    loadError.value = true
     ElMessage.error('获取教师详情失败')
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => {
-  fetchDetail()
-})
-
 const goBack = () => {
   router.back()
 }
+
+onMounted(() => {
+  fetchDetail()
+})
 </script>
 
 <style scoped lang="scss">
-.detail-content {
-  margin-top: 20px;
+.teacher-avatar {
+  background: linear-gradient(135deg, #ffc98f, #f5a25a);
 }
 
-.profile-header {
-  text-align: center;
-  padding: 20px 0;
+.basic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0 24px;
 
-  h3 {
-    margin: 16px 0 8px;
-    font-size: 20px;
-  }
-
-  .subtitle {
-    color: rgba(0, 0, 0, 0.45);
-    margin-bottom: 12px;
-  }
-}
-
-.info-list {
-  .info-item {
+  .basic-item {
     display: flex;
-    padding: 12px 0;
-    border-bottom: 1px solid #f0f0f0;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(60, 60, 67, 0.08);
+    font-size: 13px;
 
-    &:last-child {
-      border-bottom: none;
+    .k {
+      color: var(--text-color-secondary);
+      flex-shrink: 0;
     }
 
-    .label {
-      width: 80px;
-      color: rgba(0, 0, 0, 0.45);
-    }
-
-    .value {
-      flex: 1;
-      color: rgba(0, 0, 0, 0.85);
+    .v {
+      color: var(--text-color);
+      text-align: right;
+      overflow-wrap: anywhere;
     }
   }
 }
 
-.evaluation-stats {
-  padding: 20px;
-
-  .stat-item {
-    text-align: center;
-    padding: 20px;
-    background: #f6ffed;
-    border-radius: 8px;
-
-    .stat-value {
-      font-size: 32px;
-      font-weight: 600;
-      color: #52c41a;
-    }
-
-    .stat-label {
-      margin-top: 8px;
-      color: rgba(0, 0, 0, 0.45);
-    }
-  }
+.missing-note {
+  margin-top: 14px;
 }
 </style>

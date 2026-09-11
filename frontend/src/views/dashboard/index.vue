@@ -634,44 +634,6 @@ watch(trendPeriod, () => {
   overflow-x: auto;
 }
 
-.plain-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-
-  th {
-    text-align: left;
-    padding: 0 10px 8px;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: rgba(60, 60, 67, 0.72);
-    border-bottom: 1px solid var(--border-color);
-    white-space: nowrap;
-  }
-
-  td {
-    padding: 11px 10px;
-    border-bottom: 1px solid rgba(60, 60, 67, 0.08);
-    color: var(--text-color-secondary);
-    white-space: nowrap;
-
-    &.strong {
-      color: var(--text-color);
-      font-weight: 500;
-    }
-  }
-
-  tbody tr {
-    transition: background 0.14s;
-
-    &:hover {
-      background: rgba(60, 60, 67, 0.035);
-    }
-  }
-}
-
 /* ---------- 待处理事项 ---------- */
 .todo-body {
   display: flex;

@@ -1,102 +1,137 @@
 <template>
-  <div class="page-container">
-    <el-card>
-      <div class="profile-container">
-        <!-- 左侧信息 -->
-        <div class="profile-sidebar">
-          <div class="avatar-section">
-            <el-avatar :size="120" :src="userInfo.avatar" />
-            <h3>{{ userInfo.name }}</h3>
-            <p class="role">{{ userInfo.role }}</p>
+  <div>
+    <div class="detail-head">
+      <span class="detail-title">我的画像</span>
+    </div>
+
+    <div class="detail-grid">
+      <!-- 左：账号卡 -->
+      <aside class="glass-panel profile-card">
+        <div class="profile-top">
+          <span class="avatar-lg me-avatar">{{ initialOf(displayName) }}</span>
+          <h3 class="profile-name">{{ displayName || '—' }}</h3>
+          <p class="profile-sub">{{ roleLabel }}</p>
+          <span class="profile-tag">{{ userInfo?.username || '—' }}</span>
+        </div>
+
+        <div class="info-rows account-rows">
+          <div class="info-row">
+            <span class="k">用户名</span><span class="v">{{ userInfo?.username || '—' }}</span>
           </div>
+          <div class="info-row">
+            <span class="k">昵称</span><span class="v">{{ userInfo?.nickname || '—' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="k">角色</span><span class="v">{{ roleLabel }}</span>
+          </div>
+          <div class="info-row"><span class="k">邮箱</span><span class="v">—</span></div>
+          <div class="info-row"><span class="k">电话</span><span class="v">—</span></div>
+          <div class="info-row"><span class="k">部门</span><span class="v">—</span></div>
+        </div>
 
-          <el-divider />
+        <p class="no-source">
+          <el-icon :size="14"><WarningFilled /></el-icon>
+          <span>邮箱 / 电话 / 部门在 `/auth/userInfo` 中不返回，暂无数据来源。</span>
+        </p>
+      </aside>
 
-          <div class="info-section">
-            <div class="info-item">
-              <span class="label">用户名</span>
-              <span class="value">{{ userInfo.username }}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">邮箱</span>
-              <span class="value">{{ userInfo.email }}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">电话</span>
-              <span class="value">{{ userInfo.phone }}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">部门</span>
-              <span class="value">{{ userInfo.dept }}</span>
-            </div>
+      <!-- 右：设置 -->
+      <section class="glass-panel detail-main">
+        <div class="detail-tabs">
+          <div class="seg-control">
+            <button
+              v-for="t in tabs"
+              :key="t.key"
+              type="button"
+              class="seg-item"
+              :class="{ 'is-active': activeTab === t.key }"
+              @click="activeTab = t.key"
+            >
+              {{ t.label }}
+            </button>
           </div>
         </div>
 
-        <!-- 右侧内容 -->
-        <div class="profile-content">
-          <el-tabs v-model="activeTab">
-            <el-tab-pane label="基本设置" name="basic">
-              <el-form :model="form" label-width="100px" style="max-width: 500px">
-                <el-form-item label="昵称">
-                  <el-input v-model="form.nickname" />
-                </el-form-item>
-                <el-form-item label="邮箱">
-                  <el-input v-model="form.email" />
-                </el-form-item>
-                <el-form-item label="电话">
-                  <el-input v-model="form.phone" />
-                </el-form-item>
-                <el-form-item label="个人简介">
-                  <el-input v-model="form.bio" type="textarea" :rows="4" />
-                </el-form-item>
-                <el-form-item>
-                  <el-button type="primary">保存</el-button>
-                </el-form-item>
-              </el-form>
-            </el-tab-pane>
+        <div class="detail-tab-body">
+          <template v-if="activeTab === 'basic'">
+            <div class="section-title">基本设置</div>
+            <el-form :model="form" label-position="top" class="settings-form">
+              <el-form-item label="昵称">
+                <el-input v-model="form.nickname" />
+              </el-form-item>
+              <el-form-item label="邮箱">
+                <el-input v-model="form.email" />
+              </el-form-item>
+              <el-form-item label="电话">
+                <el-input v-model="form.phone" />
+              </el-form-item>
+              <el-form-item label="个人简介">
+                <el-input v-model="form.bio" type="textarea" :rows="4" />
+              </el-form-item>
+            </el-form>
+            <el-button type="primary" class="submit-btn" @click="notReady">保存</el-button>
+            <p class="no-source form-note">
+              <el-icon :size="14"><WarningFilled /></el-icon>
+              <span
+                >资料保存暂无接口：`api/auth.js` 仅有 login / userInfo / logout /
+                refresh，无更新资料接口。</span
+              >
+            </p>
+          </template>
 
-            <el-tab-pane label="安全设置" name="security">
-              <el-form :model="passwordForm" label-width="120px" style="max-width: 500px">
-                <el-form-item label="原密码">
-                  <el-input v-model="passwordForm.oldPassword" type="password" />
-                </el-form-item>
-                <el-form-item label="新密码">
-                  <el-input v-model="passwordForm.newPassword" type="password" />
-                </el-form-item>
-                <el-form-item label="确认新密码">
-                  <el-input v-model="passwordForm.confirmPassword" type="password" />
-                </el-form-item>
-                <el-form-item>
-                  <el-button type="primary">修改密码</el-button>
-                </el-form-item>
-              </el-form>
-            </el-tab-pane>
-          </el-tabs>
+          <template v-else>
+            <div class="section-title">安全设置</div>
+            <el-form :model="passwordForm" label-position="top" class="settings-form">
+              <el-form-item label="原密码">
+                <el-input v-model="passwordForm.oldPassword" type="password" show-password />
+              </el-form-item>
+              <el-form-item label="新密码">
+                <el-input v-model="passwordForm.newPassword" type="password" show-password />
+              </el-form-item>
+              <el-form-item label="确认新密码">
+                <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
+              </el-form-item>
+            </el-form>
+            <el-button type="primary" class="submit-btn" @click="notReady">修改密码</el-button>
+            <p class="no-source form-note">
+              <el-icon :size="14"><WarningFilled /></el-icon>
+              <span>修改密码暂无接口，需后端提供后再接入。</span>
+            </p>
+          </template>
         </div>
-      </div>
-    </el-card>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
+import { ElMessage } from 'element-plus'
+import { WarningFilled } from '@element-plus/icons-vue'
+import { useUserStore } from '@/store/modules/user'
+import { initialOf } from '@/utils/avatar'
+
+const userStore = useUserStore()
+
+const tabs = [
+  { key: 'basic', label: '基本设置' },
+  { key: 'security', label: '安全设置' }
+]
 
 const activeTab = ref('basic')
 
-const userInfo = ref({
-  name: '管理员',
-  username: 'admin',
-  role: '系统管理员',
-  avatar: '',
-  email: 'admin@edu.edu.cn',
-  phone: '13800138000',
-  dept: '信息中心'
-})
+// 改版前本页是写死的假数据，此处改读 store 里的真实登录用户
+const userInfo = computed(() => userStore.userInfo)
+const displayName = computed(() => userInfo.value?.nickname || userInfo.value?.username || '')
+
+const roleLabel = computed(
+  () => ({ 0: '系统管理员', 1: '教师', 2: '学生' })[userInfo.value?.userType] || '—'
+)
 
 const form = reactive({
-  nickname: '管理员',
-  email: 'admin@edu.edu.cn',
-  phone: '13800138000',
+  nickname: userInfo.value?.nickname || '',
+  email: '',
+  phone: '',
   bio: ''
 })
 
@@ -105,56 +140,48 @@ const passwordForm = reactive({
   newPassword: '',
   confirmPassword: ''
 })
+
+const notReady = () => {
+  ElMessage.info('该功能暂未开放')
+}
 </script>
 
 <style scoped lang="scss">
-.profile-container {
-  display: flex;
-  gap: 40px;
+.me-avatar {
+  background: linear-gradient(135deg, #a2c9ff, #7aa7f5);
+}
 
-  .profile-sidebar {
-    width: 280px;
-    flex-shrink: 0;
+.account-rows {
+  margin-top: 22px;
+}
 
-    .avatar-section {
-      text-align: center;
-      padding: 20px 0;
+.no-source {
+  margin-top: 16px;
+}
 
-      h3 {
-        margin: 16px 0 8px;
-        font-size: 20px;
-      }
+.settings-form {
+  max-width: 460px;
 
-      .role {
-        color: rgba(0, 0, 0, 0.45);
-      }
-    }
-
-    .info-section {
-      .info-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 12px 0;
-        border-bottom: 1px solid #f0f0f0;
-
-        &:last-child {
-          border-bottom: none;
-        }
-
-        .label {
-          color: rgba(0, 0, 0, 0.45);
-        }
-
-        .value {
-          color: rgba(0, 0, 0, 0.85);
-        }
-      }
-    }
+  :deep(.el-form-item__label) {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-color-secondary);
+    padding-bottom: 6px;
+    line-height: 1;
   }
+}
 
-  .profile-content {
-    flex: 1;
-    padding: 20px 0;
-  }
+.submit-btn {
+  height: 38px;
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: none;
+}
+
+.form-note {
+  margin-top: 16px;
+  max-width: 460px;
 }
 </style>

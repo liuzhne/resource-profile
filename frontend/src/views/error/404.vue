@@ -40,7 +40,7 @@ const goBack = () => {
     .error-code {
       font-size: 120px;
       font-weight: 600;
-      color: #1890ff;
+      color: var(--primary-color);
       margin-bottom: 24px;
       line-height: 1;
     }
