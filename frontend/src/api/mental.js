@@ -21,8 +21,7 @@ export const addQuestion = (questionnaireId, data) =>
   request.post(`/mental/questionnaires/${questionnaireId}/questions`, data)
 export const updateQuestion = (questionId, data) =>
   request.put(`/mental/questions/${questionId}`, data)
-export const deleteQuestion = (questionId) =>
-  request.delete(`/mental/questions/${questionId}`)
+export const deleteQuestion = (questionId) => request.delete(`/mental/questions/${questionId}`)
 
 /* ========== 完成情况（教师/管理员） ========== */
 export const getCompletionList = (questionnaireId) =>
@@ -33,8 +32,7 @@ export const studentListQuestionnaires = (userId) =>
   request.get('/mental/student/questionnaires', { params: { userId } })
 export const studentGetQuestionnaireForTaking = (id) =>
   request.get(`/mental/student/questionnaires/${id}`)
-export const studentSubmitAnswers = (data) =>
-  request.post('/mental/student/assessments', data)
+export const studentSubmitAnswers = (data) => request.post('/mental/student/assessments', data)
 export const studentMyHistory = (userId) =>
   request.get('/mental/student/assessments', { params: { userId } })
 export const studentGetMyAssessment = (userId, assessmentId) =>

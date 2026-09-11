@@ -78,6 +78,34 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
+    @Override
+    public void deleteByQuestionnaireId(Long questionnaireId) {
+        questionMapper.delete(new LambdaQueryWrapper<Question>()
+                .eq(Question::getQuestionnaireId, questionnaireId));
+        syncQuestionCount(questionnaireId);
+    }
+
+    @Override
+    public void saveBatch(Long questionnaireId, List<Question> questions) {
+        if (questions == null || questions.isEmpty()) {
+            syncQuestionCount(questionnaireId);
+            return;
+        }
+        int order = 1;
+        for (Question question : questions) {
+            question.setQuestionnaireId(questionnaireId);
+            if (question.getSortOrder() == null) {
+                question.setSortOrder(order);
+            }
+            if (question.getRequired() == null) {
+                question.setRequired(1);
+            }
+            questionMapper.insert(question);
+            order++;
+        }
+        syncQuestionCount(questionnaireId);
+    }
+
     private void syncQuestionCount(Long questionnaireId) {
         Long count = questionMapper.selectCount(
                 new LambdaQueryWrapper<Question>().eq(Question::getQuestionnaireId, questionnaireId)

@@ -34,7 +34,8 @@
                 :value="i"
                 :label="i"
                 style="display: block; margin: 6px 0"
-              >{{ opt.label }}</el-radio>
+                >{{ opt.label }}</el-radio
+              >
             </el-radio-group>
 
             <!-- 多选 -->
@@ -48,7 +49,8 @@
                 :value="i"
                 :label="i"
                 style="display: block; margin: 6px 0"
-              >{{ opt.label }}</el-checkbox>
+                >{{ opt.label }}</el-checkbox
+              >
             </el-checkbox-group>
 
             <!-- 简答 -->
@@ -61,11 +63,7 @@
             />
 
             <!-- 量表（按文本回退处理，仅展示，不计分） -->
-            <el-input
-              v-else
-              v-model="answers[q.id].text"
-              placeholder="（量表题，请输入数字）"
-            />
+            <el-input v-else v-model="answers[q.id].text" placeholder="（量表题，请输入数字）" />
           </div>
         </div>
 
@@ -97,7 +95,7 @@ const questions = ref<any[]>([])
 const answers = reactive<Record<number, any>>({})
 
 const typeLabel = (t: string) =>
-  ({ single_choice: '单选', multiple_choice: '多选', text: '简答', scale: '量表' } as any)[t] || t
+  (({ single_choice: '单选', multiple_choice: '多选', text: '简答', scale: '量表' }) as any)[t] || t
 
 const parseOpts = (raw: any): any[] => {
   if (!raw) return []
@@ -130,7 +128,10 @@ const handleSubmit = async () => {
   for (const q of questions.value) {
     if (!q.required) continue
     const a = answers[q.id]
-    if (q.questionType === 'single_choice' && (a.singleIndex === null || a.singleIndex === undefined)) {
+    if (
+      q.questionType === 'single_choice' &&
+      (a.singleIndex === null || a.singleIndex === undefined)
+    ) {
       ElMessage.warning(`第 ${q.sortOrder} 题为必答`)
       return
     }
@@ -154,7 +155,8 @@ const handleSubmit = async () => {
     answers: questions.value.map((q: any) => {
       const a = answers[q.id]
       let optionIndices: number[] = []
-      if (q.questionType === 'single_choice' && a.singleIndex !== null) optionIndices = [a.singleIndex]
+      if (q.questionType === 'single_choice' && a.singleIndex !== null)
+        optionIndices = [a.singleIndex]
       else if (q.questionType === 'multiple_choice') optionIndices = a.multiIndices || []
       return {
         questionId: q.id,

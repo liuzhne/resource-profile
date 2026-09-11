@@ -1,6 +1,8 @@
 package com.edu.student.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.edu.common.security.SensitiveField;
+import com.edu.common.security.Sensitivity;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -25,6 +27,7 @@ public class Student {
     private Integer gender;
 
     @TableField("birth_date")
+    @SensitiveField(Sensitivity.HIGH)
     private LocalDate birthDate;
 
     @TableField("dept_id")
@@ -50,8 +53,10 @@ public class Student {
     @TableField("expected_graduation")
     private LocalDate expectedGraduation;
 
+    @SensitiveField(Sensitivity.MEDIUM)
     private BigDecimal gpa;
 
+    @SensitiveField(Sensitivity.MEDIUM)
     private Integer credits;
 
     private Integer status;

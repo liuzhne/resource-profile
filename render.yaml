@@ -1,0 +1,326 @@
+# ==============================================================================
+# Render Blueprint Specification - 免费预览部署
+# Docs: https://render.com/docs/free
+# ==============================================================================
+
+version: "1"
+
+# ------------------------------------------------------------------------------
+# 共享环境变量组（Aiven MySQL 凭据由 Render Dashboard 手工维护，不写入仓库）
+# ------------------------------------------------------------------------------
+envVarGroups:
+  - name: edu-portrait-common-env
+    envVars:
+      - key: MANAGEMENT_HEALTH_REDIS_ENABLED
+        value: "false"
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      # 禁用 Nacos 注册与配置拉取（Render 独立容器运行）
+      - key: SPRING_CLOUD_NACOS_DISCOVERY_ENABLED
+        value: "false"
+      - key: SPRING_CLOUD_NACOS_CONFIG_ENABLED
+        value: "false"
+      - key: SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED
+        value: "false"
+      - key: SPRING_CONFIG_IMPORT
+        value: "optional:classpath:application.yml"
+      # JWT 认证密钥：Render 自动生成强随机 256 位安全密钥
+      - key: JWT_SECRET
+        generateValue: true
+      # MCP 内部通信安全 Token（纵深防御）
+      - key: EDUCARE_MCP_TOKEN
+        generateValue: true
+      # Aiven Free MySQL 强制 TLS；每个微服务最多占 3 条连接，避免耗尽免费实例连接数。
+      - key: MYSQL_SSL_MODE
+        value: REQUIRED
+      - key: DB_MAXIMUM_POOL_SIZE
+        value: "3"
+      - key: DB_MINIMUM_IDLE
+        value: "0"
+      - key: DB_MAX_LIFETIME_MS
+        value: "600000"
+
+services:
+  # ============================================================================
+  # 1. 前端 Vue 3 单页应用 (Render Static Site - 100% 免费全球 CDN)
+  # ============================================================================
+  - type: web
+    name: edu-portrait-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      # 未配置 LLM 供应商前隐藏 AI 预警与 LLM 追踪入口。
+      - key: VITE_AI_ENABLED
+        value: "true"
+    buildFilter:
+      paths:
+        - frontend/**
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://edu-portrait-gateway.onrender.com/*
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /assets/*
+        name: Cache-Control
+        value: "public, max-age=31536000, immutable"
+    autoDeploy: true
+
+  # ============================================================================
+  # 2. 网关服务 (Web Service - 100% 免费层)
+  # ============================================================================
+  - type: web
+    name: edu-portrait-gateway
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.gateway
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8080"
+      - key: SERVER_PORT
+        value: "8080"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+      - key: AUTH_SERVICE_URL
+        value: https://edu-portrait-auth.onrender.com
+      - key: USER_SERVICE_URL
+        value: https://edu-portrait-user.onrender.com
+      - key: TEACHER_SERVICE_URL
+        value: https://edu-portrait-teacher.onrender.com
+      - key: STUDENT_SERVICE_URL
+        value: https://edu-portrait-student.onrender.com
+      - key: MENTAL_SERVICE_URL
+        value: https://edu-portrait-mental.onrender.com
+      - key: DATA_SERVICE_URL
+        value: https://edu-portrait-data.onrender.com
+      - key: AGENT_SERVICE_URL
+        value: https://edu-portrait-agent.onrender.com
+      - key: SPRING_DATA_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: edu-portrait-kv
+          property: connectionString
+    autoDeploy: true
+
+  # ============================================================================
+  # 3. 核心业务微服务群 (Web Services - 100% 免费层)
+  # ============================================================================
+  - type: web
+    name: edu-portrait-auth
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.auth
+    plan: free
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8081"
+      - key: SERVER_PORT
+        value: "8081"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75.0"
+      - key: SPRING_DATA_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: edu-portrait-kv
+          property: connectionString
+    autoDeploy: true
+
+  - type: web
+    name: edu-portrait-user
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.user
+    plan: free
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8082"
+      - key: SERVER_PORT
+        value: "8082"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75.0"
+    autoDeploy: true
+
+  - type: web
+    name: edu-portrait-teacher
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.teacher
+    plan: free
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8083"
+      - key: SERVER_PORT
+        value: "8083"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75.0"
+    autoDeploy: true
+
+  - type: web
+    name: edu-portrait-student
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.student
+    plan: free
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8084"
+      - key: SERVER_PORT
+        value: "8084"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75.0"
+    autoDeploy: true
+
+  - type: web
+    name: edu-portrait-mental
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.mental
+    plan: free
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8085"
+      - key: SERVER_PORT
+        value: "8085"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75.0"
+    autoDeploy: true
+
+  - type: web
+    name: edu-portrait-data
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.data
+    plan: free
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8086"
+      - key: SERVER_PORT
+        value: "8086"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75.0"
+    autoDeploy: true
+
+  # ============================================================================
+  # 4. EduCare Agent 智能编排与 MCP 节点 (100% 免费层)
+  # ============================================================================
+  - type: web
+    name: edu-portrait-agent
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.agent
+    plan: free
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8087"
+      - key: SERVER_PORT
+        value: "8087"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75.0"
+      - key: MCP_STUDENT_DATA_URL
+        value: https://edu-portrait-mcp-student.onrender.com
+      - key: MCP_KNOWLEDGE_RAG_URL
+        value: https://edu-portrait-ai-inference.onrender.com
+      - key: MCP_KNOWLEDGE_RAG_ENDPOINT
+        value: /mcp/
+      - key: STUDENT_SERVICE_URL
+        value: https://edu-portrait-student.onrender.com
+      - key: MENTAL_SERVICE_URL
+        value: https://edu-portrait-mental.onrender.com
+      - key: DATA_SERVICE_URL
+        value: https://edu-portrait-data.onrender.com
+      - key: AI_INFERENCE_URL
+        value: https://edu-portrait-ai-inference.onrender.com
+      - key: MCP_CLIENT_REQUEST_TIMEOUT
+        value: 120s
+      - key: EDUCARE_AGENT_LOOP_ENABLED
+        value: "true"
+      - key: SPRING_AI_MCP_CLIENT_ENABLED
+        value: "true"
+      - key: SPRING_AI_OPENAI_BASE_URL
+        value: https://api.groq.com/openai
+      - key: SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL
+        value: openai/gpt-oss-120b
+      - key: SPRING_AI_OPENAI_CHAT_OPTIONS_RESPONSE_FORMAT_TYPE
+        value: JSON_OBJECT
+      - key: SPRING_AI_OPENAI_CHAT_OPTIONS_REASONING_EFFORT
+        value: low
+      - key: LLM_MAX_TOKENS
+        value: "1200"
+      - key: LLM_CACHE_PROMPT_ENABLED
+        value: "false"
+      - key: SPRING_DATA_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: edu-portrait-kv
+          property: connectionString
+    autoDeploy: true
+
+  - type: web
+    name: edu-portrait-mcp-student
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.mcp-student-data
+    plan: free
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8094"
+      - key: SERVER_PORT
+        value: "8094"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75.0"
+      - key: STUDENT_SERVICE_URL
+        value: https://edu-portrait-student.onrender.com
+      - key: MENTAL_SERVICE_URL
+        value: https://edu-portrait-mental.onrender.com
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+
+  - type: web
+    name: edu-portrait-ai-inference
+    runtime: docker
+    dockerContext: ./ai-inference-service
+    dockerfilePath: ./ai-inference-service/Dockerfile
+    plan: free
+    envVars:
+      - fromGroup: edu-portrait-common-env
+      - key: PORT
+        value: "8090"
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: LLM_MODEL
+        value: openai/gpt-oss-120b
+      - key: LLM_CACHE_PROMPT_ENABLED
+        value: "false"
+      - key: RERANKER_ENABLED
+        value: "false"
+    healthCheckPath: /health
+    autoDeploy: true
+
+  # ============================================================================
+  # 5. 基础设施：Render 托管 Key Value（MySQL 使用外部 Aiven Free MySQL）
+  # ============================================================================
+  - type: keyvalue
+    name: edu-portrait-kv
+    plan: free
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+    persistenceMode: off

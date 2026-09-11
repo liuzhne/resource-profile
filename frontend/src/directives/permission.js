@@ -1,16 +1,22 @@
 /**
- * v-permission 指令 + usePermission 组合式 API（E-5：前端二次脱敏）
+ * v-permission 指令 + usePermission 组合式 API
  *
- * 用法：
+ * <p><b>语义（G-2.2 后）</b>：这是一个 UX 隐藏指令，<b>不是</b>安全防线。
+ * 实际的字段级权限由后端 `FieldPermissionAdvice`（common 模块）在响应序列化前
+ * 把无权限字段置 null。本指令的作用仅限于：
+ *   - 不渲染"明显属于其他角色"的 UI 区块（按钮/卡片），避免出现 null/空值占位
+ *   - 让无权限用户看不到"按钮但点不动"等令人困惑的状态
+ *
+ * <p>用法：
  *   <span v-permission="['psychologist','admin']">原始得分: {{ row.score }}</span>
  *   <el-table-column v-if="hasRole(['psychologist','admin'])" prop="score" label="得分" />
  *
- * 命中策略：
- *   - 取 useUserStore().userRoles，用户角色与 binding 数组取交集
- *   - 没命中则把元素从 DOM 中移除（而非 display:none），避免 devtools 翻看
- *   - binding 为空 / 非数组：警告并默认拒绝（fail-secure）
+ * <p>命中策略：
+ *   - 取 useUserStore().userRoles（由后端 /auth/user-info 返回的 roles），与 binding 数组取交集
+ *   - 没命中则 detach DOM（而非 display:none），让 devtools 也看不到模板
+ *   - binding 为空 / 非数组：警告并默认拒绝（保守降级，与后端 advice 行为一致）
  *
- * 注意：仅作前端二次防线，后端 mental-service 已对原始问卷答案做接口层鉴权。
+ * <p>验收：见 docs/educare/FIELD_PERMISSION_VERIFY.md 的 5 角色矩阵测试。
  */
 import { useUserStore } from '@/store/modules/user'
 
@@ -66,7 +72,7 @@ export const permission = {
 /** 在 setup 中用 v-if / 计算属性的场景。 */
 export const usePermission = () => {
   const hasRole = (allowed) => {
-    const list = Array.isArray(allowed) ? allowed : (allowed ? [allowed] : PRIVILEGED_FALLBACK)
+    const list = Array.isArray(allowed) ? allowed : allowed ? [allowed] : PRIVILEGED_FALLBACK
     return hasAnyRole(list)
   }
   return { hasRole }

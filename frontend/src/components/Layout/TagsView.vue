@@ -43,17 +43,17 @@ const isAffix = (tag: TagView) => {
 }
 
 const addView = (view: RouteLocationNormalized) => {
-  if (visitedViews.value.some(v => v.path === view.path)) return
+  if (visitedViews.value.some((v) => v.path === view.path)) return
 
   visitedViews.value.push({
     name: view.name as string,
     path: view.path,
-    title: view.meta.title as string || 'no-name'
+    title: (view.meta.title as string) || 'no-name'
   })
 }
 
 const closeSelectedTag = (view: TagView) => {
-  const index = visitedViews.value.findIndex(v => v.path === view.path)
+  const index = visitedViews.value.findIndex((v) => v.path === view.path)
   visitedViews.value.splice(index, 1)
 
   if (isActive(view)) {
@@ -66,9 +66,13 @@ const closeSelectedTag = (view: TagView) => {
   }
 }
 
-watch(() => route.path, () => {
-  addView(route)
-}, { immediate: true })
+watch(
+  () => route.path,
+  () => {
+    addView(route)
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped lang="scss">

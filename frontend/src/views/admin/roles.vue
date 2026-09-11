@@ -8,7 +8,7 @@
         </div>
       </template>
 
-      <el-table :data="roleList" stripe v-loading="loading">
+      <el-table v-loading="loading" :data="roleList" stripe>
         <el-table-column type="index" width="50" />
         <el-table-column prop="name" label="角色名称" />
         <el-table-column prop="code" label="角色编码" />
@@ -26,11 +26,7 @@
     </el-card>
 
     <!-- 权限设置对话框 -->
-    <el-dialog
-      v-model="permissionDialogVisible"
-      title="权限设置"
-      width="600px"
-    >
+    <el-dialog v-model="permissionDialogVisible" title="权限设置" width="600px">
       <el-tree
         ref="permissionTree"
         :data="permissionData"
@@ -125,7 +121,7 @@ const permissionData = ref([
   }
 ])
 
-const handlePermission = (row: any) => {
+const handlePermission = (_row: any) => {
   permissionDialogVisible.value = true
 }
 </script>

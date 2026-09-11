@@ -45,6 +45,12 @@ request.interceptors.response.use(
     return res
   },
   (error) => {
+    // HTTP 401（网关 JwtAuthGlobalFilter 拒绝：未登录/过期/登出后旧 token）→ 自动登出。
+    // 注意：业务层 401（body code===401）在上面的成功分支处理；这里专门兜 HTTP 状态码 401。
+    if (error.response?.status === 401) {
+      const userStore = useUserStore()
+      userStore.logout()
+    }
     const message = error.response?.data?.message || error.message || '网络错误'
     ElMessage.error(message)
     return Promise.reject(error)

@@ -4,13 +4,22 @@
       <template #header>
         <div class="card-header">
           <span>我的问卷</span>
-          <el-button link type="primary" @click="$router.push('/student-mental/history')">查看历史评估</el-button>
+          <el-button link type="primary" @click="$router.push('/student-mental/history')"
+            >查看历史评估</el-button
+          >
         </div>
       </template>
 
       <el-empty v-if="!loading && list.length === 0" description="当前没有可作答的问卷" />
-      <el-row v-else :gutter="16" v-loading="loading">
-        <el-col v-for="item in list" :key="item.id" :xs="24" :sm="12" :md="8" style="margin-bottom: 16px">
+      <el-row v-else v-loading="loading" :gutter="16">
+        <el-col
+          v-for="item in list"
+          :key="item.id"
+          :xs="24"
+          :sm="12"
+          :md="8"
+          style="margin-bottom: 16px"
+        >
           <el-card shadow="hover" class="q-card">
             <div class="q-title">{{ item.title }}</div>
             <div class="q-meta">
@@ -18,9 +27,7 @@
               <span>共 {{ item.questions }} 题</span>
             </div>
             <div class="q-desc">{{ item.description || '（无描述）' }}</div>
-            <div class="q-time">
-              {{ item.startTime || '不限' }} ~ {{ item.endTime || '不限' }}
-            </div>
+            <div class="q-time">{{ item.startTime || '不限' }} ~ {{ item.endTime || '不限' }}</div>
             <div class="q-actions">
               <el-tag v-if="item.answered" type="success">已作答</el-tag>
               <el-tag v-else-if="!item.inWindow" type="info">不在作答时间</el-tag>
@@ -29,12 +36,11 @@
                 type="primary"
                 size="small"
                 @click="goTake(item.id)"
-              >去作答</el-button>
-              <el-button
-                v-if="item.answered"
-                size="small"
-                @click="findAndOpenResult(item.id)"
-              >查看结果</el-button>
+                >去作答</el-button
+              >
+              <el-button v-if="item.answered" size="small" @click="findAndOpenResult(item.id)"
+                >查看结果</el-button
+              >
             </div>
           </el-card>
         </el-col>

@@ -9,7 +9,7 @@
       </template>
 
       <el-empty v-if="!loading && rows.length === 0" description="暂无评估记录" />
-      <el-table v-else :data="rows" stripe v-loading="loading">
+      <el-table v-else v-loading="loading" :data="rows" stripe>
         <el-table-column type="index" width="50" />
         <el-table-column prop="questionnaireId" label="问卷ID" width="100" />
         <el-table-column prop="score" label="得分" width="100" />
@@ -22,7 +22,9 @@
         <el-table-column prop="createTime" label="评估时间" width="180" />
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="$router.push(`/student-mental/result/${row.id}`)">查看</el-button>
+            <el-button link type="primary" @click="$router.push(`/student-mental/result/${row.id}`)"
+              >查看</el-button
+            >
           </template>
         </el-table-column>
       </el-table>
@@ -40,7 +42,8 @@ const loading = ref(false)
 const rows = ref<any[]>([])
 
 const levelTagColor = (l: string) =>
-  ({ 正常: 'success', 轻度: '', 中度: 'warning', 重度: 'danger', 高危: 'danger' } as any)[l] || 'info'
+  (({ 正常: 'success', 轻度: '', 中度: 'warning', 重度: 'danger', 高危: 'danger' }) as any)[l] ||
+  'info'
 
 const fetchData = async () => {
   loading.value = true

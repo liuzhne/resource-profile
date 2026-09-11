@@ -56,7 +56,7 @@ const data = ref<any>(null)
 const questions = ref<any[]>([])
 
 const typeLabel = (t: string) =>
-  ({ single_choice: '单选', multiple_choice: '多选', text: '简答', scale: '量表' } as any)[t] || t
+  (({ single_choice: '单选', multiple_choice: '多选', text: '简答', scale: '量表' }) as any)[t] || t
 
 const parseOpts = (raw: any): any[] => {
   if (!raw) return []
@@ -77,9 +77,7 @@ const answerView = computed(() => {
   return questions.value.map((q: any) => {
     const a = map[q.id] || {}
     const opts = parseOpts(q.options)
-    const labels = (a.optionIndices || [])
-      .map((idx: number) => opts[idx]?.label)
-      .filter(Boolean)
+    const labels = (a.optionIndices || []).map((idx: number) => opts[idx]?.label).filter(Boolean)
     return {
       content: q.content,
       questionType: q.questionType,
@@ -91,7 +89,17 @@ const answerView = computed(() => {
 
 const bannerClass = computed(() => {
   const lvl = data.value?.assessment?.level
-  return ({ 正常: 'lvl-good', 轻度: 'lvl-mild', 中度: 'lvl-warn', 重度: 'lvl-danger', 高危: 'lvl-danger' } as any)[lvl] || ''
+  return (
+    (
+      {
+        正常: 'lvl-good',
+        轻度: 'lvl-mild',
+        中度: 'lvl-warn',
+        重度: 'lvl-danger',
+        高危: 'lvl-danger'
+      } as any
+    )[lvl] || ''
+  )
 })
 
 const fetchData = async () => {
@@ -155,10 +163,30 @@ onMounted(fetchData)
       margin-bottom: 4px;
     }
   }
-  &.lvl-good { background: #f0f9eb; .level .num { color: #67c23a } }
-  &.lvl-mild { background: #ecf5ff; .level .num { color: #409eff } }
-  &.lvl-warn { background: #fdf6ec; .level .num { color: #e6a23c } }
-  &.lvl-danger { background: #fef0f0; .level .num { color: #f56c6c } }
+  &.lvl-good {
+    background: #f0f9eb;
+    .level .num {
+      color: #67c23a;
+    }
+  }
+  &.lvl-mild {
+    background: #ecf5ff;
+    .level .num {
+      color: #409eff;
+    }
+  }
+  &.lvl-warn {
+    background: #fdf6ec;
+    .level .num {
+      color: #e6a23c;
+    }
+  }
+  &.lvl-danger {
+    background: #fef0f0;
+    .level .num {
+      color: #f56c6c;
+    }
+  }
 }
 .q-block {
   padding: 10px 0;
@@ -168,7 +196,10 @@ onMounted(fetchData)
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 6px;
-  .num { color: var(--el-color-primary); margin-right: 4px; }
+  .num {
+    color: var(--el-color-primary);
+    margin-right: 4px;
+  }
 }
 .q-answer {
   padding-left: 20px;

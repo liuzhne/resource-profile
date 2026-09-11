@@ -33,13 +33,15 @@
       </el-form>
 
       <!-- 表格 -->
-      <el-table :data="userList" stripe v-loading="loading">
+      <el-table v-loading="loading" :data="userList" stripe>
         <el-table-column type="index" width="50" />
         <el-table-column prop="username" label="用户名" />
         <el-table-column prop="nickname" label="昵称" />
         <el-table-column prop="role" label="角色">
           <template #default="{ row }">
-            <el-tag :type="row.role === 'admin' ? 'danger' : row.role === 'teacher' ? 'success' : ''">
+            <el-tag
+              :type="row.role === 'admin' ? 'danger' : row.role === 'teacher' ? 'success' : ''"
+            >
               {{ row.roleText }}
             </el-tag>
           </template>
@@ -53,7 +55,7 @@
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="160" />
         <el-table-column label="操作" width="150" fixed="right">
-          <template #default="{ row }">
+          <template #default>
             <el-button link type="primary">编辑</el-button>
             <el-button link type="danger">删除</el-button>
           </template>
@@ -62,9 +64,9 @@
 
       <!-- 分页 -->
       <el-pagination
-        class="pagination"
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
+        class="pagination"
         :page-sizes="[10, 20, 50, 100]"
         :total="total"
         layout="total, sizes, prev, pager, next, jumper"

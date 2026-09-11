@@ -7,8 +7,8 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-@SpringBootApplication(    exclude = {
-        org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration.class
+@SpringBootApplication(exclude = {
+        org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration.class
 })
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = "com.edu.agent.feign")

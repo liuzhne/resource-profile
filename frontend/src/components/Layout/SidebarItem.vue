@@ -48,7 +48,7 @@ const props = defineProps({
 const onlyOneChild = ref(null)
 
 const hasOneShowingChild = (children = [], parent) => {
-  const showingChildren = children.filter(item => !item.meta?.hidden)
+  const showingChildren = children.filter((item) => !item.meta?.hidden)
 
   // 没有子菜单，显示父菜单
   if (showingChildren.length === 0) {

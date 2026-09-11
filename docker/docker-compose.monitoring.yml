@@ -1,0 +1,54 @@
+# ============================================================
+# 监控覆盖层：Prometheus 抓取 /actuator/prometheus + Grafana 看板/告警。
+# profile 门控（默认不起，resume 场景可不开）。
+#
+# 用法（在 docker/ 目录，需与基础 compose 一起）：
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml --profile monitoring up -d
+#   Grafana → http://localhost:3000（默认 admin/admin，首登强制改密；或经 GRAFANA_ADMIN_PASSWORD 覆盖）
+#   Prometheus → http://localhost:9090
+# 两者仅绑 127.0.0.1，不对公网暴露。
+# ============================================================
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: edu-portrait-prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - edu-network
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: edu-portrait-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - edu-network
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

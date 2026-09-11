@@ -10,8 +10,12 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -23,12 +27,19 @@ public class JwtUtil {
 
     @PostConstruct
     public void init() {
-        // 从配置中读取密钥
+        // A5：密钥 fail-fast —— 不留可预测默认，缺失/过弱即拒绝启动（清晰报错，胜过 jjwt 的 WeakKeyException）。
         String secret = jwtProperties.getSecret();
-        if (secret == null || secret.isEmpty()) {
-            throw new IllegalStateException("JWT secret must be configured. Please set jwt.secret in configuration.");
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "JWT 密钥未配置：请设置 JWT_SECRET 环境变量（或 Nacos jwt.secret），长度 ≥ 32 字符。");
         }
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length < 32) {
+            throw new IllegalStateException(
+                    "JWT 密钥强度不足：HS256 要求 ≥ 256 位（≥ 32 字节），当前 " + bytes.length
+                            + " 字节。请设置更长的 JWT_SECRET。");
+        }
+        this.key = Keys.hmacShaKeyFor(bytes);
     }
 
     /**
@@ -76,16 +87,17 @@ public class JwtUtil {
                     .parseSignedClaims(token)
                     .getPayload();
         } catch (ExpiredJwtException e) {
-            log.error("Token已过期: {}", e.getMessage());
+            // 过期是预期的用户行为（24h 失效），不是系统错误。降到 debug 避免污染 ERROR 日志。
+            log.debug("Token已过期: {}", e.getMessage());
             throw e;
         } catch (UnsupportedJwtException e) {
-            log.error("Token格式错误: {}", e.getMessage());
+            log.warn("Token格式错误: {}", e.getMessage());
             throw e;
         } catch (MalformedJwtException e) {
-            log.error("Token非法: {}", e.getMessage());
+            log.warn("Token非法: {}", e.getMessage());
             throw e;
         } catch (Exception e) {
-            log.error("Token解析失败: {}", e.getMessage());
+            log.warn("Token解析失败: {}", e.getMessage());
             throw e;
         }
     }
@@ -133,5 +145,26 @@ public class JwtUtil {
     public boolean isTokenExpired(String token) {
         Date expiration = getExpiration(token);
         return expiration.before(new Date(System.currentTimeMillis() + 30 * 60 * 1000));
+    }
+
+    /**
+     * G-2.2-b：从 token 中解析 {@code roles} claim（auth-service 登录时写入的字符串数组）。
+     * Token 缺失该 claim、解析失败或值非集合时返回空集合（调用方按"无角色"处理，
+     * {@link com.edu.common.security.FieldPermissionAdvice} 会回退到最低权限）。
+     */
+    public Set<String> parseRoles(String token) {
+        try {
+            Claims claims = parseToken(token);
+            Object raw = claims.get("roles");
+            if (raw instanceof Collection<?> coll) {
+                return coll.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .map(Object::toString)
+                        .collect(Collectors.toUnmodifiableSet());
+            }
+        } catch (Exception e) {
+            log.debug("parseRoles 失败: {}", e.getMessage());
+        }
+        return Collections.emptySet();
     }
 }

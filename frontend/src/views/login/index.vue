@@ -51,7 +51,7 @@
       </el-form>
 
       <div class="login-footer">
-        <p>默认账号：admin / 123456</p>
+        <p>默认账号：admin / admin</p>
       </div>
     </div>
   </div>
@@ -69,18 +69,13 @@ const loginFormRef = ref()
 
 const loginForm = reactive({
   username: 'admin',
-  password: '123456',
+  password: 'admin',
   remember: false
 })
 
 const loginRules = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' }
-  ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
-  ]
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
 const handleLogin = async () => {

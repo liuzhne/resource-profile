@@ -8,7 +8,7 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 
 ## EduCare 子系统路线图
 
-The AI subsystem (agent-service + ai-inference-service + Multi-Agent + RAG + 本地 LLM) is tracked in **`docs/educare/ROADMAP.md`** — single source of truth for phase status (A/B/C0/C/D done; E pending), stage task lists, end-to-end startup commands, and known gotchas. **Read it first** instead of grepping git log or prior session jsonls. After finishing a stage, update the progress board and any leftover task lists in that file.
+The AI subsystem (agent-service + ai-inference-service + Multi-Agent + RAG + 本地 LLM) is tracked in **`docs/educare/EXECUTION_PLAN.md`** — single source of truth for Phase G/H/I 的可执行原子任务清单、§1 下一步指针、§6 变更记录、§8 已知阻塞。当前状态：Phase G 代码侧基本完成（仅 G-2.3/G-3.4 待用户实跑验证），Phase H 启动中（H-1.1 完成，下一步 H-1.2 student-data MCP server），Phase I 储备。设计源（决策依据）见 `docs/educare/IMPROVEMENT_2026_MAY.md` (v1.1, 2026-05-12 拍板)。**Read EXECUTION_PLAN.md first** instead of grepping git log or prior session jsonls. After finishing an atomic task, follow §0 Update Protocol: 勾选 + 追加 `完成于 YYYY-MM-DD：备注` 行 + 更新 §1 指针 + 顶部"最近更新"。
 
 ## Architecture
 
@@ -28,7 +28,7 @@ The Java side handles business logic, persistence, and orchestration. AI calls g
 **Spring Boot:** 3.2.5
 **Spring Cloud:** 2023.0.1
 **Spring Cloud Alibaba:** 2023.0.1.0
-**Spring AI:** 1.0.0-M6 (milestone repo `https://repo.spring.io/milestone` declared in parent POM)
+**Spring AI:** 1.1.6 (GA, on Maven Central — no milestone repo needed)
 
 **Microservices Modules:**
 
@@ -105,13 +105,15 @@ Global CORS is configured on the gateway (`allowedOrigins: "*"`).
 - Secret configured via `jwt.secret` (reads `JWT_SECRET` env var if mapped)
 - On login: tokens generated, access token stored in Redis as `token:{userId}` with 24h TTL
 - Frontend sends `Authorization: Bearer {token}` header
-- Auth endpoints (`/auth/**`) are public; all other requests require authentication (enforced by Spring Security in auth-service)
+- Auth endpoints (`/auth/**`) are public; all other requests require authentication, **enforced at the gateway by `JwtAuthGlobalFilter`** (validates JWT signature + expiry, then checks the Redis session whitelist `token:{userId}` so logout/password-change revokes old tokens → 401 on failure; accepts `Authorization: Bearer` or `?token=` for SSE; `**/_internal/**` paths → 403; toggles `educare.gateway.auth.enabled` / `educare.gateway.auth.check-session`, both default on). `auth-service`'s own Spring Security only protects auth-service itself.
+- **Horizontal authorization (IDOR)** is enforced per-endpoint via `common`'s `AccessGuard.allowSelfRoleOrInternal` (self or privileged staff role; tokenless internal Feign calls trusted) across student/mental/agent/data controllers.
+- **Field-level permission** (`@SensitiveField` + `FieldPermissionAdvice`, `educare.field-permission.enabled`) **defaults on**: filters response fields by role for token-bearing end-user requests; tokenless internal Feign calls pass through unmasked (so the AI portrait chain keeps full data). See `docs/educare/FIELD_PERMISSION.md`.
 
 ## agent-service — AI Orchestration
 
 `agent-service` is the bridge between business services and LLM/RAG capabilities.
 
-- **Spring AI ChatClient** (configured in `SpringAiConfig`) is wired against an OpenAI-compatible endpoint set by `spring.ai.openai.base-url` (defaults to `http://host.docker.internal:8091` — i.e., a llama.cpp / vLLM server running on the host) with model `qwen2.5-32b-instruct-q4_k_m`. Use the fluent API: `chatClient.prompt().system(...).user(...).call().content()` or `.entity(Class)` for structured output (see `RiskAnalyzeService`).
+- **Spring AI ChatClient** (configured in `SpringAiConfig`, single local `@Primary` bean) is wired against an OpenAI-compatible endpoint set by `spring.ai.openai.base-url` (defaults to `http://host.docker.internal:8091` — i.e., a llama.cpp / vLLM server running on the host) with model from `spring.ai.openai.chat.options.model` (default `qwen2.5-14b`). Use the fluent API: `chatClient.prompt().system(...).user(...).call().content()` or `.entity(Class)` for structured output (see `RiskAnalyzeService`).
 - **Feign client** `AiInferenceClient` (`name = "ai-inference-service"`, URL `${ai.inference.url:http://host.docker.internal:8090}`) calls into the Python service for `/api/v1/agent/risk`, `/api/v1/rag/retrieve`, `/api/v1/agent/plan`, and `/api/v1/agent/audit`. Use this when the call needs vector search or LangChain-side logic; use `ChatClient` directly for plain LLM calls.
 - Async work is dispatched via the executor in `AsyncConfig`.
 - MyBatis-Plus auto-fill is wired in `MyMetaObjectHandler`.
@@ -214,7 +216,7 @@ mvn -pl <module> test -Dtest=ClassName
 mvn -pl <module> test -Dtest=ClassName#methodName
 ```
 
-Note: Spring AI 1.0.0-M6 is on the Spring milestone repo, declared in the parent `pom.xml`. A first-time `mvn clean install` will fetch from `repo.spring.io/milestone`.
+Note: Spring AI 1.1.6 is GA on Maven Central — no milestone repo needed (the `repo.spring.io/milestone` declaration was removed when upgrading off 1.0.0-M6).
 
 **Frontend (npm):**
 ```bash

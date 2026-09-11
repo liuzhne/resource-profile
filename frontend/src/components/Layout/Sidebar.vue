@@ -17,10 +17,10 @@
         active-text-color="#fff"
       >
         <SidebarItem
-          v-for="route in menuRoutes"
-          :key="route.path"
-          :item="route"
-          :base-path="route.path"
+          v-for="menuRoute in menuRoutes"
+          :key="menuRoute.path"
+          :item="menuRoute"
+          :base-path="menuRoute.path"
         />
       </el-menu>
     </el-scrollbar>
@@ -58,8 +58,8 @@ const matchRole = (meta) => {
 
 // 提取 Layout 路由下的 children 作为菜单数据源
 const menuRoutes = computed(() => {
-  const layoutRoute = routes.find(r => r.path === '/')
-  return (layoutRoute?.children || []).filter(r => !r.meta?.hidden && matchRole(r.meta))
+  const layoutRoute = routes.find((r) => r.path === '/')
+  return (layoutRoute?.children || []).filter((r) => !r.meta?.hidden && matchRole(r.meta))
 })
 </script>
 

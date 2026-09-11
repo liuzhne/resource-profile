@@ -1,5 +1,6 @@
 package com.edu.agent.feign;
 
+import com.edu.agent.feign.fallback.MentalServiceClientFallbackFactory;
 import com.edu.common.result.Result;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,7 +16,11 @@ import java.util.Map;
  * 当前调用全校分析接口，尝试从中提取该学生指标。
  * 建议后续在 mental-service 中补充：GET /mental/record/{studentId}
  */
-@FeignClient(name = "mental-service")
+@FeignClient(
+        name = "mental-service",
+        url = "${MENTAL_SERVICE_URL:}",
+        fallbackFactory = MentalServiceClientFallbackFactory.class
+)
 public interface MentalServiceClient {
 
     /**

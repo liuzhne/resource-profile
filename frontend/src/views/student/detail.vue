@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <el-page-header @back="goBack" title="学生详情" />
+    <el-page-header title="学生详情" @back="goBack" />
 
     <el-row :gutter="20" class="detail-content">
       <el-col :xs="24" :lg="8">
@@ -95,12 +95,15 @@
 
             <el-tab-pane label="心理健康" name="mental">
               <el-descriptions :column="2" border>
-                <el-descriptions-item label="最近测评">{{ studentInfo.lastMentalTest }}</el-descriptions-item>
+                <el-descriptions-item label="最近测评">{{
+                  studentInfo.lastMentalTest
+                }}</el-descriptions-item>
                 <el-descriptions-item label="测评结果">
                   <el-tag type="success">{{ studentInfo.mentalStatus }}</el-tag>
                 </el-descriptions-item>
-                <el-descriptions-item label="辅导员关注" :span="2"
-                  >{{ studentInfo.counselorNotes || '无' }}</el-descriptions-item>
+                <el-descriptions-item label="辅导员关注" :span="2">{{
+                  studentInfo.counselorNotes || '无'
+                }}</el-descriptions-item>
               </el-descriptions>
             </el-tab-pane>
           </el-tabs>

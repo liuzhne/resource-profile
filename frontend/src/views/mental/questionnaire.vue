@@ -8,7 +8,7 @@
         </div>
       </template>
 
-      <el-table :data="questionnaires" stripe v-loading="loading">
+      <el-table v-loading="loading" :data="questionnaires" stripe>
         <el-table-column type="index" width="50" />
         <el-table-column prop="title" label="问卷标题" min-width="200" />
         <el-table-column prop="type" label="类型" width="120">
@@ -24,8 +24,9 @@
         </el-table-column>
         <el-table-column prop="startTime" label="开始时间" width="120" />
         <el-table-column prop="endTime" label="结束时间" width="120" />
-        <el-table-column label="操作" width="320" fixed="right">
+        <el-table-column label="操作" width="380" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" @click="handleView(row)">查看</el-button>
             <el-button link type="primary" @click="handleDesign(row)">设计题目</el-button>
             <el-button link type="primary" @click="handleResult(row)">完成情况</el-button>
             <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
@@ -87,7 +88,7 @@
 
     <!-- 查看对话框 -->
     <el-dialog v-model="viewDialogVisible" title="问卷详情" width="500px">
-      <el-descriptions :column="1" border v-if="viewData">
+      <el-descriptions v-if="viewData" :column="1" border>
         <el-descriptions-item label="问卷标题">{{ viewData.title }}</el-descriptions-item>
         <el-descriptions-item label="问卷类型">{{ viewData.type }}</el-descriptions-item>
         <el-descriptions-item label="描述">{{ viewData.description }}</el-descriptions-item>
@@ -104,7 +105,13 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getQuestionnaireList, getQuestionnaireDetail, createQuestionnaire, updateQuestionnaire, deleteQuestionnaire } from '@/api/mental'
+import {
+  getQuestionnaireList,
+  getQuestionnaireDetail,
+  createQuestionnaire,
+  updateQuestionnaire,
+  deleteQuestionnaire
+} from '@/api/mental'
 
 const router = useRouter()
 const handleDesign = (row: any) => router.push(`/mental/questionnaire/design/${row.id}`)
@@ -208,15 +215,17 @@ const handleView = async (row: any) => {
 }
 
 const handleDelete = (row: any) => {
-  ElMessageBox.confirm('确定删除该问卷？', '提示', { type: 'warning' }).then(async () => {
-    try {
-      await deleteQuestionnaire(row.id)
-      ElMessage.success('删除成功')
-      fetchData()
-    } catch (e) {
-      console.error('删除问卷失败', e)
-    }
-  }).catch(() => {})
+  ElMessageBox.confirm('确定删除该问卷？', '提示', { type: 'warning' })
+    .then(async () => {
+      try {
+        await deleteQuestionnaire(row.id)
+        ElMessage.success('删除成功')
+        fetchData()
+      } catch (e) {
+        console.error('删除问卷失败', e)
+      }
+    })
+    .catch(() => {})
 }
 
 const handleSubmit = async () => {

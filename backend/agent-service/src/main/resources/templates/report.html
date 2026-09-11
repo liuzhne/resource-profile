@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <title>EduCare 干预报告</title>
+    <style>
+        @page { size: A4; margin: 1.6cm 1.4cm; }
+        body { font-family: "NotoSansSC", "Source Han Sans", sans-serif; font-size: 11pt; color: #222; line-height: 1.55; }
+        h1 { font-size: 18pt; margin: 0 0 4px 0; color: #1d4ed8; }
+        h2 { font-size: 13pt; margin: 18px 0 8px 0; padding-bottom: 4px; border-bottom: 2px solid #1d4ed8; color: #1d4ed8; page-break-after: avoid; }
+        h3 { font-size: 11pt; margin: 12px 0 6px 0; color: #374151; }
+        .sub { color: #6b7280; font-size: 9pt; margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin: 6px 0 10px 0; }
+        th, td { border: 1px solid #d1d5db; padding: 5px 8px; text-align: left; vertical-align: top; font-size: 10pt; }
+        th { background: #f3f4f6; font-weight: 600; }
+        .meta-table td { border: 1px solid #e5e7eb; }
+        .meta-label { background: #f9fafb; color: #6b7280; width: 16%; }
+        .tag { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 9pt; font-weight: 500; }
+        .tag-info { background: #e0e7ff; color: #3730a3; }
+        .tag-success { background: #d1fae5; color: #065f46; }
+        .tag-warning { background: #fef3c7; color: #92400e; }
+        .tag-danger { background: #fee2e2; color: #991b1b; }
+        .tag-muted { background: #f3f4f6; color: #6b7280; }
+        ul { margin: 4px 0 4px 18px; padding: 0; }
+        li { margin-bottom: 3px; }
+        .score-block { display: inline-block; padding: 6px 14px; background: #fef2f2; border-left: 4px solid #f87171; margin: 4px 0; }
+        .score-num { font-size: 22pt; font-weight: 700; color: #dc2626; }
+        .score-label { color: #6b7280; font-size: 9pt; margin-left: 4px; }
+        .alert { padding: 8px 12px; margin: 6px 0; border-radius: 3px; }
+        .alert-warn { background: #fffbeb; border-left: 3px solid #f59e0b; }
+        .alert-info { background: #eff6ff; border-left: 3px solid #3b82f6; }
+        .alert-success { background: #f0fdf4; border-left: 3px solid #22c55e; }
+        .alert-error { background: #fef2f2; border-left: 3px solid #ef4444; }
+        .muted { color: #9ca3af; font-style: italic; }
+        .footer { margin-top: 24px; padding-top: 8px; border-top: 1px dashed #d1d5db; color: #9ca3af; font-size: 9pt; text-align: center; }
+        .no-break { page-break-inside: avoid; }
+    </style>
+</head>
+<body>
+
+<h1>EduCare 学业风险干预报告</h1>
+<div class="sub">
+    任务编号 <span th:text="${task.id}">—</span>
+    · 生成时间 <span th:text="${#temporals.format(generatedAt, 'yyyy-MM-dd HH:mm')}">—</span>
+</div>
+
+<!-- ========== 基本信息 ========== -->
+<h2>一、基本信息</h2>
+<table class="meta-table no-break">
+    <tr>
+        <td class="meta-label">任务 ID</td>
+        <td th:text="${task.id}">—</td>
+        <td class="meta-label">学生 ID</td>
+        <td th:text="${task.studentId}">—</td>
+    </tr>
+    <tr>
+        <td class="meta-label">任务状态</td>
+        <td th:text="${task.status}">—</td>
+        <td class="meta-label">风险等级</td>
+        <td>
+            <span class="tag" th:classappend="
+                ${task.riskLevel != null and task.riskLevel.name() == 'HIGH'} ? 'tag-danger' :
+                (${task.riskLevel != null and task.riskLevel.name() == 'MEDIUM'} ? 'tag-warning' :
+                (${task.riskLevel != null and task.riskLevel.name() == 'LOW'} ? 'tag-success' : 'tag-info'))"
+                  th:text="${task.riskLevel != null} ? ${task.riskLevel.name()} : '—'">—</span>
+        </td>
+    </tr>
+    <tr>
+        <td class="meta-label">主要风险</td>
+        <td th:text="${risk['primary_risk_type'] ?: '—'}" colspan="3">—</td>
+    </tr>
+    <tr>
+        <td class="meta-label">创建时间</td>
+        <td th:text="${task.createdAt != null} ? ${#temporals.format(task.createdAt, 'yyyy-MM-dd HH:mm')} : '—'">—</td>
+        <td class="meta-label">完成时间</td>
+        <td th:text="${task.completedAt != null} ? ${#temporals.format(task.completedAt, 'yyyy-MM-dd HH:mm')} : '—'">—</td>
+    </tr>
+</table>
+
+<!-- ========== 阶段 1：风险识别 ========== -->
+<h2>二、阶段 1 · 风险识别</h2>
+<div th:if="${risk != null and !risk.isEmpty()}" class="no-break">
+    <div class="score-block">
+        <span class="score-num" th:text="${risk['risk_score'] ?: '—'}">—</span>
+        <span class="score-label">风险分（0-100）</span>
+    </div>
+
+    <div class="alert alert-warn" th:if="${risk['root_cause_analysis']}">
+        <strong>根因分析：</strong>
+        <span th:text="${risk['root_cause_analysis']}">—</span>
+    </div>
+
+    <h3 th:if="${keyIndicators != null and !keyIndicators.isEmpty()}">关键指标</h3>
+    <ul th:if="${keyIndicators != null and !keyIndicators.isEmpty()}">
+        <li th:each="k : ${keyIndicators}" th:text="${k}">—</li>
+    </ul>
+
+    <h3 th:if="${interventionTypes != null and !interventionTypes.isEmpty()}">推荐干预方向</h3>
+    <p th:if="${interventionTypes != null and !interventionTypes.isEmpty()}">
+        <span class="tag tag-success" th:each="t : ${interventionTypes}" th:text="${t}" style="margin-right:6px;">—</span>
+    </p>
+
+    <div class="alert alert-info" th:if="${risk['urgency_reason']}">
+        <strong>紧迫性说明：</strong>
+        <span th:text="${risk['urgency_reason']}">—</span>
+    </div>
+</div>
+<p th:unless="${risk != null and !risk.isEmpty()}" class="muted">未执行</p>
+
+<!-- ========== 阶段 2：知识检索 ========== -->
+<h2>三、阶段 2 · 知识检索（RAG）</h2>
+<div th:if="${knowledgeChunks != null and !knowledgeChunks.isEmpty()}">
+    <table>
+        <thead>
+        <tr>
+            <th style="width:14%;">知识库</th>
+            <th style="width:24%;">标题</th>
+            <th>片段</th>
+            <th style="width:10%;">相关度</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="c : ${knowledgeChunks}">
+            <td th:text="${c['source_db'] ?: '—'}">—</td>
+            <td th:text="${c['title'] ?: '—'}">—</td>
+            <td th:text="${c['content'] ?: '—'}">—</td>
+            <td th:text="${c['rerank_score'] ?: c['score'] ?: '—'}">—</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+<p th:unless="${knowledgeChunks != null and !knowledgeChunks.isEmpty()}" class="muted">无召回结果</p>
+
+<!-- ========== 阶段 3：干预方案 ========== -->
+<h2>四、阶段 3 · 干预方案</h2>
+<div th:if="${plan != null and !plan.isEmpty()}">
+    <div class="alert alert-success" th:if="${plan['summary']}">
+        <strong>方案摘要：</strong>
+        <span th:text="${plan['summary']}">—</span>
+    </div>
+
+    <h3 th:if="${immediateActions != null and !immediateActions.isEmpty()}">立即行动（7 天内）</h3>
+    <table th:if="${immediateActions != null and !immediateActions.isEmpty()}">
+        <thead>
+        <tr>
+            <th>行动</th>
+            <th style="width:14%;">负责人</th>
+            <th style="width:10%;">期限</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="a : ${immediateActions}">
+            <td th:text="${a['action'] ?: '—'}">—</td>
+            <td th:text="${a['owner'] ?: '—'}">—</td>
+            <td th:text="${a['deadline_days'] != null} ? ${a['deadline_days']} + ' 天' : '—'">—</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h3 th:if="${longTermPlan != null and !longTermPlan.isEmpty()}">长期跟进</h3>
+    <div th:each="p, ps : ${longTermPlan}" class="no-break" style="margin-bottom:10px;">
+        <strong th:text="${p['phase'] ?: '阶段 ' + (ps.index + 1)}">—</strong>
+        <div th:if="${p['goals'] != null}">
+            <em>目标：</em>
+            <ul><li th:each="g : ${p['goals']}" th:text="${g}">—</li></ul>
+        </div>
+        <div th:if="${p['metrics'] != null}">
+            <em>衡量指标：</em>
+            <ul><li th:each="m : ${p['metrics']}" th:text="${m}">—</li></ul>
+        </div>
+    </div>
+
+    <h3 th:if="${plan['talk_outline']}">谈话提纲</h3>
+    <div class="alert alert-info" th:if="${plan['talk_outline']}" style="white-space: pre-wrap;"
+         th:text="${plan['talk_outline']}">—</div>
+
+    <h3 th:if="${resources != null and !resources.isEmpty()}">资源推荐</h3>
+    <table th:if="${resources != null and !resources.isEmpty()}">
+        <thead>
+        <tr>
+            <th style="width:14%;">类型</th>
+            <th style="width:30%;">名称</th>
+            <th>链接 / 联系</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="r : ${resources}">
+            <td th:text="${r['type'] ?: '—'}">—</td>
+            <td th:text="${r['name'] ?: '—'}">—</td>
+            <td th:text="${r['link_or_contact'] ?: '—'}">—</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+<p th:unless="${plan != null and !plan.isEmpty()}" class="muted">未执行</p>
+
+<!-- ========== 阶段 4：合规审核 ========== -->
+<h2>五、阶段 4 · 合规审核</h2>
+<div th:if="${audit != null and !audit.isEmpty()}">
+    <div th:class="${audit['audit_passed']} ? 'alert alert-success' : 'alert alert-error'">
+        <strong th:text="${audit['audit_passed']} ? '✓ 审核通过' : '✗ 未通过 — 已转人工兜底'">—</strong>
+    </div>
+
+    <h3 th:if="${auditItems != null and !auditItems.isEmpty()}">审核维度</h3>
+    <table th:if="${auditItems != null and !auditItems.isEmpty()}">
+        <thead>
+        <tr>
+            <th style="width:18%;">维度</th>
+            <th style="width:10%;">结果</th>
+            <th>问题说明</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="i : ${auditItems}">
+            <td th:text="${i['dimension'] ?: '—'}">—</td>
+            <td>
+                <span class="tag" th:classappend="${i['passed']} ? 'tag-success' : 'tag-danger'"
+                      th:text="${i['passed']} ? '通过' : '未通过'">—</span>
+            </td>
+            <td th:text="${i['issue'] ?: '—'}">—</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h3 th:if="${redactedSuggestions != null and !redactedSuggestions.isEmpty()}">整改建议</h3>
+    <ul th:if="${redactedSuggestions != null and !redactedSuggestions.isEmpty()}">
+        <li th:each="s : ${redactedSuggestions}" th:text="${s}">—</li>
+    </ul>
+</div>
+<p th:unless="${audit != null and !audit.isEmpty()}" class="muted">未执行</p>
+
+<div class="footer">
+    本报告由 EduCare 学业风险预警系统于
+    <span th:text="${#temporals.format(generatedAt, 'yyyy-MM-dd HH:mm:ss')}">—</span>
+    自动生成 · 仅限授权人员查阅
+</div>
+
+</body>
+</html>

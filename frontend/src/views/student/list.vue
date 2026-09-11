@@ -14,12 +14,23 @@
           <el-input v-model="searchForm.name" placeholder="请输入姓名" clearable />
         </el-form-item>
         <el-form-item label="学院">
-          <el-select v-model="searchForm.dept" placeholder="请选择学院" clearable filterable style="width: 200px">
+          <el-select
+            v-model="searchForm.dept"
+            placeholder="请选择学院"
+            clearable
+            filterable
+            style="width: 200px"
+          >
             <el-option v-for="d in DEPT_OPTIONS" :key="d" :label="d" :value="d" />
           </el-select>
         </el-form-item>
         <el-form-item label="年级">
-          <el-select v-model="searchForm.grade" placeholder="请选择年级" clearable style="width: 140px">
+          <el-select
+            v-model="searchForm.grade"
+            placeholder="请选择年级"
+            clearable
+            style="width: 140px"
+          >
             <el-option v-for="g in GRADE_OPTIONS" :key="g" :label="`${g}级`" :value="g" />
           </el-select>
         </el-form-item>
@@ -30,7 +41,7 @@
       </el-form>
 
       <!-- 表格 -->
-      <el-table :data="studentList" stripe v-loading="loading">
+      <el-table v-loading="loading" :data="studentList" stripe>
         <el-table-column type="index" width="50" />
         <el-table-column prop="studentId" label="学号" min-width="120" />
         <el-table-column prop="name" label="姓名" min-width="100" />
@@ -60,9 +71,9 @@
 
       <!-- 分页 -->
       <el-pagination
-        class="pagination"
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
+        class="pagination"
         :page-sizes="[10, 20, 50, 100]"
         :total="total"
         layout="total, sizes, prev, pager, next, jumper"
@@ -76,14 +87,28 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { getStudentList } from '@/api/student'
 
 const DEPT_OPTIONS = [
-  '计算机学院', '软件学院', '数学学院', '物理学院', '化学学院',
-  '生命科学学院', '电子工程学院', '心理学院', '医学院', '文学院',
-  '历史学院', '哲学学院', '教育学院', '艺术学院', '体育学院',
-  '法学院', '经济管理学院', '外国语学院', '马克思主义学院'
+  '计算机学院',
+  '软件学院',
+  '数学学院',
+  '物理学院',
+  '化学学院',
+  '生命科学学院',
+  '电子工程学院',
+  '心理学院',
+  '医学院',
+  '文学院',
+  '历史学院',
+  '哲学学院',
+  '教育学院',
+  '艺术学院',
+  '体育学院',
+  '法学院',
+  '经济管理学院',
+  '外国语学院',
+  '马克思主义学院'
 ]
 const GRADE_OPTIONS = ['2024', '2023', '2022', '2021', '2020']
 

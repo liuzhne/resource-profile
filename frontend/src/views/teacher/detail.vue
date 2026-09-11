@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <el-page-header @back="goBack" title="教师详情" />
+    <el-page-header title="教师详情" @back="goBack" />
 
     <el-row :gutter="20" class="detail-content">
       <el-col :xs="24" :lg="8">
@@ -44,12 +44,24 @@
               <el-descriptions :column="2" border>
                 <el-descriptions-item label="姓名">{{ teacherInfo.name }}</el-descriptions-item>
                 <el-descriptions-item label="性别">{{ teacherInfo.gender }}</el-descriptions-item>
-                <el-descriptions-item label="出生日期">{{ teacherInfo.birthDate }}</el-descriptions-item>
-                <el-descriptions-item label="政治面貌">{{ teacherInfo.political }}</el-descriptions-item>
-                <el-descriptions-item label="学历" :span="2">{{ teacherInfo.education }}</el-descriptions-item>
-                <el-descriptions-item label="毕业院校" :span="2">{{ teacherInfo.school }}</el-descriptions-item>
-                <el-descriptions-item label="专业方向" :span="2">{{ teacherInfo.major }}</el-descriptions-item>
-                <el-descriptions-item label="研究方向" :span="2">{{ teacherInfo.researchArea }}</el-descriptions-item>
+                <el-descriptions-item label="出生日期">{{
+                  teacherInfo.birthDate
+                }}</el-descriptions-item>
+                <el-descriptions-item label="政治面貌">{{
+                  teacherInfo.political
+                }}</el-descriptions-item>
+                <el-descriptions-item label="学历" :span="2">{{
+                  teacherInfo.education
+                }}</el-descriptions-item>
+                <el-descriptions-item label="毕业院校" :span="2">{{
+                  teacherInfo.school
+                }}</el-descriptions-item>
+                <el-descriptions-item label="专业方向" :span="2">{{
+                  teacherInfo.major
+                }}</el-descriptions-item>
+                <el-descriptions-item label="研究方向" :span="2">{{
+                  teacherInfo.researchArea
+                }}</el-descriptions-item>
               </el-descriptions>
             </el-tab-pane>
 
@@ -73,9 +85,7 @@
                 <el-table-column prop="level" label="级别" width="120" />
                 <el-table-column prop="role" label="角色" width="100" />
                 <el-table-column prop="amount" label="经费" width="120">
-                  <template #default="{ row }">
-                    ¥{{ row.amount }}万
-                  </template>
+                  <template #default="{ row }"> ¥{{ row.amount }}万 </template>
                 </el-table-column>
                 <el-table-column prop="period" label="周期" width="180" />
               </el-table>

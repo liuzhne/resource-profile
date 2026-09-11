@@ -26,13 +26,15 @@
       <el-divider />
 
       <h4>重点人群分析</h4>
-      <el-table :data="focusGroups" stripe style="margin-top: 16px" v-loading="loading">
+      <el-table v-loading="loading" :data="focusGroups" stripe style="margin-top: 16px">
         <el-table-column type="index" width="50" />
         <el-table-column prop="group" label="人群类型" />
         <el-table-column prop="count" label="人数" width="100" />
         <el-table-column prop="risk" label="风险等级" width="120">
           <template #default="{ row }">
-            <el-tag :type="row.risk === '高' ? 'danger' : row.risk === '中' ? 'warning' : 'success'">
+            <el-tag
+              :type="row.risk === '高' ? 'danger' : row.risk === '中' ? 'warning' : 'success'"
+            >
               {{ row.risk }}
             </el-tag>
           </template>
@@ -63,7 +65,9 @@ const initDeptChart = (data: any[]) => {
   deptChart = echarts.init(deptChartRef.value)
 
   // 汇总各学院数据为饼图
-  let totalGood = 0, totalAttention = 0, totalIntervention = 0
+  let totalGood = 0,
+    totalAttention = 0,
+    totalIntervention = 0
   data.forEach((item: any) => {
     totalGood += Number(item.good) || 0
     totalAttention += Number(item.attention) || 0
@@ -73,15 +77,17 @@ const initDeptChart = (data: any[]) => {
   deptChart.setOption({
     tooltip: { trigger: 'item' },
     legend: { orient: 'vertical', right: '5%', top: 'center' },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      data: [
-        { value: totalGood, name: '良好', itemStyle: { color: '#52c41a' } },
-        { value: totalAttention, name: '关注', itemStyle: { color: '#faad14' } },
-        { value: totalIntervention, name: '干预', itemStyle: { color: '#f5222d' } }
-      ]
-    }]
+    series: [
+      {
+        type: 'pie',
+        radius: ['40%', '70%'],
+        data: [
+          { value: totalGood, name: '良好', itemStyle: { color: '#52c41a' } },
+          { value: totalAttention, name: '关注', itemStyle: { color: '#faad14' } },
+          { value: totalIntervention, name: '干预', itemStyle: { color: '#f5222d' } }
+        ]
+      }
+    ]
   })
 }
 
@@ -91,16 +97,18 @@ const initGradeChart = (data: any[]) => {
 
   const grades = data.map((item: any) => item.grade)
   const rates = data.map((item: any) => Number(item.rate))
-  const barColors = rates.map(r => r >= 80 ? '#52c41a' : r >= 60 ? '#faad14' : '#f5222d')
+  const barColors = rates.map((r) => (r >= 80 ? '#52c41a' : r >= 60 ? '#faad14' : '#f5222d'))
 
   gradeChart.setOption({
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: grades },
     yAxis: { type: 'value', max: 100 },
-    series: [{
-      type: 'bar',
-      data: rates.map((v, i) => ({ value: v, itemStyle: { color: barColors[i] } }))
-    }]
+    series: [
+      {
+        type: 'bar',
+        data: rates.map((v, i) => ({ value: v, itemStyle: { color: barColors[i] } }))
+      }
+    ]
   })
 }
 
@@ -124,7 +132,7 @@ const initGenderChart = (data: any[]) => {
 
   genderChart.setOption({
     tooltip: { trigger: 'axis' },
-    legend: { data: series.map(s => s.name) },
+    legend: { data: series.map((s) => s.name) },
     xAxis: { type: 'category', data: ['良好', '关注', '干预'] },
     yAxis: { type: 'value' },
     series

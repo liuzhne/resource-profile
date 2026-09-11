@@ -1,0 +1,11 @@
+FROM mysql:8.0
+
+ENV TZ=Asia/Shanghai
+
+# build context 是仓库根目录（render.yaml: dockerContext: ./）。复制全部按序初始化脚本，
+# 避免只建基础表而缺少 questionnaire/agent/student extras/feedback 表。
+COPY sql/init/ /docker-entrypoint-initdb.d/
+
+EXPOSE 3306
+
+CMD ["mysqld", "--default-authentication-plugin=mysql_native_password", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]

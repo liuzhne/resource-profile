@@ -76,3 +76,50 @@ def search(
     except Exception as exc:
         logger.error("Milvus 搜索失败 collection=%s: %s", collection_name, exc)
         return []
+
+
+def delete_by_doc_id(collection_name: str, doc_id: str) -> int:
+    """G-4.2：按 `chunk_id like "{doc_id}_%"` 删除旧 chunk，返回删除条数。
+
+    Milvus 没有 `LIKE`，但 VARCHAR 字段支持 `like` 表达式（pymilvus 2.4+）。
+    集合不存在时返回 0（首次 upsert 走 insert）。
+    """
+    if not _ensure_connected():
+        raise RuntimeError("Milvus 未连接，无法删除")
+    if not utility.has_collection(collection_name, using=_CONN_ALIAS):
+        return 0
+    collection = Collection(collection_name, using=_CONN_ALIAS)
+    expr = f'chunk_id like "{doc_id}_%"'
+    res = collection.delete(expr)
+    deleted = int(getattr(res, "delete_count", 0) or 0)
+    collection.flush()
+    return deleted
+
+
+def insert_chunks(
+    collection_name: str,
+    rows: List[Dict[str, Any]],
+) -> int:
+    """G-4.2：批量插入 chunk。
+
+    rows 每行 keys：chunk_id / title / content / source / embedding。
+    集合不存在则抛错（调用方应保证集合已 init_milvus.py 跑过）。
+    """
+    if not _ensure_connected():
+        raise RuntimeError("Milvus 未连接，无法写入")
+    if not utility.has_collection(collection_name, using=_CONN_ALIAS):
+        raise RuntimeError(f"Milvus 集合 {collection_name} 不存在，先跑 init_milvus.py")
+    if not rows:
+        return 0
+
+    collection = Collection(collection_name, using=_CONN_ALIAS)
+    data = [
+        [r["chunk_id"] for r in rows],
+        [r.get("title", "") for r in rows],
+        [r.get("content", "") for r in rows],
+        [r.get("source", "") for r in rows],
+        [r["embedding"] for r in rows],
+    ]
+    collection.insert(data)
+    collection.flush()
+    return len(rows)

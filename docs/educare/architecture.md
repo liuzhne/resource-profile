@@ -251,7 +251,8 @@ COMPLETED
 
 - 部署与日常运维：[`deploy.md`](./deploy.md)
 - 验收 checklist：[`acceptance.md`](./acceptance.md)
-- 阶段路线图：[`ROADMAP.md`](./ROADMAP.md)
+- 阶段执行计划：[`EXECUTION_PLAN.md`](./EXECUTION_PLAN.md)（Phase G/H/I 原子任务 + 下一步指针）
+- 改进设计源：[`IMPROVEMENT_2026_MAY.md`](./IMPROVEMENT_2026_MAY.md)（v1.1 拍板）
 - DDL：[`/sql/init/03_agent_init.sql`](../../sql/init/03_agent_init.sql)
 - Java 主入口：[`AgentTaskServiceImpl`](../../backend/agent-service/src/main/java/com/edu/agent/service/impl/AgentTaskServiceImpl.java)
 - Python 路由：[`/ai-inference-service/app/api/`](../../ai-inference-service/app/api/)

@@ -54,7 +54,7 @@
               </el-radio-group>
             </div>
           </template>
-          <div ref="trendChartRef" class="chart-container" style="height: 350px;"></div>
+          <div ref="trendChartRef" class="chart-container" style="height: 350px"></div>
         </el-card>
       </el-col>
       <el-col :xs="24" :lg="8">
@@ -64,7 +64,7 @@
               <span>师生分布</span>
             </div>
           </template>
-          <div ref="pieChartRef" class="chart-container" style="height: 350px;"></div>
+          <div ref="pieChartRef" class="chart-container" style="height: 350px"></div>
         </el-card>
       </el-col>
     </el-row>

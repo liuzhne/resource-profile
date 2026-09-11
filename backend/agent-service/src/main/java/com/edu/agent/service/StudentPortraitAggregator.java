@@ -127,6 +127,7 @@ public class StudentPortraitAggregator {
     public String buildMaskedProfile(String studentId) {
         AgentSecurityContext ctx = new AgentSecurityContext();
         ctx.setRole(AgentSecurityContext.ROLE_COUNSELOR);
+        ctx.setSensitiveDataAllowed(false);
         AgentContextHolder.set(ctx);
 
         try {

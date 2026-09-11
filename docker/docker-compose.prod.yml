@@ -1,0 +1,33 @@
+# ============================================================
+# 生产覆盖层：在基础 docker-compose.yml 之上叠加 nginx/TLS 公网入口。
+#
+# 用法（在 docker/ 目录）：
+#   ../scripts/preflight-prod.sh                                   # ① 先过密钥体检（必须全绿）
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# 网络拓扑：
+#   公网 ──443/80──> nginx(frontend) ──/api──> gateway:8080 ──> 各业务/Agent
+#   gateway 与所有数据存储仅绑 127.0.0.1（见基础 compose），不直接对公网暴露。
+#   nginx 经 edu-network 以服务名 gateway 访问网关，不依赖宿主端口。
+# ============================================================
+
+services:
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: edu-portrait-frontend
+    ports:
+      - "80:80"      # 跳转 443（+ ACME 挑战）
+      - "443:443"    # TLS 终止 + SPA + /api 反代
+    volumes:
+      # 站点配置与证书运行时挂载：改 nginx 配置只需 restart，无需重建镜像
+      - ./nginx/edu-portrait.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      # certbot http-01 挑战目录（如用 Let's Encrypt）
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - gateway
+    networks:
+      - edu-network
+    restart: unless-stopped

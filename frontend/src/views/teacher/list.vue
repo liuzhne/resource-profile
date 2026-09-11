@@ -35,7 +35,7 @@
       </el-form>
 
       <!-- 表格 -->
-      <el-table :data="teacherList" stripe v-loading="loading">
+      <el-table v-loading="loading" :data="teacherList" stripe>
         <el-table-column type="index" width="50" />
         <el-table-column prop="employeeId" label="工号" min-width="120" />
         <el-table-column prop="name" label="姓名" min-width="100" />
@@ -54,9 +54,9 @@
 
       <!-- 分页 -->
       <el-pagination
-        class="pagination"
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
+        class="pagination"
         :page-sizes="[10, 20, 50, 100]"
         :total="total"
         layout="total, sizes, prev, pager, next, jumper"

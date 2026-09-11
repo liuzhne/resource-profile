@@ -60,6 +60,25 @@ CREATE TABLE IF NOT EXISTS knowledge_citation (
     INDEX idx_task (task_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '知识引用';
 
+-- ========== 5. 报告异步导出任务（F-1：PDF 导出）==========
+CREATE TABLE IF NOT EXISTS agent_export_task (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
+    task_id     BIGINT       NOT NULL COMMENT '关联 agent_task.id',
+    user_id     BIGINT       NOT NULL DEFAULT 0 COMMENT '触发导出的用户ID（0=未登录态/未解析）',
+    status      VARCHAR(16)  NOT NULL DEFAULT 'PENDING'
+        COMMENT '状态: PENDING/PROCESSING/DONE/FAILED',
+    file_path   VARCHAR(512) DEFAULT NULL COMMENT '生成的 PDF 文件绝对路径',
+    file_size   BIGINT       DEFAULT NULL COMMENT '文件字节数',
+    err_msg     VARCHAR(512) DEFAULT NULL COMMENT '失败原因',
+    created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at  DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    finished_at DATETIME     DEFAULT NULL COMMENT '完成或失败时间',
+    deleted     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    INDEX idx_task_id (task_id),
+    INDEX idx_user_status (user_id, status),
+    INDEX idx_status_created (status, created_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '报告异步导出任务';
+
 -- ========== 4. 合规审计日志（满足教育数据安全审计要求）==========
 CREATE TABLE IF NOT EXISTS audit_log (
     id           BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键',

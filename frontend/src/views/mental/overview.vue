@@ -35,7 +35,9 @@
               <el-icon :size="32"><BellFilled /></el-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-value" style="color: #f5222d">{{ overviewData.interventionRate }}%</div>
+              <div class="stat-value" style="color: #f5222d">
+                {{ overviewData.interventionRate }}%
+              </div>
               <div class="stat-label">需要干预</div>
             </div>
           </div>
@@ -62,7 +64,9 @@
         <el-card>
           <template #header>
             <div class="card-header">
-              <span><el-icon><WarningFilled /></el-icon> 心理预警</span>
+              <span
+                ><el-icon><WarningFilled /></el-icon> 心理预警</span
+              >
               <el-button type="primary" link>查看全部</el-button>
             </div>
           </template>
@@ -88,7 +92,9 @@
         <el-card>
           <template #header>
             <div class="card-header">
-              <span><el-icon><TrendCharts /></el-icon> 趋势分析</span>
+              <span
+                ><el-icon><TrendCharts /></el-icon> 趋势分析</span
+              >
             </div>
           </template>
           <div ref="trendChartRef" style="height: 300px"></div>
@@ -127,9 +133,11 @@ const initTrendChart = () => {
   const attentionData: number[] = []
   const interventionData: number[] = []
 
-  months.forEach(month => {
+  months.forEach((month) => {
     const monthItems = trendData.value.filter((item: any) => item.month === month)
-    let good = 0, attention = 0, intervention = 0
+    let good = 0,
+      attention = 0,
+      intervention = 0
     monthItems.forEach((item: any) => {
       const count = Number(item.count)
       if (item.level === '正常' || item.level === '轻度') good += count

@@ -1,5 +1,6 @@
 package com.edu.agent.feign;
 
+import com.edu.agent.feign.fallback.StudentServiceClientFallbackFactory;
 import com.edu.common.result.Result;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,7 +13,11 @@ import java.util.Map;
  * 调用 student-service (Port: 8084)
  * Gateway 路由: /student/** → student-service (StripPrefix=0)
  */
-@FeignClient(name = "student-service")
+@FeignClient(
+        name = "student-service",
+        url = "${STUDENT_SERVICE_URL:}",
+        fallbackFactory = StudentServiceClientFallbackFactory.class
+)
 public interface StudentServiceClient {
 
     /**

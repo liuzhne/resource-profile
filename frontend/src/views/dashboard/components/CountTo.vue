@@ -51,9 +51,12 @@ onMounted(() => {
   startAnimate(props.start, props.end)
 })
 
-watch(() => props.end, (newEnd) => {
-  startAnimate(displayValue.value, newEnd)
-})
+watch(
+  () => props.end,
+  (newEnd) => {
+    startAnimate(displayValue.value, newEnd)
+  }
+)
 
 onUnmounted(() => {
   if (rafId !== null) {

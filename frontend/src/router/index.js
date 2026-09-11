@@ -5,6 +5,8 @@ import 'nprogress/nprogress.css'
 
 NProgress.configure({ showSpinner: false })
 
+const aiEnabled = import.meta.env.VITE_AI_ENABLED === 'true'
+
 const routes = [
   {
     path: '/login',
@@ -133,26 +135,30 @@ const routes = [
           }
         ]
       },
-      {
-        path: '/agent',
-        name: 'Agent',
-        redirect: '/agent/warning',
-        meta: { title: 'AI 预警', icon: 'Bell', roles: ['admin', 'teacher'] },
-        children: [
-          {
-            path: '/agent/warning',
-            name: 'AgentWarning',
-            component: () => import('@/views/agent/Warning.vue'),
-            meta: { title: '预警中心', roles: ['admin', 'teacher'] }
-          },
-          {
-            path: '/agent/report/:id',
-            name: 'AgentReport',
-            component: () => import('@/views/agent/ReportDetail.vue'),
-            meta: { title: '干预报告', hidden: true, roles: ['admin', 'teacher'] }
-          }
-        ]
-      },
+      ...(aiEnabled
+        ? [
+            {
+              path: '/agent',
+              name: 'Agent',
+              redirect: '/agent/warning',
+              meta: { title: 'AI 预警', icon: 'Bell', roles: ['admin', 'teacher'] },
+              children: [
+                {
+                  path: '/agent/warning',
+                  name: 'AgentWarning',
+                  component: () => import('@/views/agent/Warning.vue'),
+                  meta: { title: '预警中心', roles: ['admin', 'teacher'] }
+                },
+                {
+                  path: '/agent/report/:id',
+                  name: 'AgentReport',
+                  component: () => import('@/views/agent/ReportDetail.vue'),
+                  meta: { title: '干预报告', hidden: true, roles: ['admin', 'teacher'] }
+                }
+              ]
+            }
+          ]
+        : []),
       {
         path: '/profile',
         name: 'Profile',
@@ -176,7 +182,17 @@ const routes = [
             name: 'AdminRoles',
             component: () => import('@/views/admin/roles.vue'),
             meta: { title: '角色权限' }
-          }
+          },
+          ...(aiEnabled
+            ? [
+                {
+                  path: '/admin/trace',
+                  name: 'AdminTrace',
+                  component: () => import('@/views/admin/trace.vue'),
+                  meta: { title: 'LLM 追踪', icon: 'Connection' }
+                }
+              ]
+            : [])
         ]
       }
     ]

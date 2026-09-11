@@ -1,5 +1,5 @@
 server:
-  port: 8083
+  port: ${PORT:8083}
 
 spring:
   application:
@@ -7,15 +7,11 @@ spring:
   profiles:
     active: dev
 
-  # 配置导入（替代 bootstrap 机制）
-  config:
-    import:
-      - optional:nacos:teacher-service.yml?group=DEFAULT_GROUP
-      - optional:nacos:common.yml?group=DEFAULT_GROUP
 
   cloud:
     nacos:
       discovery:
+        enabled: ${SPRING_CLOUD_NACOS_DISCOVERY_ENABLED:true}
         server-addr: ${NACOS_SERVER:localhost:8848}
         namespace: ${NACOS_NAMESPACE:}
         username: ${NACOS_USERNAME:nacos}
@@ -24,6 +20,7 @@ spring:
         identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
 
       config:
+        enabled: ${SPRING_CLOUD_NACOS_CONFIG_ENABLED:true}
         import-check:
           enabled: false
         server-addr: ${NACOS_SERVER:localhost:8848}
@@ -35,10 +32,14 @@ spring:
         file-extension: yml
 
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/edu_portrait?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:edu_portrait}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&sslMode=${MYSQL_SSL_MODE:PREFERRED}
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_MAXIMUM_POOL_SIZE:3}
+      minimum-idle: ${DB_MINIMUM_IDLE:0}
+      max-lifetime: ${DB_MAX_LIFETIME_MS:600000}
 
 mybatis-plus:
   configuration:

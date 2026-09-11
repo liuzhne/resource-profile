@@ -25,6 +25,22 @@ public class Question {
 
     private String options;
 
+    /** B-1：计分规则 JSON {选项值: 分值}，量表/单选计分用。 */
+    @TableField("scoring_rules")
+    private String scoringRules;
+
+    /** B-1：scale 题型下限。 */
+    @TableField("scale_min")
+    private Integer scaleMin;
+
+    /** B-1：scale 题型上限。 */
+    @TableField("scale_max")
+    private Integer scaleMax;
+
+    /** B-1：scale 两端标签 JSON {"min": "...", "max": "..."}。 */
+    @TableField("scale_labels")
+    private String scaleLabels;
+
     private Integer required;
 
     @TableLogic

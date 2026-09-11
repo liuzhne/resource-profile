@@ -1,0 +1,30 @@
+# Prometheus 抓取配置：各 Spring 服务的 /actuator/prometheus（容器内 edu-network 服务名直连）。
+# 业务服务（auth/user/...）默认未开 actuator；如需纳管，给其加 actuator+micrometer 后在此追加 job。
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+scrape_configs:
+  - job_name: 'gateway'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['gateway:8080']
+        labels:
+          application: gateway-service
+
+  - job_name: 'agent-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['agent-service:8087']
+
+  - job_name: 'mcp-student-data'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['mcp-student-data:8094']
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

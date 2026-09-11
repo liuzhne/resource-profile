@@ -1,5 +1,6 @@
 package com.edu.agent.feign;
 
+import com.edu.agent.feign.fallback.DataServiceClientFallbackFactory;
 import com.edu.common.result.Result;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,7 +16,11 @@ import java.util.Map;
  * 当前调用全校统计接口，尝试从中提取该学生指标。
  * 建议后续在 data-service 中补充：GET /data/student/{studentId}
  */
-@FeignClient(name = "data-service")
+@FeignClient(
+        name = "data-service",
+        url = "${DATA_SERVICE_URL:}",
+        fallbackFactory = DataServiceClientFallbackFactory.class
+)
 public interface DataServiceClient {
 
     /**

@@ -1,24 +1,41 @@
 <template>
   <div class="page-container">
-    <el-page-header @back="goBack" :title="`任务 #${taskId} · 干预报告`">
+    <el-page-header :title="`任务 #${taskId} · 干预报告`" @back="goBack">
       <template #extra>
-        <el-button :icon="Refresh" @click="fetchDetail" :loading="loading">刷新</el-button>
+        <el-button
+          v-permission="['admin', 'psychologist']"
+          type="primary"
+          :icon="Download"
+          :loading="exporting"
+          :disabled="!canExport"
+          @click="handleExport"
+          >{{ exporting ? '导出中...' : '导出 PDF' }}</el-button
+        >
+        <el-button :icon="Refresh" :loading="loading" @click="fetchDetail">刷新</el-button>
       </template>
     </el-page-header>
 
-    <el-card class="meta-card" v-loading="loading">
+    <el-card v-loading="loading" class="meta-card">
       <el-descriptions :column="4" border size="small">
         <el-descriptions-item label="任务ID">{{ task.id }}</el-descriptions-item>
         <el-descriptions-item label="学生ID">{{ task.studentId }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="statusType(task.status)" effect="dark">{{ statusLabel(task.status) }}</el-tag>
+          <el-tag :type="statusType(task.status)" effect="dark">{{
+            statusLabel(task.status)
+          }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="风险等级">
-          <el-tag v-if="task.riskLevel" :type="riskType(task.riskLevel)">{{ riskLabel(task.riskLevel) }}</el-tag>
+          <el-tag v-if="task.riskLevel" :type="riskType(task.riskLevel)">{{
+            riskLabel(task.riskLevel)
+          }}</el-tag>
           <span v-else>—</span>
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ formatTime(task.createdAt) }}</el-descriptions-item>
-        <el-descriptions-item label="完成时间">{{ formatTime(task.completedAt) || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{
+          formatTime(task.createdAt)
+        }}</el-descriptions-item>
+        <el-descriptions-item label="完成时间">{{
+          formatTime(task.completedAt) || '—'
+        }}</el-descriptions-item>
         <el-descriptions-item label="主要风险" :span="2">
           {{ risk.primary_risk_type || '—' }}
         </el-descriptions-item>
@@ -26,7 +43,7 @@
     </el-card>
 
     <!-- 4 阶段时间线 -->
-    <el-card class="timeline-card" v-loading="loading">
+    <el-card v-loading="loading" class="timeline-card">
       <template #header>
         <span>4-Agent 流水线</span>
       </template>
@@ -48,7 +65,9 @@
                 <span class="lbl">风险分</span>
               </div>
               <div class="risk-level">
-                <el-tag :type="riskType(task.riskLevel)" size="large">{{ riskLabel(task.riskLevel) }}</el-tag>
+                <el-tag :type="riskType(task.riskLevel)" size="large">{{
+                  riskLabel(task.riskLevel)
+                }}</el-tag>
                 <div class="primary-type">{{ risk.primary_risk_type || '' }}</div>
               </div>
             </div>
@@ -61,7 +80,11 @@
               class="mt-12"
             />
             <!-- 关键指标可能含心理量表原始分等敏感字段；普通辅导员视角隐藏 -->
-            <div v-if="risk.key_indicators?.length" v-permission="['psychologist','admin']" class="mt-12">
+            <div
+              v-if="risk.key_indicators?.length"
+              v-permission="['psychologist', 'admin']"
+              class="mt-12"
+            >
               <div class="sub-h">关键指标</div>
               <el-tag v-for="(k, i) in risk.key_indicators" :key="i" class="tag-mr">{{ k }}</el-tag>
             </div>
@@ -73,7 +96,8 @@
                 type="success"
                 effect="plain"
                 class="tag-mr"
-              >{{ t }}</el-tag>
+                >{{ t }}</el-tag
+              >
             </div>
             <div v-if="risk.urgency_reason" class="mt-12 urgency">
               <strong>紧迫性：</strong>{{ risk.urgency_reason }}
@@ -92,8 +116,12 @@
         >
           <div class="stage-title">
             阶段 2 · 知识检索
-            <el-tag v-if="knowledge.reranked" type="success" size="small" class="ml-8">Cross-Encoder 精排</el-tag>
-            <el-tag v-else-if="knowledge.fallback" type="info" size="small" class="ml-8">示例数据降级</el-tag>
+            <el-tag v-if="knowledge.reranked" type="success" size="small" class="ml-8"
+              >Cross-Encoder 精排</el-tag
+            >
+            <el-tag v-else-if="knowledge.fallback" type="info" size="small" class="ml-8"
+              >示例数据降级</el-tag
+            >
           </div>
           <div v-if="hasStage(2) && knowledge.chunks?.length" class="stage-body">
             <el-table :data="knowledge.chunks" stripe size="small">
@@ -156,7 +184,8 @@
                       size="small"
                       effect="plain"
                       class="tag-mr"
-                    >{{ r }}</el-tag>
+                      >{{ r }}</el-tag
+                    >
                   </template>
                 </el-table-column>
               </el-table>
@@ -185,12 +214,7 @@
 
             <div v-if="plan.talk_outline" class="block">
               <div class="sub-h">谈话提纲</div>
-              <el-input
-                type="textarea"
-                :model-value="plan.talk_outline"
-                :rows="6"
-                readonly
-              />
+              <el-input type="textarea" :model-value="plan.talk_outline" :rows="6" readonly />
             </div>
 
             <div v-if="plan.resources?.length" class="block">
@@ -252,14 +276,56 @@
         </el-timeline-item>
       </el-timeline>
     </el-card>
+
+    <!-- I-5：干预反馈闭环（方案落地约 1 个月后由辅导员回填） -->
+    <el-card v-if="canExport" class="feedback-card">
+      <template #header>
+        <span>干预效果跟进</span>
+        <span class="fb-hint">建议方案落地约 1 个月后回填</span>
+      </template>
+      <el-form :model="feedback" label-width="92px" class="fb-form">
+        <el-form-item label="效果评分">
+          <el-rate v-model="feedback.score" :max="5" show-score score-template="{value} 分" />
+        </el-form-item>
+        <el-form-item label="跟进结果">
+          <el-select v-model="feedback.outcome" placeholder="请选择" clearable style="width: 220px">
+            <el-option label="有改善" value="improved" />
+            <el-option label="无变化" value="unchanged" />
+            <el-option label="恶化" value="worsened" />
+            <el-option label="已升级处理" value="escalated" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="文字反馈">
+          <el-input
+            v-model="feedback.comment"
+            type="textarea"
+            :rows="3"
+            maxlength="1000"
+            show-word-limit
+            placeholder="干预过程、学生反馈、后续建议等"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button
+            type="primary"
+            :loading="feedbackSubmitting"
+            :disabled="!feedback.score"
+            @click="handleSubmitFeedback"
+            >提交反馈</el-button
+          >
+        </el-form-item>
+      </el-form>
+    </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import {
   Refresh,
+  Download,
   WarningFilled,
   DocumentCopy,
   EditPen,
@@ -268,7 +334,13 @@ import {
   SuccessFilled,
   CircleCloseFilled
 } from '@element-plus/icons-vue'
-import { getAgentTaskDetail } from '@/api/agent'
+import {
+  getAgentTaskDetail,
+  exportReport,
+  getExportStatus,
+  downloadExport,
+  submitInterventionFeedback
+} from '@/api/agent'
 
 const route = useRoute()
 const router = useRouter()
@@ -323,6 +395,121 @@ onMounted(fetchDetail)
 
 const goBack = () => router.back()
 
+// ============== F-1：PDF 导出 ==============
+const exporting = ref(false)
+const exportJobId = ref(null)
+let pollTimer = null
+let pollCount = 0
+const MAX_POLL = 30 // 30 * 2s = 60s 超时
+
+// 仅当任务为 COMPLETED 或 REJECTED（已有 4 阶段产物）时允许导出
+const canExport = computed(() => {
+  const s = task.value.status
+  return s === 'COMPLETED' || s === 'REJECTED'
+})
+
+const stopPoll = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  pollCount = 0
+}
+
+const triggerDownload = async (jobId) => {
+  try {
+    const blob = await downloadExport(jobId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `report-${taskId}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('PDF 已下载')
+  } catch (e) {
+    console.error('下载 PDF 失败', e)
+    ElMessage.error('下载 PDF 失败')
+  }
+}
+
+const pollExportStatus = async () => {
+  if (!exportJobId.value) return
+  pollCount += 1
+  if (pollCount > MAX_POLL) {
+    stopPoll()
+    exporting.value = false
+    ElMessage.error('导出超时，请稍后重试')
+    return
+  }
+  try {
+    const res = await getExportStatus(exportJobId.value)
+    const status = res.data?.status
+    if (status === 'DONE') {
+      stopPoll()
+      const jid = exportJobId.value
+      exportJobId.value = null
+      exporting.value = false
+      await triggerDownload(jid)
+    } else if (status === 'FAILED') {
+      stopPoll()
+      exporting.value = false
+      ElMessage.error(res.data?.errMsg || 'PDF 渲染失败')
+    }
+  } catch (e) {
+    stopPoll()
+    exporting.value = false
+    console.error('查询导出状态失败', e)
+  }
+}
+
+const handleExport = async () => {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const res = await exportReport(taskId)
+    const jobId = res.data?.jobId
+    if (!jobId) throw new Error('未拿到 jobId')
+    exportJobId.value = jobId
+    pollCount = 0
+    pollTimer = setInterval(pollExportStatus, 2000)
+  } catch (e) {
+    exporting.value = false
+    console.error('触发导出失败', e)
+    // request.js 拦截器已弹出错误提示，这里不再重复
+  }
+}
+
+onUnmounted(stopPoll)
+
+// ============== I-5：干预反馈闭环 ==============
+const feedback = ref({ score: 0, outcome: '', comment: '' })
+const feedbackSubmitting = ref(false)
+
+const handleSubmitFeedback = async () => {
+  if (!feedback.value.score) {
+    ElMessage.warning('请先打分')
+    return
+  }
+  feedbackSubmitting.value = true
+  try {
+    await submitInterventionFeedback({
+      taskId: Number(taskId),
+      score: feedback.value.score,
+      outcome: feedback.value.outcome || null,
+      comment: feedback.value.comment || null
+    })
+    ElMessage.success('反馈已提交，感谢跟进')
+    feedback.value = { score: 0, outcome: '', comment: '' }
+  } catch (e) {
+    console.error('提交干预反馈失败', e)
+    // request.js 拦截器已弹错误提示
+  } finally {
+    feedbackSubmitting.value = false
+  }
+}
+
 const STATUS_LABELS = {
   PENDING: '待处理',
   RISK_ANALYZING: '风险识别中',
@@ -353,12 +540,13 @@ const statusType = (s) =>
     COMPLETED: 'success',
     REJECTED: 'danger',
     FAILED: 'danger'
-  }[s] || '')
+  })[s] || ''
 const statusLabel = (s) => STATUS_LABELS[s] || s
-const riskType = (r) => ({ NONE: 'info', LOW: 'success', MEDIUM: 'warning', HIGH: 'danger' }[r] || '')
+const riskType = (r) =>
+  ({ NONE: 'info', LOW: 'success', MEDIUM: 'warning', HIGH: 'danger' })[r] || ''
 const riskLabel = (r) => RISK_LABELS[r] || r
 const sourceTagType = (s) =>
-  ({ case: '', psychology: 'success', policy: 'warning', success: 'info' }[s] || '')
+  ({ case: '', psychology: 'success', policy: 'warning', success: 'info' })[s] || ''
 const sourceLabel = (s) => SOURCE_LABELS[s] || s
 const dimensionLabel = (d) => DIMENSION_LABELS[d] || d
 
@@ -371,8 +559,20 @@ const formatTime = (s) => (s ? s.replace('T', ' ').slice(0, 19) : '')
 
 <style scoped lang="scss">
 .meta-card,
-.timeline-card {
+.timeline-card,
+.feedback-card {
   margin-top: 20px;
+}
+.feedback-card {
+  .fb-hint {
+    margin-left: 12px;
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.45);
+  }
+  .fb-form {
+    max-width: 560px;
+    margin-top: 8px;
+  }
 }
 .stage-title {
   font-size: 16px;
@@ -426,8 +626,16 @@ const formatTime = (s) => (s ? s.replace('T', ' ').slice(0, 19) : '')
   margin-right: 6px;
   margin-bottom: 6px;
 }
-.mt-12 { margin-top: 12px; }
-.mb-12 { margin-bottom: 12px; }
-.ml-8 { margin-left: 8px; }
-.muted { color: rgba(0, 0, 0, 0.4); }
+.mt-12 {
+  margin-top: 12px;
+}
+.mb-12 {
+  margin-bottom: 12px;
+}
+.ml-8 {
+  margin-left: 8px;
+}
+.muted {
+  color: rgba(0, 0, 0, 0.4);
+}
 </style>

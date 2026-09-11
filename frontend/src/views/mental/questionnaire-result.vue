@@ -8,14 +8,18 @@
             <span class="title">{{ questionnaire?.title || '完成情况' }}</span>
           </div>
           <div class="stats">
-            <span>已完成 <strong>{{ rows.length }}</strong> 人</span>
-            <span v-if="avgScore !== null" v-permission="['psychologist','admin']">| 平均分 <strong>{{ avgScore }}</strong></span>
+            <span
+              >已完成 <strong>{{ rows.length }}</strong> 人</span
+            >
+            <span v-if="avgScore !== null" v-permission="['psychologist', 'admin']"
+              >| 平均分 <strong>{{ avgScore }}</strong></span
+            >
           </div>
         </div>
       </template>
 
       <el-empty v-if="!loading && rows.length === 0" description="暂无学生提交" />
-      <el-table v-else :data="rows" stripe v-loading="loading">
+      <el-table v-else v-loading="loading" :data="rows" stripe>
         <el-table-column type="index" label="#" width="50" />
         <el-table-column prop="studentNo" label="学号" width="120" />
         <el-table-column prop="name" label="姓名" width="100" />
@@ -23,7 +27,13 @@
         <el-table-column prop="grade" label="年级" width="80" />
         <el-table-column prop="className" label="班级" width="100" />
         <!-- 原始得分仅 psychologist/admin 可见；其它角色看 等级 列即可 -->
-        <el-table-column v-if="hasRole(['psychologist','admin'])" prop="score" label="得分" width="80" sortable />
+        <el-table-column
+          v-if="hasRole(['psychologist', 'admin'])"
+          prop="score"
+          label="得分"
+          width="80"
+          sortable
+        />
         <el-table-column label="等级" width="100">
           <template #default="{ row }">
             <el-tag :type="levelTagColor(row.level)">{{ row.level || '-' }}</el-tag>
@@ -58,7 +68,10 @@ const avgScore = computed(() => {
 })
 
 const levelTagColor = (l: string) => {
-  return ({ 正常: 'success', 轻度: '', 中度: 'warning', 重度: 'danger', 高危: 'danger' } as any)[l] || 'info'
+  return (
+    ({ 正常: 'success', 轻度: '', 中度: 'warning', 重度: 'danger', 高危: 'danger' } as any)[l] ||
+    'info'
+  )
 }
 
 const fetchData = async () => {

@@ -6,7 +6,9 @@
           <div>
             <el-button link @click="goBack">← 返回列表</el-button>
             <span class="title">{{ questionnaire?.title || '问卷设计' }}</span>
-            <el-tag v-if="questionnaire?.type" style="margin-left: 8px">{{ questionnaire.type }}</el-tag>
+            <el-tag v-if="questionnaire?.type" style="margin-left: 8px">{{
+              questionnaire.type
+            }}</el-tag>
           </div>
           <div>
             <el-button @click="rulesDialogVisible = true">编辑等级规则</el-button>
@@ -16,12 +18,14 @@
       </template>
 
       <el-empty v-if="!loading && questions.length === 0" description="尚无题目，点击右上角新增" />
-      <el-table v-else :data="questions" stripe v-loading="loading">
+      <el-table v-else v-loading="loading" :data="questions" stripe>
         <el-table-column type="index" label="#" width="50" />
         <el-table-column prop="content" label="题干" min-width="280" show-overflow-tooltip />
         <el-table-column label="题型" width="120">
           <template #default="{ row }">
-            <el-tag :type="typeTagColor(row.questionType)">{{ typeLabel(row.questionType) }}</el-tag>
+            <el-tag :type="typeTagColor(row.questionType)">{{
+              typeLabel(row.questionType)
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="选项数" width="80">
@@ -64,7 +68,13 @@
           <div v-for="(opt, idx) in form.optionList" :key="idx" class="option-row">
             <el-input v-model="opt.label" placeholder="选项内容" style="flex: 1" />
             <el-input-number v-model="opt.score" :min="0" :max="100" controls-position="right" />
-            <el-button link type="danger" :disabled="form.optionList.length <= 1" @click="removeOption(idx)">×</el-button>
+            <el-button
+              link
+              type="danger"
+              :disabled="form.optionList.length <= 1"
+              @click="removeOption(idx)"
+              >×</el-button
+            >
           </div>
           <el-button link type="primary" @click="addOption">+ 添加选项</el-button>
         </template>
@@ -86,7 +96,12 @@
         <el-input v-model="rule.suggestion" placeholder="建议" style="flex: 1" />
         <el-button link type="danger" @click="editingRules.splice(idx, 1)">×</el-button>
       </div>
-      <el-button link type="primary" @click="editingRules.push({ level: '', minScore: 0, suggestion: '' })">+ 添加规则</el-button>
+      <el-button
+        link
+        type="primary"
+        @click="editingRules.push({ level: '', minScore: 0, suggestion: '' })"
+        >+ 添加规则</el-button
+      >
       <template #footer>
         <el-button @click="rulesDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="saveLevelRules">保存</el-button>
@@ -130,9 +145,10 @@ const form = reactive({
 const rulesDialogVisible = ref(false)
 
 const typeLabel = (t: string) =>
-  ({ single_choice: '单选', multiple_choice: '多选', text: '简答', scale: '量表' } as any)[t] || t
+  (({ single_choice: '单选', multiple_choice: '多选', text: '简答', scale: '量表' }) as any)[t] || t
 const typeTagColor = (t: string) =>
-  ({ single_choice: '', multiple_choice: 'success', text: 'info', scale: 'warning' } as any)[t] || ''
+  (({ single_choice: '', multiple_choice: 'success', text: 'info', scale: 'warning' }) as any)[t] ||
+  ''
 
 const parseOpts = (raw: any): any[] => {
   if (!raw) return []
@@ -182,7 +198,9 @@ const openEditDialog = (row: any) => {
   form.required = row.required
   form.sortOrder = row.sortOrder
   const opts = parseOpts(row.options)
-  form.optionList = opts.length ? opts.map((o: any) => ({ label: o.label, score: o.score ?? 0 })) : [{ label: '', score: 0 }]
+  form.optionList = opts.length
+    ? opts.map((o: any) => ({ label: o.label, score: o.score ?? 0 }))
+    : [{ label: '', score: 0 }]
   dialogVisible.value = true
 }
 
@@ -243,7 +261,11 @@ const handleDelete = (row: any) => {
 const saveLevelRules = async () => {
   const cleaned = editingRules.value
     .filter((r: any) => r.level && r.level.trim())
-    .map((r: any) => ({ level: r.level.trim(), minScore: Number(r.minScore) || 0, suggestion: r.suggestion || '' }))
+    .map((r: any) => ({
+      level: r.level.trim(),
+      minScore: Number(r.minScore) || 0,
+      suggestion: r.suggestion || ''
+    }))
   try {
     await updateQuestionnaire(questionnaireId, {
       ...questionnaire.value,
