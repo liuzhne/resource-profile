@@ -1,24 +1,36 @@
 <template>
-  <span>{{ displayValue }}</span>
+  <span>{{ formattedValue }}</span>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 interface Props {
   start?: number
   end: number
   duration?: number
   decimals?: number
+  /** 千分位分隔，对齐原型的 1,286 / 18,432 */
+  separator?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   start: 0,
   duration: 2000,
-  decimals: 0
+  decimals: 0,
+  separator: true
 })
 
 const displayValue = ref(props.start)
+
+const formattedValue = computed(() =>
+  props.separator
+    ? displayValue.value.toLocaleString('en-US', {
+        minimumFractionDigits: props.decimals,
+        maximumFractionDigits: props.decimals
+      })
+    : displayValue.value
+)
 let rafId: number | null = null
 
 const startAnimate = (from: number, to: number) => {

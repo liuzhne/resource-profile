@@ -1,5 +1,6 @@
 // 全局样式入口
 @use './variables';
+@use './glass';
 @use './layout';
 @use './element-plus';
 
@@ -9,16 +10,42 @@
   box-sizing: border-box;
 }
 
-html, body, #app {
+html,
+body,
+#app {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  // 原型字体栈：优先系统中文字体，保证中文字形不回落到 Arial
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
-  color: #333;
-  background-color: #f0f2f5;
+  color: var(--text-color);
+  -webkit-font-smoothing: antialiased;
+}
+
+// 底色只加在 html/body 上：#app 若不透明会盖掉 body 的光晕
+html,
+body {
+  background-color: var(--bg-color);
+}
+
+#app {
+  background: transparent;
+}
+
+// 暖白底 + 三层光晕。fixed 让光晕不随内容滚动，与原型的绝对定位遮罩等效
+body {
+  background-image:
+    radial-gradient(900px 620px at 12% -8%, rgba(0, 122, 255, 0.1), transparent 62%),
+    radial-gradient(780px 560px at 92% 4%, rgba(255, 149, 0, 0.09), transparent 60%),
+    radial-gradient(1000px 700px at 62% 108%, rgba(88, 86, 214, 0.07), transparent 62%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 // 清除默认样式
-ul, ol {
+ul,
+ol {
   list-style: none;
 }
 
@@ -36,15 +63,22 @@ a {
 
 // 滚动条样式
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: rgba(60, 60, 67, 0.22);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+
+  &:hover {
+    background: rgba(60, 60, 67, 0.34);
+    background-clip: content-box;
+  }
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }

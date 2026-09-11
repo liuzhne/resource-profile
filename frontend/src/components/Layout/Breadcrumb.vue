@@ -37,11 +37,27 @@ watch(() => route.path, getBreadcrumb, { immediate: true })
 
 <style scoped lang="scss">
 :deep(.el-breadcrumb) {
-  margin-left: 16px;
   font-size: 14px;
+  line-height: 1;
 
+  .el-breadcrumb__separator {
+    color: rgba(60, 60, 67, 0.3);
+    margin: 0 7px;
+  }
+
+  .el-breadcrumb__inner {
+    color: rgba(60, 60, 67, 0.68);
+    font-weight: 400;
+
+    a:hover {
+      color: var(--primary-color);
+    }
+  }
+
+  // 末级为当前页：加粗且不可点
   .no-redirect {
-    color: #97a8be;
+    color: var(--text-color);
+    font-weight: 600;
     cursor: text;
   }
 }

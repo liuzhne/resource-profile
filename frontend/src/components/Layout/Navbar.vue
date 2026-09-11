@@ -2,8 +2,8 @@
   <div class="navbar">
     <!-- 左侧：折叠按钮和面包屑 -->
     <div class="left">
-      <div class="collapse-btn" @click="toggleSidebar">
-        <el-icon :size="18">
+      <div class="icon-btn collapse-btn" @click="toggleSidebar">
+        <el-icon :size="17">
           <Fold v-if="!sidebarCollapsed" />
           <Expand v-else />
         </el-icon>
@@ -11,15 +11,21 @@
       <Breadcrumb />
     </div>
 
-    <!-- 右侧：用户相关 -->
+    <!-- 右侧：工具区 + 用户 -->
     <div class="right">
+      <!-- 全局搜索与通知：原型有版式，后端暂无对应接口，先占位 -->
+      <div class="icon-btn" title="全局搜索" @click="notReady">
+        <el-icon :size="17"><Search /></el-icon>
+      </div>
+      <div class="icon-btn" title="通知" @click="notReady">
+        <el-icon :size="17"><Bell /></el-icon>
+      </div>
+
       <el-dropdown trigger="click">
         <div class="user-info">
-          <el-avatar :size="32" :src="userInfo?.avatar">
-            <el-icon><User /></el-icon>
-          </el-avatar>
-          <span class="username">{{ userInfo?.nickname || userInfo?.username }}</span>
-          <el-icon><ArrowDown /></el-icon>
+          <span class="avatar">{{ avatarText }}</span>
+          <span class="username">{{ displayName }}</span>
+          <el-icon :size="11"><ArrowDown /></el-icon>
         </div>
         <template #dropdown>
           <el-dropdown-menu>
@@ -42,7 +48,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAppStore } from '@/store/modules/app'
 import { useUserStore } from '@/store/modules/user'
 import Breadcrumb from './Breadcrumb.vue'
@@ -54,8 +60,15 @@ const userStore = useUserStore()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const userInfo = computed(() => userStore.userInfo)
 
+const displayName = computed(() => userInfo.value?.nickname || userInfo.value?.username || '')
+const avatarText = computed(() => displayName.value.charAt(0) || '?')
+
 const toggleSidebar = () => {
   appStore.toggleSidebar()
+}
+
+const notReady = () => {
+  ElMessage.info('该功能暂未开放')
 }
 
 const goToProfile = () => {
@@ -80,48 +93,73 @@ const handleLogout = () => {
 <style scoped lang="scss">
 .navbar {
   height: var(--header-height);
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
+  gap: 12px;
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background: rgba(255, 255, 255, 0.96);
+  }
 
   .left {
     display: flex;
     align-items: center;
+    gap: 14px;
+    min-width: 0;
 
     .collapse-btn {
-      padding: 8px;
-      cursor: pointer;
-      border-radius: 4px;
-      transition: background 0.3s;
-
-      &:hover {
-        background: rgba(0, 0, 0, 0.025);
-      }
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
     }
   }
 
   .right {
     display: flex;
     align-items: center;
+    gap: 6px;
 
     .user-info {
       display: flex;
       align-items: center;
+      gap: 9px;
       cursor: pointer;
-      padding: 4px 8px;
-      border-radius: 4px;
-      transition: background 0.3s;
+      padding: 4px 10px 4px 4px;
+      border-radius: var(--radius-pill);
+      margin-left: 4px;
+      color: var(--text-color-tertiary);
+      transition: background 0.16s;
 
       &:hover {
-        background: rgba(0, 0, 0, 0.025);
+        background: var(--fill-hover);
+      }
+
+      .avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #a2c9ff, #7aa7f5);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 12px;
+        font-weight: 600;
       }
 
       .username {
-        margin: 0 8px;
-        color: rgba(0, 0, 0, 0.85);
+        color: var(--text-color);
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
       }
     }
   }

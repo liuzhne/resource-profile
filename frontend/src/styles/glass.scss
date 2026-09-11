@@ -1,0 +1,136 @@
+// 毛玻璃复用样式
+// backdrop-filter 不可用时（旧浏览器 / 关闭硬件加速）统一降级为不透明白底，
+// 否则半透明底叠在光晕背景上会导致文字对比度不足。
+
+@mixin glass($bg: var(--glass-bg)) {
+  background: $bg;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background: rgba(255, 255, 255, 0.96);
+  }
+}
+
+// 面板：图表区、表格区等大块容器
+.glass-panel {
+  @include glass;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-1);
+}
+
+// 卡片：统计卡等可 hover 抬起的小块
+.glass-card {
+  @include glass;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-2);
+  }
+}
+
+// 面板内的分区标题行
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+
+  .panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-color);
+    letter-spacing: -0.01em;
+  }
+}
+
+// 分段控件（周期切换、详情页 tab）
+.seg-control {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--fill-grey);
+  border-radius: 9px;
+
+  .seg-item {
+    height: 26px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-color-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.18s ease;
+
+    &:hover:not(.is-active) {
+      color: var(--text-color);
+    }
+
+    &.is-active {
+      background: #fff;
+      color: var(--text-color);
+      box-shadow: var(--shadow-thumb);
+    }
+  }
+}
+
+// 药丸标签（TagsView、状态徽标）
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+
+// 图标胶囊（统计卡右上角、列表行首）
+.icon-chip {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+// 数字：等宽对齐。原型用 Barlow，此处用系统字体 + tabular-nums 达到同等对齐效果
+.tnum {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+// 顶栏/侧栏的图标按钮
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-color-secondary);
+  transition: background 0.16s;
+
+  &:hover {
+    background: var(--fill-hover);
+  }
+}

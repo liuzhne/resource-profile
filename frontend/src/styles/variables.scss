@@ -1,35 +1,73 @@
-// 主题变量 - Ant Design Pro 风格
+// 主题变量 - 毛玻璃（iOS / visionOS 风格）
+// 色板来源：Claude Design 原型「新设计 · 毛玻璃」
 :root {
   // 主色调
-  --primary-color: #1890ff;
-  --primary-color-hover: #40a9ff;
-  --primary-color-active: #096dd9;
+  --primary-color: #007aff;
+  --primary-color-hover: #339cff;
+  --primary-color-active: #0060df;
+  // 主色浅色底（原型 accentTint = rgba(accent, 0.13)）
+  --primary-tint: rgba(0, 122, 255, 0.13);
 
-  // 功能色
-  --success-color: #52c41a;
-  --warning-color: #faad14;
-  --error-color: #f5222d;
-  --info-color: #1890ff;
+  // 功能色。-deep 变体用于文字/图标前景，保证浅色底上的对比度
+  --success-color: #34c759;
+  --success-deep: #248a3d;
+  --success-tint: rgba(52, 199, 89, 0.14);
 
-  // 文字色
-  --text-color: rgba(0, 0, 0, 0.85);
-  --text-color-secondary: rgba(0, 0, 0, 0.45);
-  --text-color-disabled: rgba(0, 0, 0, 0.25);
+  --warning-color: #ff9500;
+  --warning-deep: #a85c00;
+  --warning-tint: rgba(255, 149, 0, 0.14);
+
+  --error-color: #ff3b30;
+  --error-deep: #c8261d;
+  --error-tint: rgba(255, 59, 48, 0.14);
+
+  --info-color: #007aff;
+  --info-deep: #0060df;
+  --info-tint: rgba(0, 122, 255, 0.13);
+
+  // 中性色（iOS label 体系）
+  --text-color: #1c1c1e;
+  --text-color-secondary: rgba(60, 60, 67, 0.7);
+  --text-color-tertiary: rgba(60, 60, 67, 0.45);
+  --text-color-disabled: rgba(60, 60, 67, 0.3);
+
+  // 中性填充（分段控件底、未选中标签底）
+  --fill-grey: rgba(120, 120, 128, 0.12);
+  --fill-grey-fg: rgba(60, 60, 67, 0.75);
+  --fill-hover: rgba(60, 60, 67, 0.08);
 
   // 背景色
-  --bg-color: #f0f2f5;
+  --bg-color: #f6f4f1;
   --bg-color-container: #fff;
 
   // 边框色
-  --border-color: #f0f0f0;
+  --border-color: rgba(60, 60, 67, 0.1);
+  --border-color-strong: rgba(60, 60, 67, 0.14);
+
+  // 毛玻璃
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-thin: rgba(255, 255, 255, 0.52);
+  --glass-bg-input: rgba(255, 255, 255, 0.66);
+  --glass-border: rgba(255, 255, 255, 0.66);
+  --glass-blur: 26px;
+  --glass-saturate: 180%;
 
   // 布局
-  --sidebar-width: 208px;
+  --sidebar-width: 224px;
   --sidebar-collapsed-width: 80px;
-  --header-height: 64px;
+  --header-height: 60px;
   --footer-height: 70px;
 
+  // 圆角阶
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 999px;
+
   // 阴影
-  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 28px -18px rgba(16, 24, 40, 0.28);
+  --shadow-2: 0 1px 2px rgba(16, 24, 40, 0.04), 0 18px 36px -18px rgba(16, 24, 40, 0.34);
+  // 分段控件滑块
+  --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 1px rgba(0, 0, 0, 0.06);
 }

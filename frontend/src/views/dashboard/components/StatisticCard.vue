@@ -1,20 +1,27 @@
 <template>
-  <el-card class="statistic-card" shadow="hover">
-    <div class="card-content">
-      <div class="icon-wrapper" :style="{ backgroundColor: color + '15' }">
-        <el-icon :size="32" :style="{ color: color }">
+  <div class="glass-card statistic-card">
+    <div class="card-head">
+      <span class="title">{{ title }}</span>
+      <span class="icon-chip" :style="{ backgroundColor: tint, color: color }">
+        <el-icon :size="17">
           <component :is="icon" />
         </el-icon>
-      </div>
-      <div class="statistic-info">
-        <div class="title">{{ title }}</div>
-        <div class="value" :style="{ color: color }">
-          <CountTo :end="value" :duration="2000" />
-          <span class="suffix">{{ suffix }}</span>
-        </div>
-      </div>
+      </span>
     </div>
-  </el-card>
+
+    <div class="value-row">
+      <span class="value tnum">
+        <CountTo :end="value" :duration="1600" />
+      </span>
+      <span v-if="suffix" class="suffix">{{ suffix }}</span>
+    </div>
+
+    <!-- 环比：后端 /data/dashboard/statistics 暂无该字段，有值才渲染 -->
+    <div v-if="delta" class="delta-row">
+      <span class="delta tnum" :style="{ color: deltaColor }">{{ delta }}</span>
+      <span class="delta-label">较上月</span>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -24,48 +31,70 @@ interface Props {
   title: string
   value: number
   icon: string
+  /** 图标前景色，用 -deep 变体保证浅底对比度 */
   color: string
+  /** 图标胶囊底色 */
+  tint: string
   suffix?: string
+  delta?: string
+  deltaColor?: string
 }
 
-defineProps<Props>()
+withDefaults(defineProps<Props>(), {
+  suffix: '',
+  delta: '',
+  deltaColor: 'var(--success-deep)'
+})
 </script>
 
 <style scoped lang="scss">
 .statistic-card {
-  .card-content {
+  padding: 18px;
+
+  .card-head {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
 
-    .icon-wrapper {
-      width: 60px;
-      height: 60px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-right: 16px;
+    .title {
+      font-size: 13px;
+      color: var(--text-color-secondary);
+    }
+  }
+
+  .value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+
+    // 原型里数值统一为深色，颜色信息只由图标胶囊承载
+    .value {
+      font-size: 34px;
+      font-weight: 600;
+      line-height: 1;
+      color: var(--text-color);
     }
 
-    .statistic-info {
-      flex: 1;
+    .suffix {
+      font-size: 13px;
+      color: rgba(60, 60, 67, 0.65);
+    }
+  }
 
-      .title {
-        font-size: 14px;
-        color: rgba(0, 0, 0, 0.45);
-        margin-bottom: 4px;
-      }
+  .delta-row {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
 
-      .value {
-        font-size: 28px;
-        font-weight: 600;
-        line-height: 1;
+    .delta {
+      font-weight: 600;
+    }
 
-        .suffix {
-          font-size: 14px;
-          margin-left: 4px;
-        }
-      }
+    .delta-label {
+      color: rgba(60, 60, 67, 0.65);
     }
   }
 }
