@@ -1,65 +1,107 @@
 <template>
-  <div class="page-container">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>我的问卷</span>
-          <el-button link type="primary" @click="$router.push('/student-mental/history')"
-            >查看历史评估</el-button
-          >
-        </div>
-      </template>
-
-      <el-empty v-if="!loading && list.length === 0" description="当前没有可作答的问卷" />
-      <el-row v-else v-loading="loading" :gutter="16">
-        <el-col
-          v-for="item in list"
-          :key="item.id"
-          :xs="24"
-          :sm="12"
-          :md="8"
-          style="margin-bottom: 16px"
+  <div class="page-container student-mental-list-page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">我的心理测评</h1>
+        <div class="page-subtitle">查看当前可填写问卷、测评开放时间与已完成记录。</div>
+      </div>
+      <div class="page-actions">
+        <el-button :icon="Refresh" :loading="loading" @click="fetchData"> 刷新 </el-button>
+        <el-button
+          type="primary"
+          plain
+          :icon="Clock"
+          @click="router.push('/student-mental/history')"
         >
-          <el-card shadow="hover" class="q-card">
-            <div class="q-title">{{ item.title }}</div>
-            <div class="q-meta">
-              <el-tag size="small">{{ item.type }}</el-tag>
-              <span>共 {{ item.questions }} 题</span>
-            </div>
-            <div class="q-desc">{{ item.description || '（无描述）' }}</div>
-            <div class="q-time">{{ item.startTime || '不限' }} ~ {{ item.endTime || '不限' }}</div>
-            <div class="q-actions">
-              <el-tag v-if="item.answered" type="success">已作答</el-tag>
-              <el-tag v-else-if="!item.inWindow" type="info">不在作答时间</el-tag>
-              <el-button
-                v-if="!item.answered && item.inWindow"
-                type="primary"
-                size="small"
-                @click="goTake(item.id)"
-                >去作答</el-button
-              >
-              <el-button v-if="item.answered" size="small" @click="findAndOpenResult(item.id)"
-                >查看结果</el-button
-              >
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
-    </el-card>
+          历史评估
+        </el-button>
+      </div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <span>问卷总数</span>
+        <strong>{{ list.length }}</strong>
+        <p>当前账号可见测评</p>
+      </div>
+      <div class="summary-card is-primary">
+        <span>待作答</span>
+        <strong>{{ summary.available }}</strong>
+        <p>在开放时间内</p>
+      </div>
+      <div class="summary-card is-success">
+        <span>已完成</span>
+        <strong>{{ summary.answered }}</strong>
+        <p>可查看评估结果</p>
+      </div>
+      <div class="summary-card is-muted">
+        <span>未开放</span>
+        <strong>{{ summary.closed }}</strong>
+        <p>当前不可作答</p>
+      </div>
+    </div>
+
+    <div v-loading="loading" class="questionnaire-grid">
+      <el-empty v-if="!loading && list.length === 0" description="当前没有可作答的问卷" />
+
+      <article v-for="item in list" v-else :key="item.id" class="questionnaire-card">
+        <div class="card-top">
+          <el-tag effect="plain">{{ item.type || '-' }}</el-tag>
+          <el-tag :type="stateType(item)" effect="plain">
+            {{ stateLabel(item) }}
+          </el-tag>
+        </div>
+        <h2>{{ item.title || '未命名问卷' }}</h2>
+        <p>{{ item.description || '暂无描述' }}</p>
+
+        <div class="meta-list">
+          <div>
+            <span>题目数量</span>
+            <strong>{{ item.questions || 0 }} 题</strong>
+          </div>
+          <div>
+            <span>开放时间</span>
+            <strong>{{ timeRange(item) }}</strong>
+          </div>
+        </div>
+
+        <div class="card-actions">
+          <el-button
+            v-if="!item.answered && item.inWindow"
+            type="primary"
+            :icon="EditPen"
+            @click="goTake(item.id)"
+          >
+            去作答
+          </el-button>
+          <el-button v-else-if="item.answered" :icon="View" @click="findAndOpenResult(item.id)">
+            查看结果
+          </el-button>
+          <el-button v-else disabled>暂不可作答</el-button>
+        </div>
+      </article>
+    </div>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
+<script setup>
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Clock, EditPen, Refresh, View } from '@element-plus/icons-vue'
 import { studentListQuestionnaires, studentMyHistory } from '@/api/mental'
 import { useUserStore } from '@/store/modules/user'
 
 const router = useRouter()
 const userStore = useUserStore()
-const list = ref<any[]>([])
+const list = ref([])
 const loading = ref(false)
+
+const summary = computed(() => ({
+  available: list.value.filter((item) => !item.answered && item.inWindow).length,
+  answered: list.value.filter((item) => item.answered).length,
+  closed: list.value.filter((item) => !item.answered && !item.inWindow).length
+}))
 
 const fetchData = async () => {
   loading.value = true
@@ -78,15 +120,17 @@ const fetchData = async () => {
   }
 }
 
-const goTake = (id: number) => {
+const goTake = (id) => {
   router.push(`/student-mental/take/${id}`)
 }
 
-const findAndOpenResult = async (questionnaireId: number) => {
+const findAndOpenResult = async (questionnaireId) => {
   try {
     const userId = userStore.userInfo?.id
     const res = await studentMyHistory(userId)
-    const found = (res.data || []).find((a: any) => a.questionnaireId === questionnaireId)
+    const found = (res.data || []).find(
+      (assessment) => assessment.questionnaireId === questionnaireId
+    )
     if (found) {
       router.push(`/student-mental/result/${found.id}`)
     } else {
@@ -97,46 +141,157 @@ const findAndOpenResult = async (questionnaireId: number) => {
   }
 }
 
+const stateLabel = (item) => {
+  if (item.answered) return '已作答'
+  if (!item.inWindow) return '未开放'
+  return '待作答'
+}
+
+const stateType = (item) => {
+  if (item.answered) return 'success'
+  if (!item.inWindow) return 'info'
+  return 'primary'
+}
+
+const timeRange = (item) => `${item.startTime || '不限'} ~ ${item.endTime || '不限'}`
+
 onMounted(fetchData)
 </script>
 
 <style scoped lang="scss">
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.student-mental-list-page {
+  .page-actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+  }
 }
-.q-card {
-  height: 100%;
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.summary-card {
+  min-height: 112px;
+  padding: 18px;
+  background: var(--bg-color-container);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-1);
+
+  span {
+    display: block;
+    color: var(--text-color-secondary);
+    font-size: 13px;
+  }
+
+  strong {
+    display: block;
+    margin-top: 10px;
+    color: var(--text-color);
+    font-size: 28px;
+    line-height: 1;
+  }
+
+  p {
+    margin: 12px 0 0;
+    color: var(--text-color-muted);
+    font-size: 12px;
+  }
+
+  &.is-primary strong {
+    color: var(--primary-color);
+  }
+
+  &.is-success strong {
+    color: #2f9e44;
+  }
+
+  &.is-muted strong {
+    color: #64748b;
+  }
+}
+
+.questionnaire-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  min-height: 240px;
+}
+
+.questionnaire-card {
   display: flex;
   flex-direction: column;
-  .q-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-  .q-meta {
+  min-height: 250px;
+  padding: 18px;
+  background: var(--bg-color-container);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-1);
+
+  .card-top {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--el-text-color-secondary);
-    font-size: 13px;
-    margin-bottom: 8px;
+    justify-content: space-between;
+    gap: 10px;
   }
-  .q-desc {
-    color: var(--el-text-color-regular);
-    margin-bottom: 12px;
-    min-height: 40px;
+
+  h2 {
+    margin: 16px 0 8px;
+    color: var(--text-color);
+    font-size: 18px;
+    line-height: 1.4;
   }
-  .q-time {
+
+  p {
+    margin: 0;
+    color: var(--text-color-regular);
+    line-height: 1.6;
+    min-height: 46px;
+  }
+}
+
+.meta-list {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+
+  span {
+    display: block;
+    color: var(--text-color-muted);
     font-size: 12px;
-    color: var(--el-text-color-secondary);
-    margin-bottom: 12px;
   }
-  .q-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+
+  strong {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-color);
+    font-size: 13px;
+    font-weight: 650;
+  }
+}
+
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+@media (max-width: 1180px) {
+  .questionnaire-grid,
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .questionnaire-grid,
+  .summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

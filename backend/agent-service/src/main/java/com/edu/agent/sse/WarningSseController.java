@@ -36,6 +36,19 @@ public class WarningSseController {
     @Value("${educare.sse.timeout-millis:1800000}")
     private long timeoutMillis;
 
+    /**
+     * Opens an SSE stream for warning pushes and registers the created emitter.
+     *
+     * <p>Determines the requesting user's ID from either an `Authorization: Bearer <token>` header
+     * or a `token` query parameter (defaults to `0` if not present or invalid), sends an initial
+     * `"hello"` event containing `userId` and a timestamp to transition the client to OPEN, and
+     * registers the emitter for subsequent pushes.</p>
+     *
+     * @param authHeader the value of the `Authorization` header; may be null or not start with `Bearer `
+     * @param tokenParam the `token` query parameter; may be null or blank
+     * @return an `SseEmitter` configured for the connection; if sending the initial event fails the
+     *         emitter will be completed with the error and still returned
+     */
     @GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
@@ -61,6 +74,13 @@ public class WarningSseController {
         return emitter;
     }
 
+    /**
+     * Extracts the user ID from a JWT provided in an Authorization header or a token query parameter.
+     *
+     * @param authHeader the Authorization header value; expected in the form "Bearer <token>" (may be null)
+     * @param tokenParam the token provided via the "token" query parameter (may be null or blank)
+     * @return the user ID parsed from the JWT subject as a Long, or `0L` if the token is missing, subject is absent, malformed, or cannot be parsed
+     */
     private Long extractUserId(String authHeader, String tokenParam) {
         String token = null;
         if (authHeader != null && authHeader.startsWith("Bearer ")) {

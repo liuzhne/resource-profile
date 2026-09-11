@@ -14,6 +14,7 @@ import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -36,6 +37,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 @Slf4j
 @Service
@@ -46,6 +48,8 @@ public class ExportServiceImpl implements ExportService {
     private final AgentTaskMapper agentTaskMapper;
     private final TemplateEngine templateEngine;
     private final ResourceLoader resourceLoader;
+    @Qualifier("agentExecutor")
+    private final Executor agentExecutor;
 
     @Value("${educare.export.storage-path:/tmp/edu-exports}")
     private String storagePath;
@@ -59,6 +63,15 @@ public class ExportServiceImpl implements ExportService {
      */
     private File cachedFontFile;
 
+    /**
+     * Initializes the export service by ensuring the configured storage directory exists and
+     * materializing the configured font into a cached file used for PDF rendering.
+     *
+     * This method sets the {@code cachedFontFile} field to the materialized font file or
+     * {@code null} when the configured font resource is not available.
+     *
+     * @throws IOException if creating the storage directory or writing the cached font file fails
+     */
     @PostConstruct
     public void init() throws IOException {
         Path dir = Paths.get(storagePath);
@@ -74,6 +87,13 @@ public class ExportServiceImpl implements ExportService {
         }
     }
 
+    /**
+     * Ensures the configured font resource is materialized to the service storage and returns the cached font file.
+     *
+     * Copies the font located at the configured `fontPath` into `storagePath/.fonts/NotoSansSC-Regular.ttf` if it does not already exist or is empty. Creates parent directories as needed. Returns `null` when the font resource is absent or cannot be read.
+     *
+     * @return the cached font File pointing to `storagePath/.fonts/NotoSansSC-Regular.ttf`, or `null` if the resource does not exist or could not be materialized
+     */
     private File materializeFont() {
         try {
             Resource res = resourceLoader.getResource(fontPath);
@@ -95,6 +115,17 @@ public class ExportServiceImpl implements ExportService {
         }
     }
 
+    /**
+     * Creates a new export job for the specified AgentTask and schedules PDF rendering.
+     *
+     * The method persists an AgentExportTask with pending status and submits a background task
+     * to perform the PDF rendering.
+     *
+     * @param taskId the id of the AgentTask to export
+     * @param userId the id of the requesting user; when null, treated as 0L
+     * @return the id of the created export job
+     * @throws IllegalArgumentException if no AgentTask exists with the given taskId
+     */
     @Override
     public Long createExportJob(Long taskId, Long userId) {
         AgentTask source = agentTaskMapper.selectById(taskId);
@@ -109,10 +140,20 @@ public class ExportServiceImpl implements ExportService {
         exportMapper.insert(job);
         log.info("F-1：创建导出任务 jobId={} taskId={} userId={}", job.getId(), taskId, userId);
 
-        renderPdfAsync(job.getId());
+        agentExecutor.execute(() -> renderPdfAsync(job.getId()));
         return job.getId();
     }
 
+    /**
+     * Processes an export job: renders the source task to PDF and updates the job record accordingly.
+     *
+     * On invocation the job status is set to PROCESSING. If the source task exists, HTML is rendered
+     * to PDF and the job is marked DONE with the generated file path and size; on any failure the job
+     * is marked FAILED with a truncated error message. If the job record does not exist the method
+     * returns without side effects.
+     *
+     * @param jobId the id of the AgentExportTask to render
+     */
     @Override
     @Async("agentExecutor")
     public void renderPdfAsync(Long jobId) {
@@ -140,11 +181,24 @@ public class ExportServiceImpl implements ExportService {
         }
     }
 
+    /**
+     * Fetches the export job record for the given job identifier.
+     *
+     * @param jobId the export job id
+     * @return the corresponding {@code AgentExportTask}, or {@code null} if no such job exists
+     */
     @Override
     public AgentExportTask getJobStatus(Long jobId) {
         return exportMapper.selectById(jobId);
     }
 
+    /**
+     * Load the completed PDF file for the given export job as a Spring Resource.
+     *
+     * @param jobId the export job id
+     * @return a Resource pointing to the exported PDF file
+     * @throws IllegalStateException if the export job does not exist, is not finished, or the PDF file is missing
+     */
     @Override
     public Resource loadFile(Long jobId) {
         AgentExportTask job = exportMapper.selectById(jobId);
@@ -161,7 +215,12 @@ public class ExportServiceImpl implements ExportService {
         return new FileSystemResource(file);
     }
 
-    // ==================== 渲染细节 ====================
+    /**
+     * Render an HTML report for the given AgentTask using the "report" Thymeleaf template.
+     *
+     * @param source the AgentTask whose data populates the template
+     * @return the rendered HTML string for the report
+     */
 
     private String renderHtml(AgentTask source) {
         Context ctx = new Context();
@@ -184,6 +243,15 @@ public class ExportServiceImpl implements ExportService {
         return templateEngine.process("report", ctx);
     }
 
+    /**
+     * Render the provided HTML into a PDF file stored in the service storage directory for the specified job and task.
+     *
+     * @param html   the HTML content to render into PDF
+     * @param jobId  the export job identifier used to compose the output filename
+     * @param taskId the source task identifier used to compose the output filename
+     * @return       the created PDF file
+     * @throws IOException if writing the output file or the PDF rendering process fails
+     */
     private File renderPdf(String html, Long jobId, Long taskId) throws IOException {
         File output = new File(storagePath, String.format("report-%d-%d.pdf", taskId, jobId));
         try (FileOutputStream fos = new FileOutputStream(output)) {
@@ -203,7 +271,14 @@ public class ExportServiceImpl implements ExportService {
         return output;
     }
 
-    // ==================== JSON 解析辅助 ====================
+    /**
+     * Parses a JSON object string into a Map of keys to values.
+     *
+     * <p>Returns an empty map when the input is null, blank, or cannot be parsed as a JSON object.</p>
+     *
+     * @param json the JSON string expected to contain an object
+     * @return the parsed map of key/value pairs, or an empty map if input is null, blank, or invalid
+     */
 
     private Map<String, Object> parseObj(String json) {
         if (json == null || json.isBlank()) return new HashMap<>();
@@ -216,7 +291,10 @@ public class ExportServiceImpl implements ExportService {
     }
 
     /**
-     * RAG 阶段的产物结构：{"chunks":[...], "reranked":bool, "fallback":bool}
+     * Extracts the top-level "chunks" array from a JSON string produced by the RAG stage.
+     *
+     * @param json JSON string expected to contain an object with a `chunks` array; may be null or blank
+     * @return a list of maps representing each object in the `chunks` array; an empty list if the input is null, blank, malformed, or if `chunks` is missing
      */
     private List<Map<String, Object>> parseChunks(String json) {
         if (json == null || json.isBlank()) return new ArrayList<>();
@@ -236,6 +314,14 @@ public class ExportServiceImpl implements ExportService {
         }
     }
 
+    /**
+     * Extracts an array of JSON objects from a JSON string by field name.
+     *
+     * @param json  a JSON object string that contains the target array; may be null or blank
+     * @param field the key whose value is expected to be a JSON array of objects
+     * @return      a list of maps representing each object in the array; returns an empty list if the input is null/blank,
+     *              the field is missing or not an array, or a parse error occurs
+     */
     private List<Map<String, Object>> parseArr(String json, String field) {
         if (json == null || json.isBlank()) return new ArrayList<>();
         try {
@@ -254,6 +340,13 @@ public class ExportServiceImpl implements ExportService {
         }
     }
 
+    /**
+     * Extracts the values of the specified array field from a JSON object as a list of strings.
+     *
+     * @param json  the JSON string representing an object that may contain the array field
+     * @param field the name of the array field to extract
+     * @return a list of string representations of the array elements; returns an empty list if the input is null/blank, the field is missing, not an array, or parsing fails (null elements are skipped)
+     */
     private List<String> parseStringArr(String json, String field) {
         if (json == null || json.isBlank()) return new ArrayList<>();
         try {
@@ -272,7 +365,18 @@ public class ExportServiceImpl implements ExportService {
         }
     }
 
-    // ==================== 状态变更 ====================
+    /**
+     * Update an AgentExportTask record's status and optionally its file path or error message.
+     *
+     * Sets the task identified by `jobId` to `status`. If `filePath` is non-null, updates the task's
+     * file path; if `errMsg` is non-null, updates the task's error message. The changes are persisted
+     * to the database.
+     *
+     * @param jobId    the id of the export job to update
+     * @param status   the new status value to set on the job
+     * @param filePath the output PDF file path to set, or `null` to leave unchanged
+     * @param errMsg   the error message to set, or `null` to leave unchanged
+     */
 
     private void markStatus(Long jobId, String status, String filePath, String errMsg) {
         LambdaUpdateWrapper<AgentExportTask> uw = new LambdaUpdateWrapper<AgentExportTask>()
@@ -283,6 +387,16 @@ public class ExportServiceImpl implements ExportService {
         exportMapper.update(null, uw);
     }
 
+    /**
+     * Mark the export job as completed and record the produced file's metadata.
+     *
+     * Sets the job status to `STATUS_DONE`, stores the output `filePath`, the file `size` in bytes,
+     * and updates the `finishedAt` timestamp to the current time.
+     *
+     * @param jobId    the identifier of the AgentExportTask to update
+     * @param filePath the filesystem path to the generated PDF
+     * @param size     the size of the generated file in bytes
+     */
     private void markDone(Long jobId, String filePath, long size) {
         exportMapper.update(null, new LambdaUpdateWrapper<AgentExportTask>()
                 .eq(AgentExportTask::getId, jobId)
@@ -292,6 +406,12 @@ public class ExportServiceImpl implements ExportService {
                 .set(AgentExportTask::getFinishedAt, LocalDateTime.now()));
     }
 
+    /**
+     * Mark an export job as failed and record its error message and finished timestamp.
+     *
+     * @param jobId the id of the export job to update
+     * @param errMsg the error message to store for the job (may be null)
+     */
     private void markFailed(Long jobId, String errMsg) {
         exportMapper.update(null, new LambdaUpdateWrapper<AgentExportTask>()
                 .eq(AgentExportTask::getId, jobId)
@@ -300,6 +420,14 @@ public class ExportServiceImpl implements ExportService {
                 .set(AgentExportTask::getFinishedAt, LocalDateTime.now()));
     }
 
+    /**
+     * Truncates the input string to at most the specified number of characters.
+     *
+     * @param s   the input string, may be {@code null}
+     * @param max the maximum number of characters to keep
+     * @return the original string if its length is less than or equal to {@code max}, a substring of the first {@code max}
+     *         characters if longer, or {@code null} if {@code s} is {@code null}
+     */
     private String truncate(String s, int max) {
         if (s == null) return null;
         return s.length() > max ? s.substring(0, max) : s;

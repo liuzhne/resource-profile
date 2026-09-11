@@ -16,43 +16,35 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { RouteLocationNormalized } from 'vue-router'
-
-interface TagView {
-  name: string
-  path: string
-  title: string
-  affix?: boolean
-}
 
 const route = useRoute()
 const router = useRouter()
-const visitedViews = ref<TagView[]>([
+const visitedViews = ref([
   { name: 'Dashboard', path: '/dashboard', title: '数据面板', affix: true }
 ])
 
-const isActive = (tag: TagView) => {
+const isActive = (tag) => {
   return tag.path === route.path
 }
 
-const isAffix = (tag: TagView) => {
+const isAffix = (tag) => {
   return tag.affix
 }
 
-const addView = (view: RouteLocationNormalized) => {
+const addView = (view) => {
   if (visitedViews.value.some((v) => v.path === view.path)) return
 
   visitedViews.value.push({
-    name: view.name as string,
+    name: view.name,
     path: view.path,
-    title: (view.meta.title as string) || 'no-name'
+    title: view.meta.title || 'no-name'
   })
 }
 
-const closeSelectedTag = (view: TagView) => {
+const closeSelectedTag = (view) => {
   const index = visitedViews.value.findIndex((v) => v.path === view.path)
   visitedViews.value.splice(index, 1)
 
@@ -77,47 +69,58 @@ watch(
 
 <style scoped lang="scss">
 .tags-view-container {
-  height: 40px;
+  height: 38px;
   background: #fff;
-  border-bottom: 1px solid #d8dce5;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.12);
-  padding: 0 16px;
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: none;
+  padding: 0 18px;
 
   .tags-view-wrapper {
     display: flex;
     height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
 
     .tags-view-item {
       display: inline-flex;
       align-items: center;
-      height: 28px;
-      line-height: 28px;
+      flex: 0 0 auto;
+      height: 26px;
+      line-height: 26px;
       margin-top: 6px;
       margin-right: 8px;
-      padding: 0 12px;
-      background: #fff;
-      border: 1px solid #d8dce5;
-      color: #495060;
+      padding: 0 10px;
+      background: var(--bg-color-subtle);
+      border: 1px solid transparent;
+      border-radius: 5px;
+      color: var(--text-color-secondary);
       font-size: 12px;
       cursor: pointer;
       transition: all 0.3s;
       text-decoration: none;
 
       &:hover {
-        background: #f0f0f0;
+        color: var(--primary-color);
+        background: var(--primary-color-light);
       }
 
       &.active {
-        background-color: var(--primary-color);
-        color: #fff;
-        border-color: var(--primary-color);
+        background-color: var(--primary-color-light);
+        color: var(--primary-color);
+        border-color: rgba(31, 95, 191, 0.18);
 
         &::before {
           content: '';
-          background: #fff;
+          background: var(--primary-color);
           display: inline-block;
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           margin-right: 6px;
         }
@@ -130,7 +133,7 @@ watch(
         height: 14px;
 
         &:hover {
-          background: rgba(0, 0, 0, 0.1);
+          background: rgba(31, 95, 191, 0.1);
         }
       }
     }

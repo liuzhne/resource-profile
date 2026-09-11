@@ -23,7 +23,7 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { computed } from 'vue'
 import { useAppStore } from '@/store/modules/app'
 import Sidebar from './Sidebar.vue'

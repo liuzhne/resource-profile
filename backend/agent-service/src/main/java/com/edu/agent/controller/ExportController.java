@@ -35,6 +35,13 @@ public class ExportController {
     private final ExportService exportService;
     private final AccessGuard accessGuard;
 
+    /**
+     * Creates an asynchronous PDF export job for the specified task.
+     *
+     * @param taskId     the ID of the task to export
+     * @param authHeader optional `Authorization` header (Bearer token); the method extracts the JWT subject as the user ID and uses `0` when the header is missing or invalid
+     * @return a `Result` containing a map with key `"jobId"` and the created export job ID on success; returns a `Result.error` with an error message (404 when the task is not found) on failure
+     */
     @PostMapping("/task/{taskId}/export")
     public Result<Map<String, Long>> createExportJob(
             @PathVariable Long taskId,
@@ -54,6 +61,12 @@ public class ExportController {
         }
     }
 
+    /**
+     * Retrieve the current status and details of an export job.
+     *
+     * @param jobId the identifier of the export job
+     * @return a Result containing the AgentExportTask when found, or an error Result with status 404 if the job does not exist
+     */
     @GetMapping("/export/{jobId}")
     public Result<AgentExportTask> getExportStatus(
             @PathVariable Long jobId,
@@ -68,6 +81,18 @@ public class ExportController {
         return Result.success(job);
     }
 
+    /**
+     * Downloads the PDF file for the specified export job as an attachment.
+     *
+     * <p>Returns a 200 response with `Content-Type: application/pdf` and a
+     * `Content-Disposition` header containing both a plain `filename` and a UTF-8
+     * `filename*` when the file is available. Returns 404 if the export job does
+     * not exist, or 400 with an `X-Error-Reason` header if the job is not in a
+     * state that allows downloading.
+     *
+     * @param jobId the export job identifier
+     * @return a ResponseEntity containing the PDF resource as an attachment, or a 404/400 response when unavailable
+     */
     @GetMapping("/export/{jobId}/download")
     public ResponseEntity<Resource> download(
             @PathVariable Long jobId,

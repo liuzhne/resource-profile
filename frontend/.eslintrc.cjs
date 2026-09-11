@@ -34,6 +34,9 @@ module.exports = {
   rules: {
     // 项目存在单词组件名（index.vue / login 等），不强制多词组件名
     'vue/multi-word-component-names': 'off',
+    // dev 前端美化引入的约定：允许与 HTML 保留名同名的组件、报告正文渲染需要 v-html
+    'vue/no-reserved-component-names': 'off',
+    'vue/no-v-html': 'off',
     // 未使用变量降为警告，允许下划线前缀占位
     'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     'vue/no-unused-vars': ['warn', { ignorePattern: '^_' }]

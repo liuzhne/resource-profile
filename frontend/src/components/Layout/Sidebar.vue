@@ -2,7 +2,11 @@
   <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
     <!-- Logo -->
     <div class="logo">
-      <span v-show="!sidebarCollapsed" class="title">师生画像系统</span>
+      <div class="logo-mark">教</div>
+      <div v-show="!sidebarCollapsed" class="brand-copy">
+        <span class="title">师生资源画像</span>
+        <span class="subtitle">Resource Profile</span>
+      </div>
     </div>
 
     <!-- 菜单 -->
@@ -27,7 +31,7 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/store/modules/app'
@@ -66,7 +70,7 @@ const menuRoutes = computed(() => {
 <style scoped lang="scss">
 .sidebar {
   width: var(--sidebar-width);
-  background: #001529;
+  background: #10233f;
   transition: width 0.3s;
   flex-shrink: 0;
   display: flex;
@@ -80,20 +84,43 @@ const menuRoutes = computed(() => {
     height: var(--header-height);
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 0 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 
-    img {
+    .logo-mark {
       width: 32px;
       height: 32px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 8px;
+      background: rgba(31, 95, 191, 0.55);
+      color: #fff;
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 30px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .brand-copy {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
     }
 
     .title {
-      margin-left: 12px;
       color: #fff;
-      font-size: 16px;
-      font-weight: 600;
+      font-size: 15px;
+      font-weight: 650;
+      line-height: 1.25;
+      white-space: nowrap;
+    }
+
+    .subtitle {
+      color: rgba(255, 255, 255, 0.48);
+      font-size: 11px;
+      line-height: 1.3;
       white-space: nowrap;
     }
   }

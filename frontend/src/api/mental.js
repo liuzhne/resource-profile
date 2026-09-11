@@ -36,4 +36,6 @@ export const studentSubmitAnswers = (data) => request.post('/mental/student/asse
 export const studentMyHistory = (userId) =>
   request.get('/mental/student/assessments', { params: { userId } })
 export const studentGetMyAssessment = (userId, assessmentId) =>
-  request.get(`/mental/student/assessments/${assessmentId}`, { params: { userId } })
+  request.get(`/mental/student/assessments/${assessmentId}`, {
+    params: { userId }
+  })

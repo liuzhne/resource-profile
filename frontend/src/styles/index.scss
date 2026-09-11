@@ -9,16 +9,20 @@
   box-sizing: border-box;
 }
 
-html, body, #app {
+html,
+body,
+#app {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
-  color: #333;
-  background-color: #f0f2f5;
+  color: var(--text-color);
+  background-color: var(--bg-color);
 }
 
 // 清除默认样式
-ul, ol {
+ul,
+ol {
   list-style: none;
 }
 
@@ -41,10 +45,10 @@ a {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: #c4ccda;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #eef2f7;
 }

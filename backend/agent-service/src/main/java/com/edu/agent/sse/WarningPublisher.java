@@ -41,6 +41,16 @@ public class WarningPublisher {
         }
     }
 
+    /**
+     * Publishes a risk task terminal-state event to the Redis Pub/Sub channel.
+     *
+     * The published message contains `taskId`, `status`, `riskLevel`, `studentId`, and a `ts` timestamp.
+     *
+     * @param taskId    identifier of the task
+     * @param status    terminal status of the task
+     * @param riskLevel risk level associated with the task
+     * @param studentId identifier of the student related to the task
+     */
     public void publishTerminal(Long taskId, String status, String riskLevel, Long studentId) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("taskId", taskId);

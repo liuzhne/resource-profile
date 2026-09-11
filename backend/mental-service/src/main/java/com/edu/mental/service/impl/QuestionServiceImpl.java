@@ -48,6 +48,12 @@ public class QuestionServiceImpl implements QuestionService {
         return dto;
     }
 
+    /**
+     * Persists a Question, applying default values for sort order and required flag when absent, and updates the parent questionnaire's question count.
+     *
+     * @param question the Question to insert; if `sortOrder` is null it will be set to the current count + 1, and if `required` is null it will be set to 1
+     * @return the persisted Question with any defaulted fields populated
+     */
     @Override
     public Question save(Question question) {
         if (question.getSortOrder() == null) {
@@ -64,11 +70,49 @@ public class QuestionServiceImpl implements QuestionService {
         return question;
     }
 
+    /**
+     * Persists a list of questions for the specified questionnaire and updates the questionnaire's question count.
+     *
+     * For each question, ensures the questionnaireId is set; if sortOrder is null assigns index+1; if required is null sets it to 1; then inserts the question. If the provided list is null or empty, no inserts are performed but the questionnaire's question count is still synchronized.
+     *
+     * @param questionnaireId the id of the questionnaire to which the questions belong
+     * @param questions the questions to insert; may be null or empty
+     */
+    @Override
+    public void saveBatch(Long questionnaireId, List<Question> questions) {
+        if (questions == null || questions.isEmpty()) {
+            syncQuestionCount(questionnaireId);
+            return;
+        }
+        for (int i = 0; i < questions.size(); i++) {
+            Question question = questions.get(i);
+            question.setQuestionnaireId(questionnaireId);
+            if (question.getSortOrder() == null) {
+                question.setSortOrder(i + 1);
+            }
+            if (question.getRequired() == null) {
+                question.setRequired(1);
+            }
+            questionMapper.insert(question);
+        }
+        syncQuestionCount(questionnaireId);
+    }
+
+    /**
+     * Update an existing Question record using the question's ID.
+     *
+     * @param question the Question entity containing updated fields; must have a valid `id` to identify the record to update
+     */
     @Override
     public void update(Question question) {
         questionMapper.updateById(question);
     }
 
+    /**
+     * Deletes the Question with the given id and, if the question existed, synchronizes the parent questionnaire's stored question count.
+     *
+     * @param questionId the id of the Question to delete
+     */
     @Override
     public void delete(Long questionId) {
         Question q = questionMapper.selectById(questionId);

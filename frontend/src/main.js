@@ -3,15 +3,75 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import permissionDirective from './directives/permission'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import {
+  ArrowDown,
+  Avatar,
+  Bell,
+  BellFilled,
+  CircleCloseFilled,
+  Close,
+  DataLine,
+  DocumentChecked,
+  DocumentCopy,
+  EditPen,
+  Expand,
+  FirstAidKit,
+  Fold,
+  Loading,
+  Lock,
+  MagicStick,
+  Plus,
+  Reading,
+  Refresh,
+  Setting,
+  CircleCheck,
+  SuccessFilled,
+  SwitchButton,
+  TrendCharts,
+  User,
+  UserFilled,
+  Warning,
+  WarningFilled
+} from '@element-plus/icons-vue'
 
 import './styles/index.scss'
 
 const app = createApp(App)
 
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component)
+const icons = {
+  ArrowDown,
+  Avatar,
+  Bell,
+  BellFilled,
+  CircleCloseFilled,
+  Close,
+  DataLine,
+  DocumentChecked,
+  DocumentCopy,
+  EditPen,
+  Expand,
+  FirstAidKit,
+  Fold,
+  Loading,
+  Lock,
+  MagicStick,
+  Plus,
+  Reading,
+  Refresh,
+  Setting,
+  CircleCheck,
+  SuccessFilled,
+  SwitchButton,
+  TrendCharts,
+  User,
+  UserFilled,
+  Warning,
+  WarningFilled
 }
+
+Object.entries(icons).forEach(([name, component]) => {
+  app.component(name, component)
+})
 
 app.use(createPinia())
 app.use(router)

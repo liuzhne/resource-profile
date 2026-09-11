@@ -54,7 +54,10 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           const moduleId = id.replaceAll('\\', '/')
-          if (moduleId.includes('/node_modules/echarts/') || moduleId.includes('/node_modules/zrender/')) {
+          if (
+            moduleId.includes('/node_modules/echarts/') ||
+            moduleId.includes('/node_modules/zrender/')
+          ) {
             return 'charts'
           }
           if (

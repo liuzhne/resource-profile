@@ -13,7 +13,12 @@
 
     <!-- 右侧：用户相关 -->
     <div class="right">
-      <el-dropdown trigger="click">
+      <div class="workbench-meta">
+        <span>综合管理工作台</span>
+        <span class="dot"></span>
+        <span>校级数据视图</span>
+      </div>
+      <el-dropdown trigger="click" @command="handleUserCommand">
         <div class="user-info">
           <el-avatar :size="32" :src="userInfo?.avatar">
             <el-icon><User /></el-icon>
@@ -23,13 +28,13 @@
         </div>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item @click="goToProfile">
+            <el-dropdown-item command="profile">
               <el-icon><User /></el-icon> 个人中心
             </el-dropdown-item>
-            <el-dropdown-item @click="goToSettings">
+            <el-dropdown-item command="settings">
               <el-icon><Setting /></el-icon> 系统设置
             </el-dropdown-item>
-            <el-dropdown-item divided @click="handleLogout">
+            <el-dropdown-item command="logout" divided>
               <el-icon><SwitchButton /></el-icon> 退出登录
             </el-dropdown-item>
           </el-dropdown-menu>
@@ -39,7 +44,7 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
@@ -66,11 +71,28 @@ const goToSettings = () => {
   // 可以跳转到系统设置页面
 }
 
+const handleUserCommand = (command) => {
+  if (command === 'profile') {
+    goToProfile()
+    return
+  }
+  if (command === 'settings') {
+    goToSettings()
+    return
+  }
+  if (command === 'logout') {
+    handleLogout()
+  }
+}
+
 const handleLogout = () => {
-  ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+  ElMessageBox.confirm('退出后需要重新登录平台账号。', '确认退出登录？', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
-    type: 'warning'
+    type: 'warning',
+    customClass: 'app-confirm-dialog',
+    distinguishCancelAndClose: true,
+    showClose: false
   }).then(() => {
     userStore.logout()
   })
@@ -81,7 +103,8 @@ const handleLogout = () => {
 .navbar {
   height: var(--header-height);
   background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -90,15 +113,20 @@ const handleLogout = () => {
   .left {
     display: flex;
     align-items: center;
+    min-width: 0;
 
     .collapse-btn {
-      padding: 8px;
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
-      border-radius: 4px;
+      border-radius: var(--radius-small);
       transition: background 0.3s;
 
       &:hover {
-        background: rgba(0, 0, 0, 0.025);
+        background: var(--bg-color-subtle);
       }
     }
   }
@@ -106,23 +134,50 @@ const handleLogout = () => {
   .right {
     display: flex;
     align-items: center;
+    gap: 18px;
+
+    .workbench-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-color-secondary);
+      font-size: 13px;
+      white-space: nowrap;
+
+      .dot {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: var(--border-color-strong);
+      }
+    }
 
     .user-info {
       display: flex;
       align-items: center;
       cursor: pointer;
       padding: 4px 8px;
-      border-radius: 4px;
+      border-radius: var(--radius-small);
       transition: background 0.3s;
 
       &:hover {
-        background: rgba(0, 0, 0, 0.025);
+        background: var(--bg-color-subtle);
       }
 
       .username {
         margin: 0 8px;
-        color: rgba(0, 0, 0, 0.85);
+        color: var(--text-color);
       }
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  .navbar {
+    padding: 0 14px;
+
+    .right .workbench-meta {
+      display: none;
     }
   }
 }

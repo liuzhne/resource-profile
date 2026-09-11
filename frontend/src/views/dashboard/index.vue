@@ -1,7 +1,18 @@
 <template>
   <div class="dashboard-container">
-    <!-- 统计卡片 -->
-    <el-row :gutter="16">
+    <div class="page-header dashboard-header">
+      <div>
+        <h1 class="page-title">数据面板</h1>
+        <div class="page-subtitle">汇总师生资源、问卷完成与风险预警，为日常管理提供统一视图。</div>
+      </div>
+      <el-radio-group v-model="trendPeriod" size="small">
+        <el-radio-button value="week">本周</el-radio-button>
+        <el-radio-button value="month">本月</el-radio-button>
+        <el-radio-button value="year">全年</el-radio-button>
+      </el-radio-group>
+    </div>
+
+    <el-row :gutter="16" class="metric-row">
       <el-col :xs="24" :sm="12" :lg="6">
         <StatisticCard
           title="教师总数"
@@ -40,28 +51,39 @@
       </el-col>
     </el-row>
 
-    <!-- 图表区域 -->
+    <div class="risk-overview section-card">
+      <div>
+        <div class="section-eyebrow">风险态势</div>
+        <div class="risk-title">当前需重点关注 {{ stats.warningCount }} 人</div>
+        <div class="risk-desc">
+          结合心理问卷、学业表现与 AI 预警任务，优先处理高风险学生和待审核干预报告。
+        </div>
+      </div>
+      <div class="risk-actions">
+        <div class="risk-chip danger">高优先级排查</div>
+        <div class="risk-chip warning">干预方案跟进</div>
+        <div class="risk-chip info">数据持续更新</div>
+      </div>
+    </div>
+
     <el-row :gutter="16" class="chart-row">
       <el-col :xs="24" :lg="16">
-        <el-card>
+        <el-card class="panel-card">
           <template #header>
             <div class="card-header">
               <span>师生增长趋势</span>
-              <el-radio-group v-model="trendPeriod" size="small">
-                <el-radio-button label="week">本周</el-radio-button>
-                <el-radio-button label="month">本月</el-radio-button>
-                <el-radio-button label="year">全年</el-radio-button>
-              </el-radio-group>
+              <span class="card-hint">按所选周期统计新增趋势</span>
             </div>
           </template>
           <div ref="trendChartRef" class="chart-container" style="height: 350px"></div>
         </el-card>
       </el-col>
       <el-col :xs="24" :lg="8">
-        <el-card>
+        <el-card class="panel-card">
           <template #header>
             <div class="card-header">
               <span>师生分布</span>
+              <span class="card-hint">教师与学生占比</span>
             </div>
           </template>
           <div ref="pieChartRef" class="chart-container" style="height: 350px"></div>
@@ -69,14 +91,16 @@
       </el-col>
     </el-row>
 
-    <!-- 最近活动 -->
     <el-row :gutter="16" class="activity-row">
       <el-col :xs="24" :lg="12">
-        <el-card>
+        <el-card class="panel-card">
           <template #header>
-            <span>最近登录</span>
+            <div class="card-header">
+              <span>最近登录</span>
+              <span class="card-hint">平台访问记录</span>
+            </div>
           </template>
-          <el-table :data="recentLogins" stripe>
+          <el-table :data="recentLogins" stripe empty-text="暂无登录记录">
             <el-table-column prop="username" label="用户" />
             <el-table-column prop="role" label="角色" />
             <el-table-column prop="time" label="时间" />
@@ -85,18 +109,22 @@
         </el-card>
       </el-col>
       <el-col :xs="24" :lg="12">
-        <el-card>
+        <el-card class="panel-card">
           <template #header>
-            <span>待处理事项</span>
+            <div class="card-header">
+              <span>待处理事项</span>
+              <span class="card-hint">建议按优先级处理</span>
+            </div>
           </template>
-          <el-timeline>
+          <el-timeline class="work-timeline">
             <el-timeline-item
               v-for="(activity, index) in activities"
               :key="index"
               :type="activity.type"
               :timestamp="activity.time"
             >
-              {{ activity.content }}
+              <div class="activity-title">{{ activity.content }}</div>
+              <div class="activity-desc">{{ activity.description }}</div>
             </el-timeline-item>
           </el-timeline>
         </el-card>
@@ -105,10 +133,10 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import * as echarts from 'echarts'
 import StatisticCard from './components/StatisticCard.vue'
+import { graphic, init } from '@/utils/charts'
 import { getStatistics, getTrendData, getDistributionData, getRecentLogins } from '@/api/dashboard'
 
 // 统计数据
@@ -120,29 +148,51 @@ const stats = ref({
 })
 
 // 图表相关
-const trendChartRef = ref<HTMLElement>()
-const pieChartRef = ref<HTMLElement>()
-let trendChart: echarts.ECharts | null = null
-let pieChart: echarts.ECharts | null = null
+const trendChartRef = ref()
+const pieChartRef = ref()
+let trendChart = null
+let pieChart = null
 const trendPeriod = ref('month')
 
 const trendData = ref({
-  days: [] as string[],
-  teacherData: [] as number[],
-  studentData: [] as number[]
+  days: [],
+  teacherData: [],
+  studentData: []
 })
 
-const distributionData = ref([] as { name: string; value: number }[])
+const distributionData = ref([])
+
+const toCount = (value) => Number(value) || 0
 
 // 最近登录
-const recentLogins = ref([] as { username: string; role: string; time: string; ip: string }[])
+const recentLogins = ref([])
 
 // 待处理事项（暂用静态数据，后端无对应接口）
 const activities = ref([
-  { content: '新增5份心理健康预警', type: 'warning', time: '10分钟前' },
-  { content: '张三老师提交了科研项目', type: 'success', time: '30分钟前' },
-  { content: '系统检测到异常登录', type: 'danger', time: '1小时前' },
-  { content: '李四同学完成了心理问卷', type: 'info', time: '2小时前' }
+  {
+    content: '心理预警名单待复核',
+    description: '建议辅导员完成风险等级确认并记录处理意见',
+    type: 'warning',
+    time: '今日'
+  },
+  {
+    content: '问卷完成率需跟进',
+    description: '对未完成班级发起提醒，保障数据样本完整性',
+    type: 'primary',
+    time: '本周'
+  },
+  {
+    content: 'AI 干预报告待审核',
+    description: '合规审核通过后再进入教师跟进流程',
+    type: 'success',
+    time: '持续'
+  },
+  {
+    content: '基础档案数据巡检',
+    description: '关注缺失学院、专业、班级等关键画像字段',
+    type: 'info',
+    time: '每周'
+  }
 ])
 
 // 加载统计数据
@@ -151,10 +201,10 @@ const loadStatistics = async () => {
     const res = await getStatistics()
     if (res.data) {
       stats.value = {
-        teacherCount: res.data.teacherCount || 0,
-        studentCount: res.data.studentCount || 0,
-        questionnaireCount: res.data.questionnaireCount || 0,
-        warningCount: res.data.warningCount || 0
+        teacherCount: toCount(res.data.teacherCount),
+        studentCount: toCount(res.data.studentCount),
+        questionnaireCount: toCount(res.data.questionnaireCount),
+        warningCount: toCount(res.data.warningCount)
       }
     }
   } catch (error) {
@@ -208,7 +258,7 @@ const loadRecentLogins = async () => {
 const updateTrendChart = () => {
   if (!trendChartRef.value) return
   if (!trendChart) {
-    trendChart = echarts.init(trendChartRef.value)
+    trendChart = init(trendChartRef.value)
   }
   const option = {
     tooltip: {
@@ -239,7 +289,7 @@ const updateTrendChart = () => {
         data: trendData.value.teacherData,
         itemStyle: { color: '#1890ff' },
         areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          color: new graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: 'rgba(24, 144, 255, 0.3)' },
             { offset: 1, color: 'rgba(24, 144, 255, 0.05)' }
           ])
@@ -252,7 +302,7 @@ const updateTrendChart = () => {
         data: trendData.value.studentData,
         itemStyle: { color: '#52c41a' },
         areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          color: new graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: 'rgba(82, 196, 26, 0.3)' },
             { offset: 1, color: 'rgba(82, 196, 26, 0.05)' }
           ])
@@ -267,7 +317,7 @@ const updateTrendChart = () => {
 const updatePieChart = () => {
   if (!pieChartRef.value) return
   if (!pieChart) {
-    pieChart = echarts.init(pieChartRef.value)
+    pieChart = init(pieChartRef.value)
   }
   const option = {
     tooltip: {
@@ -300,7 +350,7 @@ const updatePieChart = () => {
             fontWeight: 'bold'
           }
         },
-        data: distributionData.value.map((item: any, index: number) => {
+        data: distributionData.value.map((item, index) => {
           const colors = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1']
           return {
             ...item,
@@ -342,19 +392,129 @@ watch(trendPeriod, () => {
 
 <style scoped lang="scss">
 .dashboard-container {
+  .dashboard-header {
+    align-items: center;
+  }
+
+  .metric-row {
+    margin-bottom: 16px;
+  }
+
+  .risk-overview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    background: linear-gradient(90deg, rgba(31, 95, 191, 0.08), rgba(31, 95, 191, 0)), #fff;
+
+    .section-eyebrow {
+      color: var(--primary-color);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .risk-title {
+      margin-top: 6px;
+      color: var(--text-color);
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .risk-desc {
+      margin-top: 6px;
+      color: var(--text-color-secondary);
+      line-height: 1.6;
+    }
+
+    .risk-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 260px;
+    }
+
+    .risk-chip {
+      padding: 7px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+
+      &.danger {
+        color: #b42318;
+        background: #fff1f0;
+      }
+
+      &.warning {
+        color: #9a5b13;
+        background: #fff7e6;
+      }
+
+      &.info {
+        color: var(--primary-color);
+        background: var(--primary-color-light);
+      }
+    }
+  }
+
   .chart-row,
   .activity-row {
     margin-top: 16px;
+  }
+
+  .panel-card {
+    height: 100%;
   }
 
   .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
+  }
+
+  .card-hint {
+    color: var(--text-color-muted);
+    font-size: 12px;
+    font-weight: 400;
   }
 
   .chart-container {
     width: 100%;
+  }
+
+  .work-timeline {
+    padding-top: 4px;
+
+    .activity-title {
+      color: var(--text-color);
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .activity-desc {
+      margin-top: 4px;
+      color: var(--text-color-secondary);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-container {
+    .dashboard-header,
+    .risk-overview {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .risk-overview .risk-actions {
+      justify-content: flex-start;
+      min-width: 0;
+    }
   }
 }
 </style>

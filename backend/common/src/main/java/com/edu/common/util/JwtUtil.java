@@ -77,8 +77,15 @@ public class JwtUtil {
     }
 
     /**
-     * 解析令牌
-     */
+         * Parse and verify the given JWT and return its claims.
+         *
+         * @param token the compact JWT string to parse and verify
+         * @return the parsed JWT {@code Claims}
+         * @throws io.jsonwebtoken.ExpiredJwtException    if the token is expired
+         * @throws io.jsonwebtoken.UnsupportedJwtException if the token has an unsupported format
+         * @throws io.jsonwebtoken.MalformedJwtException  if the token is malformed
+         * @throws Exception                              for other token parsing or verification errors
+         */
     public Claims parseToken(String token) {
         try {
             return Jwts.parser()

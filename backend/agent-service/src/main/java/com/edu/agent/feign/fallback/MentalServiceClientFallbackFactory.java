@@ -13,6 +13,12 @@ import java.util.Map;
 @Component
 public class MentalServiceClientFallbackFactory implements FallbackFactory<MentalServiceClient> {
 
+    /**
+     * Create a fallback MentalServiceClient used when calls to the mental-service fail; the fallback logs a warning and returns an empty analysis result.
+     *
+     * @param cause the throwable that triggered the fallback
+     * @return a MentalServiceClient whose getMentalAnalysis logs the failure and returns a successful Result containing an empty Map<String, Object>
+     */
     @Override
     public MentalServiceClient create(Throwable cause) {
         return () -> {

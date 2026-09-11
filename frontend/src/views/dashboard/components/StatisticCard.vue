@@ -17,48 +17,64 @@
   </el-card>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import CountTo from './CountTo.vue'
 
-interface Props {
-  title: string
-  value: number
-  icon: string
-  color: string
-  suffix?: string
-}
-
-defineProps<Props>()
+defineProps({
+  title: {
+    type: String,
+    required: true
+  },
+  value: {
+    type: Number,
+    required: true
+  },
+  icon: {
+    type: String,
+    required: true
+  },
+  color: {
+    type: String,
+    required: true
+  },
+  suffix: {
+    type: String,
+    default: ''
+  }
+})
 </script>
 
 <style scoped lang="scss">
 .statistic-card {
+  height: 100%;
+
   .card-content {
     display: flex;
     align-items: center;
+    min-height: 78px;
 
     .icon-wrapper {
-      width: 60px;
-      height: 60px;
-      border-radius: 8px;
+      width: 46px;
+      height: 46px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-right: 16px;
+      margin-right: 14px;
     }
 
     .statistic-info {
       flex: 1;
 
       .title {
-        font-size: 14px;
-        color: rgba(0, 0, 0, 0.45);
-        margin-bottom: 4px;
+        font-size: 13px;
+        color: var(--text-color-secondary);
+        margin-bottom: 8px;
       }
 
       .value {
-        font-size: 28px;
-        font-weight: 600;
+        font-size: 26px;
+        font-weight: 700;
         line-height: 1;
 
         .suffix {

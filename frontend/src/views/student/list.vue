@@ -1,15 +1,17 @@
 <template>
   <div class="page-container">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>学生列表</span>
-          <el-button type="primary">新增学生</el-button>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">学生画像管理</h1>
+        <div class="page-subtitle">
+          查询学生基础档案、学业状态和画像关键指标，支持按学院与年级快速筛选。
         </div>
-      </template>
+      </div>
+      <el-button type="primary">新增学生</el-button>
+    </div>
 
-      <!-- 搜索区域 -->
-      <el-form :model="searchForm" inline>
+    <div class="toolbar-card search-panel">
+      <el-form :model="searchForm" inline class="search-form">
         <el-form-item label="姓名">
           <el-input v-model="searchForm.name" placeholder="请输入姓名" clearable />
         </el-form-item>
@@ -35,16 +37,32 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">查询</el-button>
+          <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
+    </div>
 
-      <!-- 表格 -->
-      <el-table v-loading="loading" :data="studentList" stripe>
+    <el-card class="table-card student-table-card">
+      <template #header>
+        <div class="card-header">
+          <div>
+            <span>学生列表</span>
+            <span class="result-count">共 {{ total }} 条</span>
+          </div>
+          <el-button text :icon="Refresh" :loading="loading" @click="fetchList">刷新</el-button>
+        </div>
+      </template>
+
+      <el-table v-loading="loading" :data="studentList" stripe empty-text="暂无学生数据">
         <el-table-column type="index" width="50" />
         <el-table-column prop="studentId" label="学号" min-width="120" />
-        <el-table-column prop="name" label="姓名" min-width="100" />
+        <el-table-column prop="name" label="姓名" min-width="110">
+          <template #default="{ row }">
+            <div class="student-name">{{ row.name || '-' }}</div>
+            <div class="student-id">{{ row.studentId || '-' }}</div>
+          </template>
+        </el-table-column>
         <el-table-column prop="deptName" label="学院" min-width="150" />
         <el-table-column prop="majorName" label="专业" min-width="150" />
         <el-table-column prop="grade" label="年级" width="100">
@@ -53,7 +71,7 @@
         <el-table-column prop="className" label="班级" width="100" />
         <el-table-column prop="gpa" label="GPA" width="90" align="center">
           <template #default="{ row }">
-            <el-tag :type="gpaTagType(row.gpa)">{{ formatGpa(row.gpa) }}</el-tag>
+            <span :class="['gpa-value', gpaClass(row.gpa)]">{{ formatGpa(row.gpa) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="80" align="center">
@@ -64,12 +82,11 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="viewDetail(row)">查看</el-button>
-            <el-button link type="primary">编辑</el-button>
+            <el-button link>编辑</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <!-- 分页 -->
       <el-pagination
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
@@ -88,6 +105,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getStudentList } from '@/api/student'
+import { Refresh, Search } from '@element-plus/icons-vue'
 
 const DEPT_OPTIONS = [
   '计算机学院',
@@ -169,8 +187,9 @@ const gpaTagType = (g) => {
   if (n >= 2.5) return 'warning'
   return 'danger'
 }
+const gpaClass = (g) => `gpa-${gpaTagType(g) || 'normal'}`
 const statusLabel = (s) => ({ 0: '退学', 1: '在读', 2: '毕业' })[s] ?? '-'
-const statusTagType = (s) => ({ 0: 'danger', 1: 'success', 2: 'info' })[s] ?? ''
+const statusTagType = (s) => ({ 0: 'danger', 1: 'success', 2: 'info' })[s] ?? 'info'
 
 onMounted(fetchList)
 </script>
@@ -180,6 +199,72 @@ onMounted(fetchList)
   display: flex;
   justify-content: space-between;
   align-items: center;
+
+  .result-count {
+    margin-left: 10px;
+    color: var(--text-color-muted);
+    font-size: 12px;
+    font-weight: 400;
+  }
+}
+
+.search-panel {
+  padding: 16px 16px 4px;
+  margin-bottom: 14px;
+}
+
+.search-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.student-table-card {
+  :deep(.el-card__body) {
+    padding-top: 0;
+  }
+}
+
+.student-name {
+  color: var(--text-color);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.student-id {
+  color: var(--text-color-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.gpa-value {
+  display: inline-flex;
+  min-width: 44px;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 13px;
+
+  &.gpa-success {
+    color: #1f7a3a;
+    background: #edf8ef;
+  }
+
+  &.gpa-warning {
+    color: #9a5b13;
+    background: #fff7e6;
+  }
+
+  &.gpa-danger {
+    color: #b42318;
+    background: #fff1f0;
+  }
+
+  &.gpa-info {
+    color: var(--text-color-muted);
+    background: var(--bg-color-subtle);
+  }
 }
 
 .pagination {

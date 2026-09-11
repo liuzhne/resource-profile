@@ -13,6 +13,12 @@ import java.util.Map;
 @Component
 public class DataServiceClientFallbackFactory implements FallbackFactory<DataServiceClient> {
 
+    /**
+     * Create a fallback DataServiceClient that provides empty dashboard statistics when the Feign client fails.
+     *
+     * @param cause the throwable that triggered creation of this fallback (may be null)
+     * @return a DataServiceClient whose getDashboardStatistics logs a warning with the cause message and returns a successful Result containing an empty Map
+     */
     @Override
     public DataServiceClient create(Throwable cause) {
         return () -> {

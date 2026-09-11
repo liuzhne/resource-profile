@@ -1,35 +1,43 @@
-// 主题变量 - Ant Design Pro 风格
+// 主题变量 - 政企数据平台风格
 :root {
-  // 主色调
-  --primary-color: #1890ff;
-  --primary-color-hover: #40a9ff;
-  --primary-color-active: #096dd9;
+  // 主色调：稳重蓝
+  --primary-color: #1f5fbf;
+  --primary-color-hover: #2f72d6;
+  --primary-color-active: #184b99;
+  --primary-color-light: #edf4ff;
 
   // 功能色
-  --success-color: #52c41a;
-  --warning-color: #faad14;
-  --error-color: #f5222d;
-  --info-color: #1890ff;
+  --success-color: #2f9e44;
+  --warning-color: #d9822b;
+  --error-color: #d64545;
+  --info-color: #1f5fbf;
 
   // 文字色
-  --text-color: rgba(0, 0, 0, 0.85);
-  --text-color-secondary: rgba(0, 0, 0, 0.45);
-  --text-color-disabled: rgba(0, 0, 0, 0.25);
+  --text-color: #1f2937;
+  --text-color-secondary: #5f6b7a;
+  --text-color-muted: #8a95a3;
+  --text-color-disabled: #b6bec8;
 
   // 背景色
-  --bg-color: #f0f2f5;
+  --bg-color: #f5f7fb;
   --bg-color-container: #fff;
+  --bg-color-subtle: #f8fafc;
 
   // 边框色
-  --border-color: #f0f0f0;
+  --border-color: #e5eaf2;
+  --border-color-strong: #d6deeb;
 
   // 布局
-  --sidebar-width: 208px;
-  --sidebar-collapsed-width: 80px;
-  --header-height: 64px;
+  --sidebar-width: 220px;
+  --sidebar-collapsed-width: 72px;
+  --header-height: 56px;
   --footer-height: 70px;
 
   // 阴影
-  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-2: 0 8px 24px rgba(15, 23, 42, 0.08);
+
+  // 形状
+  --radius-base: 6px;
+  --radius-small: 4px;
 }

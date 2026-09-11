@@ -69,7 +69,11 @@ const routes = [
         path: '/mental',
         name: 'Mental',
         redirect: '/mental/overview',
-        meta: { title: '心理健康', icon: 'FirstAidKit', roles: ['admin', 'teacher'] },
+        meta: {
+          title: '心理健康',
+          icon: 'FirstAidKit',
+          roles: ['admin', 'teacher']
+        },
         children: [
           {
             path: '/mental/overview',
@@ -87,13 +91,21 @@ const routes = [
             path: '/mental/questionnaire/design/:id',
             name: 'MentalQuestionnaireDesign',
             component: () => import('@/views/mental/questionnaire-design.vue'),
-            meta: { title: '题目设计', hidden: true, roles: ['admin', 'teacher'] }
+            meta: {
+              title: '题目设计',
+              hidden: true,
+              roles: ['admin', 'teacher']
+            }
           },
           {
             path: '/mental/questionnaire/result/:id',
             name: 'MentalQuestionnaireResult',
             component: () => import('@/views/mental/questionnaire-result.vue'),
-            meta: { title: '完成情况', hidden: true, roles: ['admin', 'teacher'] }
+            meta: {
+              title: '完成情况',
+              hidden: true,
+              roles: ['admin', 'teacher']
+            }
           },
           {
             path: '/mental/analysis',

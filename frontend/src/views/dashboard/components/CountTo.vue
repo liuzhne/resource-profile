@@ -2,26 +2,32 @@
   <span>{{ displayValue }}</span>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 
-interface Props {
-  start?: number
-  end: number
-  duration?: number
-  decimals?: number
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  start: 0,
-  duration: 2000,
-  decimals: 0
+const props = defineProps({
+  start: {
+    type: Number,
+    default: 0
+  },
+  end: {
+    type: Number,
+    required: true
+  },
+  duration: {
+    type: Number,
+    default: 2000
+  },
+  decimals: {
+    type: Number,
+    default: 0
+  }
 })
 
 const displayValue = ref(props.start)
-let rafId: number | null = null
+let rafId = null
 
-const startAnimate = (from: number, to: number) => {
+const startAnimate = (from, to) => {
   if (rafId !== null) {
     cancelAnimationFrame(rafId)
   }
@@ -29,7 +35,7 @@ const startAnimate = (from: number, to: number) => {
   const startTime = performance.now()
   const diff = to - from
 
-  const animate = (currentTime: number) => {
+  const animate = (currentTime) => {
     const elapsed = currentTime - startTime
     const progress = Math.min(elapsed / props.duration, 1)
 

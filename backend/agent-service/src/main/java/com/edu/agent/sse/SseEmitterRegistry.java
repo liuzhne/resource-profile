@@ -22,6 +22,15 @@ public class SseEmitterRegistry {
 
     private final Set<SseEmitter> emitters = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Register an SseEmitter and attach lifecycle handlers.
+     *
+     * Adds the provided emitter to the registry and attaches handlers that remove it from
+     * the registry when the emitter completes, times out, or encounters an error. On timeout
+     * the emitter is explicitly completed.
+     *
+     * @param emitter the SseEmitter to register; its lifecycle events will drive removal from the registry
+     */
     public void add(SseEmitter emitter) {
         emitters.add(emitter);
         emitter.onCompletion(() -> {
@@ -35,12 +44,23 @@ public class SseEmitterRegistry {
         emitter.onError(ex -> emitters.remove(emitter));
     }
 
+    /**
+     * Report how many SseEmitters are currently registered.
+     *
+     * @return the number of registered SseEmitter instances
+     */
     public int size() {
         return emitters.size();
     }
 
     /**
-     * 把事件推送给所有已连接 emitter；推送失败的连接被剔除。
+     * Broadcasts an SSE event with the given name and payload to all registered emitters.
+     *
+     * Emitters that fail to send are removed from the registry and will be completed with the encountered error;
+     * failures that occur while completing an emitter are ignored.
+     *
+     * @param eventName the SSE event name to send
+     * @param data      the event payload (will be serialized for SSE data)
      */
     public void broadcast(String eventName, Object data) {
         if (emitters.isEmpty()) return;
@@ -59,8 +79,9 @@ public class SseEmitterRegistry {
     }
 
     /**
-     * 心跳：给每个 emitter 写一条 SSE 注释行（`: ping`）。
-     * 注释行不会触发前端 EventSource 的 onmessage，仅用于穿透 Nginx/Gateway 的 idle 超时。
+     * Sends a periodic SSE comment ("ping") to each registered emitter to keep proxy or gateway connections from idling out.
+     *
+     * For each emitter, attempts to send an SSE comment; emitters that fail to send are removed from the registry.
      */
     @Scheduled(fixedDelayString = "${educare.sse.heartbeat-millis:30000}")
     public void heartbeat() {

@@ -1,140 +1,233 @@
 <template>
-  <div class="page-container">
-    <el-card>
+  <div class="page-container mental-analysis-page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">心理分析报告</h1>
+        <div class="page-subtitle">
+          从学院、年级、性别维度分析心理状态分布，并沉淀重点人群风险清单。
+        </div>
+      </div>
+      <el-button type="primary" plain :icon="Download">导出报告</el-button>
+    </div>
+
+    <div class="analysis-grid">
+      <el-card class="section-card chart-card">
+        <template #header>
+          <div class="card-header">
+            <span>各学院心理状况分布</span>
+            <span class="header-hint">良好 / 关注 / 干预</span>
+          </div>
+        </template>
+        <div ref="deptChartRef" class="chart-box"></div>
+      </el-card>
+
+      <el-card class="section-card chart-card">
+        <template #header>
+          <div class="card-header">
+            <span>各年级心理状态对比</span>
+            <span class="header-hint">良好率</span>
+          </div>
+        </template>
+        <div ref="gradeChartRef" class="chart-box"></div>
+      </el-card>
+
+      <el-card class="section-card chart-card">
+        <template #header>
+          <div class="card-header">
+            <span>性别差异分析</span>
+            <span class="header-hint">按风险层级</span>
+          </div>
+        </template>
+        <div ref="genderChartRef" class="chart-box"></div>
+      </el-card>
+    </div>
+
+    <el-card class="table-card focus-card">
       <template #header>
         <div class="card-header">
-          <span>心理分析报告</span>
-          <el-button type="primary">导出报告</el-button>
+          <div>
+            <span>重点人群分析</span>
+            <span class="result-count">共 {{ focusGroups.length }} 类</span>
+          </div>
+          <span class="header-hint">用于制定分层干预策略</span>
         </div>
       </template>
 
-      <el-row :gutter="20">
-        <el-col :xs="24" :lg="8">
-          <h4>各学院心理状况分布</h4>
-          <div ref="deptChartRef" style="height: 300px; margin-top: 16px"></div>
-        </el-col>
-        <el-col :xs="24" :lg="8">
-          <h4>各年级心理状况对比</h4>
-          <div ref="gradeChartRef" style="height: 300px; margin-top: 16px"></div>
-        </el-col>
-        <el-col :xs="24" :lg="8">
-          <h4>性别差异分析</h4>
-          <div ref="genderChartRef" style="height: 300px; margin-top: 16px"></div>
-        </el-col>
-      </el-row>
-
-      <el-divider />
-
-      <h4>重点人群分析</h4>
-      <el-table v-loading="loading" :data="focusGroups" stripe style="margin-top: 16px">
-        <el-table-column type="index" width="50" />
-        <el-table-column prop="group" label="人群类型" />
-        <el-table-column prop="count" label="人数" width="100" />
-        <el-table-column prop="risk" label="风险等级" width="120">
+      <el-table v-loading="loading" :data="focusGroups" stripe empty-text="暂无重点人群数据">
+        <el-table-column type="index" width="56" />
+        <el-table-column prop="group" label="人群类型" min-width="220">
           <template #default="{ row }">
-            <el-tag
-              :type="row.risk === '高' ? 'danger' : row.risk === '中' ? 'warning' : 'success'"
-            >
-              {{ row.risk }}
+            <div class="group-name">{{ row.group || '-' }}</div>
+            <div class="group-desc">建议纳入专项跟进名单</div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="count" label="人数" width="120" align="center">
+          <template #default="{ row }">
+            <strong class="count-value">{{ row.count || 0 }}</strong>
+          </template>
+        </el-table-column>
+        <el-table-column prop="risk" label="风险等级" width="130">
+          <template #default="{ row }">
+            <el-tag :type="riskTagType(row.risk)" effect="plain">
+              {{ row.risk || '-' }}
             </el-tag>
           </template>
+        </el-table-column>
+        <el-table-column label="建议动作" min-width="260">
+          <template #default="{ row }">{{ actionSuggestion(row.risk) }}</template>
         </el-table-column>
       </el-table>
     </el-card>
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import * as echarts from 'echarts'
+import { Download } from '@element-plus/icons-vue'
 import { getMentalAnalysis } from '@/api/mental'
+import { init } from '@/utils/charts'
 
-const deptChartRef = ref<HTMLElement>()
-const gradeChartRef = ref<HTMLElement>()
-const genderChartRef = ref<HTMLElement>()
+const deptChartRef = ref()
+const gradeChartRef = ref()
+const genderChartRef = ref()
 
-let deptChart: echarts.ECharts | null = null
-let gradeChart: echarts.ECharts | null = null
-let genderChart: echarts.ECharts | null = null
+let deptChart = null
+let gradeChart = null
+let genderChart = null
 
 const loading = ref(false)
-const focusGroups = ref<any[]>([])
+const focusGroups = ref([])
 
-const initDeptChart = (data: any[]) => {
+const chartPalette = {
+  good: '#2f9e44',
+  attention: '#d9822b',
+  intervention: '#d64545',
+  male: '#1f5fbf',
+  female: '#c2417d'
+}
+
+const baseGrid = {
+  left: 10,
+  right: 16,
+  top: 44,
+  bottom: 12,
+  containLabel: true
+}
+
+const initDeptChart = (data) => {
   if (!deptChartRef.value) return
-  deptChart = echarts.init(deptChartRef.value)
+  if (!deptChart) deptChart = init(deptChartRef.value)
 
-  // 汇总各学院数据为饼图
-  let totalGood = 0,
-    totalAttention = 0,
-    totalIntervention = 0
-  data.forEach((item: any) => {
+  let totalGood = 0
+  let totalAttention = 0
+  let totalIntervention = 0
+  data.forEach((item) => {
     totalGood += Number(item.good) || 0
     totalAttention += Number(item.attention) || 0
     totalIntervention += Number(item.intervention) || 0
   })
 
   deptChart.setOption({
+    color: [chartPalette.good, chartPalette.attention, chartPalette.intervention],
     tooltip: { trigger: 'item' },
-    legend: { orient: 'vertical', right: '5%', top: 'center' },
+    legend: {
+      bottom: 0,
+      left: 'center',
+      itemWidth: 10,
+      itemHeight: 10
+    },
     series: [
       {
+        name: '状态分布',
         type: 'pie',
-        radius: ['40%', '70%'],
+        radius: ['46%', '70%'],
+        center: ['50%', '45%'],
+        avoidLabelOverlap: true,
+        label: { formatter: '{b}\n{d}%' },
         data: [
-          { value: totalGood, name: '良好', itemStyle: { color: '#52c41a' } },
-          { value: totalAttention, name: '关注', itemStyle: { color: '#faad14' } },
-          { value: totalIntervention, name: '干预', itemStyle: { color: '#f5222d' } }
+          { value: totalGood, name: '良好' },
+          { value: totalAttention, name: '关注' },
+          { value: totalIntervention, name: '干预' }
         ]
       }
     ]
   })
 }
 
-const initGradeChart = (data: any[]) => {
+const initGradeChart = (data) => {
   if (!gradeChartRef.value) return
-  gradeChart = echarts.init(gradeChartRef.value)
+  if (!gradeChart) gradeChart = init(gradeChartRef.value)
 
-  const grades = data.map((item: any) => item.grade)
-  const rates = data.map((item: any) => Number(item.rate))
-  const barColors = rates.map((r) => (r >= 80 ? '#52c41a' : r >= 60 ? '#faad14' : '#f5222d'))
+  const grades = data.map((item) => item.grade)
+  const rates = data.map((item) => Number(item.rate) || 0)
+  const barColors = rates.map((rate) =>
+    rate >= 80 ? chartPalette.good : rate >= 60 ? chartPalette.attention : chartPalette.intervention
+  )
 
   gradeChart.setOption({
-    tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: grades },
-    yAxis: { type: 'value', max: 100 },
+    tooltip: { trigger: 'axis', valueFormatter: (value) => `${value}%` },
+    grid: baseGrid,
+    xAxis: {
+      type: 'category',
+      data: grades,
+      axisLine: { lineStyle: { color: '#d8dee8' } },
+      axisLabel: { color: '#667085' }
+    },
+    yAxis: {
+      type: 'value',
+      max: 100,
+      axisLabel: { formatter: '{value}%', color: '#667085' },
+      splitLine: { lineStyle: { color: '#edf1f7' } }
+    },
     series: [
       {
+        name: '良好率',
         type: 'bar',
-        data: rates.map((v, i) => ({ value: v, itemStyle: { color: barColors[i] } }))
+        barWidth: 28,
+        data: rates.map((value, index) => ({
+          value,
+          itemStyle: { color: barColors[index], borderRadius: [4, 4, 0, 0] }
+        }))
       }
     ]
   })
 }
 
-const initGenderChart = (data: any[]) => {
+const initGenderChart = (data) => {
   if (!genderChartRef.value) return
-  genderChart = echarts.init(genderChartRef.value)
+  if (!genderChart) genderChart = init(genderChartRef.value)
 
-  const series: any[] = []
-  const genderLabels: Record<number, string> = { 0: '女生', 1: '男生' }
-  const genderColors: Record<number, string> = { 0: '#eb2f96', 1: '#1890ff' }
-
-  data.forEach((item: any) => {
+  const genderLabels = { 0: '女生', 1: '男生' }
+  const genderColors = { 0: chartPalette.female, 1: chartPalette.male }
+  const series = data.map((item) => {
     const gender = Number(item.gender)
-    series.push({
+    return {
       name: genderLabels[gender] || `性别${gender}`,
       type: 'bar',
+      barWidth: 24,
       data: [Number(item.good) || 0, Number(item.attention) || 0, Number(item.intervention) || 0],
-      itemStyle: { color: genderColors[gender] || '#999' }
-    })
+      itemStyle: {
+        color: genderColors[gender] || '#64748b',
+        borderRadius: [4, 4, 0, 0]
+      }
+    }
   })
 
   genderChart.setOption({
     tooltip: { trigger: 'axis' },
-    legend: { data: series.map((s) => s.name) },
-    xAxis: { type: 'category', data: ['良好', '关注', '干预'] },
-    yAxis: { type: 'value' },
+    legend: { top: 0, right: 0, data: series.map((item) => item.name) },
+    grid: baseGrid,
+    xAxis: {
+      type: 'category',
+      data: ['良好', '关注', '干预'],
+      axisLine: { lineStyle: { color: '#d8dee8' } },
+      axisLabel: { color: '#667085' }
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: '#edf1f7' } },
+      axisLabel: { color: '#667085' }
+    },
     series
   })
 }
@@ -143,7 +236,7 @@ const fetchData = async () => {
   loading.value = true
   try {
     const res = await getMentalAnalysis()
-    const data = res.data
+    const data = res.data || {}
     focusGroups.value = data.focusGroups || []
     initDeptChart(data.deptDistribution || [])
     initGradeChart(data.gradeComparison || [])
@@ -155,11 +248,28 @@ const fetchData = async () => {
   }
 }
 
+const riskTagType = (risk) => ({ 高: 'danger', 中: 'warning', 低: 'success' })[risk] || 'info'
+
+const actionSuggestion = (risk) =>
+  ({
+    高: '建立一对一跟进台账，并同步辅导员与心理中心。',
+    中: '纳入阶段性观察名单，结合问卷结果安排回访。',
+    低: '保持常规关注，结合班级活动持续观察。'
+  })[risk] || '根据实际情况补充跟进策略。'
+
+const resizeCharts = () => {
+  deptChart?.resize()
+  gradeChart?.resize()
+  genderChart?.resize()
+}
+
 onMounted(() => {
   fetchData()
+  window.addEventListener('resize', resizeCharts)
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', resizeCharts)
   deptChart?.dispose()
   gradeChart?.dispose()
   genderChart?.dispose()
@@ -167,14 +277,66 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
-h4 {
+.chart-card {
+  :deep(.el-card__body) {
+    padding-top: 0;
+  }
+}
+
+.chart-box {
+  height: 320px;
+}
+
+.focus-card {
+  :deep(.el-card__body) {
+    padding-top: 0;
+  }
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  .result-count,
+  .header-hint {
+    color: var(--text-color-muted);
+    font-size: 12px;
+    font-weight: 400;
+  }
+
+  .result-count {
+    margin-left: 10px;
+  }
+}
+
+.group-name {
+  color: var(--text-color);
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.group-desc {
+  color: var(--text-color-muted);
+  font-size: 12px;
+}
+
+.count-value {
+  color: var(--primary-color);
   font-size: 16px;
-  color: rgba(0, 0, 0, 0.85);
+}
+
+@media (max-width: 1200px) {
+  .analysis-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

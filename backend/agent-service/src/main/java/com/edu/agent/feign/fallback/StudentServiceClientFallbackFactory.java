@@ -14,6 +14,16 @@ import java.util.Map;
 @Component
 public class StudentServiceClientFallbackFactory implements FallbackFactory<StudentServiceClient> {
 
+    /**
+     * Provide a fallback StudentServiceClient used when remote calls fail.
+     *
+     * The returned client logs the original cause and:
+     * - `getStudentById(Long)` returns a 503 error Result with message "student-service 暂不可用".
+     * - `listActiveIds()` returns a successful Result containing an empty list.
+     *
+     * @param cause the throwable that triggered the fallback
+     * @return a StudentServiceClient supplying the described fallback behavior
+     */
     @Override
     public StudentServiceClient create(Throwable cause) {
         return new StudentServiceClient() {

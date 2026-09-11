@@ -1,85 +1,120 @@
 <template>
-  <div class="page-container">
-    <el-card v-loading="loading">
-      <template #header>
-        <div class="card-header">
-          <el-button link @click="$router.push('/student-mental/list')">← 返回</el-button>
-          <span class="title">{{ questionnaire?.title || '作答' }}</span>
+  <div class="page-container take-assessment-page">
+    <div class="page-header">
+      <div>
+        <el-button
+          link
+          :icon="ArrowLeft"
+          class="back-link"
+          @click="router.push('/student-mental/list')"
+        >
+          返回问卷列表
+        </el-button>
+        <h1 class="page-title">{{ questionnaire?.title || '心理测评' }}</h1>
+        <div class="page-subtitle">
+          {{ questionnaire?.description || '请完成当前心理测评问卷。' }}
         </div>
-      </template>
-
-      <div v-if="questionnaire" class="intro">
-        <el-tag size="small">{{ questionnaire.type }}</el-tag>
-        <p>{{ questionnaire.description }}</p>
       </div>
+      <div class="progress-card">
+        <span>作答进度</span>
+        <strong>{{ answeredCount }}/{{ questions.length }}</strong>
+      </div>
+    </div>
 
-      <el-form @submit.prevent>
-        <div v-for="(q, idx) in questions" :key="q.id" class="q-block">
-          <div class="q-title">
-            <span class="num">{{ idx + 1 }}.</span>
-            <span>{{ q.content }}</span>
-            <el-tag v-if="q.required" type="danger" size="small" effect="plain">必答</el-tag>
-            <el-tag size="small">{{ typeLabel(q.questionType) }}</el-tag>
+    <div v-loading="loading" class="assessment-layout">
+      <aside class="assessment-aside">
+        <div class="aside-card">
+          <div class="aside-label">问卷信息</div>
+          <div class="aside-title">{{ questionnaire?.type || '-' }}</div>
+          <div class="aside-meta">共 {{ questions.length }} 题 · 必答 {{ requiredCount }} 题</div>
+          <el-progress :percentage="progressPercent" :stroke-width="8" :show-text="false" />
+          <div class="progress-text">{{ progressPercent }}% 已完成</div>
+        </div>
+      </aside>
+
+      <main class="question-list">
+        <el-empty v-if="!loading && questions.length === 0" description="暂无可作答题目" />
+
+        <section
+          v-for="(question, idx) in questions"
+          v-else
+          :key="question.id"
+          class="question-card"
+        >
+          <div class="question-head">
+            <div>
+              <span class="question-index">{{ idx + 1 }}</span>
+              <strong>{{ question.content }}</strong>
+            </div>
+            <div class="question-tags">
+              <el-tag v-if="question.required" type="danger" size="small" effect="plain">
+                必答
+              </el-tag>
+              <el-tag size="small" effect="plain">
+                {{ typeLabel(question.questionType) }}
+              </el-tag>
+            </div>
           </div>
 
-          <div class="q-input">
-            <!-- 单选 -->
+          <div class="question-input">
             <el-radio-group
-              v-if="q.questionType === 'single_choice'"
-              v-model="answers[q.id].singleIndex"
+              v-if="question.questionType === 'single_choice'"
+              v-model="answers[question.id].singleIndex"
+              class="option-group"
             >
               <el-radio
-                v-for="(opt, i) in parseOpts(q.options)"
+                v-for="(opt, i) in parseOpts(question.options)"
                 :key="i"
                 :value="i"
                 :label="i"
-                style="display: block; margin: 6px 0"
-                >{{ opt.label }}</el-radio
               >
+                {{ opt.label }}
+              </el-radio>
             </el-radio-group>
 
-            <!-- 多选 -->
             <el-checkbox-group
-              v-else-if="q.questionType === 'multiple_choice'"
-              v-model="answers[q.id].multiIndices"
+              v-else-if="question.questionType === 'multiple_choice'"
+              v-model="answers[question.id].multiIndices"
+              class="option-group"
             >
               <el-checkbox
-                v-for="(opt, i) in parseOpts(q.options)"
+                v-for="(opt, i) in parseOpts(question.options)"
                 :key="i"
                 :value="i"
                 :label="i"
-                style="display: block; margin: 6px 0"
-                >{{ opt.label }}</el-checkbox
               >
+                {{ opt.label }}
+              </el-checkbox>
             </el-checkbox-group>
 
-            <!-- 简答 -->
             <el-input
-              v-else-if="q.questionType === 'text'"
-              v-model="answers[q.id].text"
+              v-else-if="question.questionType === 'text'"
+              v-model="answers[question.id].text"
               type="textarea"
-              :rows="3"
-              placeholder="请输入..."
+              :rows="4"
+              placeholder="请输入"
             />
 
-            <!-- 量表（按文本回退处理，仅展示，不计分） -->
-            <el-input v-else v-model="answers[q.id].text" placeholder="（量表题，请输入数字）" />
+            <el-input v-else v-model="answers[question.id].text" placeholder="请输入数字或文字" />
           </div>
-        </div>
+        </section>
 
         <div class="submit-bar">
-          <el-button @click="$router.push('/student-mental/list')">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">提交答卷</el-button>
+          <el-button @click="router.push('/student-mental/list')"> 取消 </el-button>
+          <el-button type="primary" :loading="submitting" @click="handleSubmit">
+            提交答卷
+          </el-button>
         </div>
-      </el-form>
-    </el-card>
+      </main>
+    </div>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+<script setup>
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import { studentGetQuestionnaireForTaking, studentSubmitAnswers } from '@/api/mental'
 import { useUserStore } from '@/store/modules/user'
 
@@ -90,14 +125,21 @@ const questionnaireId = Number(route.params.id)
 
 const loading = ref(false)
 const submitting = ref(false)
-const questionnaire = ref<any>(null)
-const questions = ref<any[]>([])
-const answers = reactive<Record<number, any>>({})
+const questionnaire = ref(null)
+const questions = ref([])
+const answers = reactive({})
 
-const typeLabel = (t: string) =>
-  (({ single_choice: '单选', multiple_choice: '多选', text: '简答', scale: '量表' }) as any)[t] || t
+const typeLabel = (type) =>
+  ({
+    single_choice: '单选',
+    multiple_choice: '多选',
+    text: '简答',
+    scale: '量表'
+  })[type] ||
+  type ||
+  '-'
 
-const parseOpts = (raw: any): any[] => {
+const parseOpts = (raw) => {
   if (!raw) return []
   if (Array.isArray(raw)) return raw
   try {
@@ -107,15 +149,38 @@ const parseOpts = (raw: any): any[] => {
   }
 }
 
+const requiredCount = computed(() => questions.value.filter((question) => question.required).length)
+
+const isAnswered = (question) => {
+  const answer = answers[question.id]
+  if (!answer) return false
+  if (question.questionType === 'single_choice') {
+    return answer.singleIndex !== null && answer.singleIndex !== undefined
+  }
+  if (question.questionType === 'multiple_choice') {
+    return Array.isArray(answer.multiIndices) && answer.multiIndices.length > 0
+  }
+  return !!answer.text?.trim()
+}
+
+const answeredCount = computed(
+  () => questions.value.filter((question) => isAnswered(question)).length
+)
+
+const progressPercent = computed(() => {
+  if (!questions.value.length) return 0
+  return Math.round((answeredCount.value / questions.value.length) * 100)
+})
+
 const fetchData = async () => {
   loading.value = true
   try {
     const res = await studentGetQuestionnaireForTaking(questionnaireId)
-    const d = res.data
-    questionnaire.value = d.questionnaire
-    questions.value = d.questions || []
-    questions.value.forEach((q: any) => {
-      answers[q.id] = { singleIndex: null, multiIndices: [], text: '' }
+    const data = res.data || {}
+    questionnaire.value = data.questionnaire || null
+    questions.value = data.questions || []
+    questions.value.forEach((question) => {
+      answers[question.id] = { singleIndex: null, multiIndices: [], text: '' }
     })
   } catch (e) {
     console.error('加载题目失败', e)
@@ -125,22 +190,10 @@ const fetchData = async () => {
 }
 
 const handleSubmit = async () => {
-  for (const q of questions.value) {
-    if (!q.required) continue
-    const a = answers[q.id]
-    if (
-      q.questionType === 'single_choice' &&
-      (a.singleIndex === null || a.singleIndex === undefined)
-    ) {
-      ElMessage.warning(`第 ${q.sortOrder} 题为必答`)
-      return
-    }
-    if (q.questionType === 'multiple_choice' && (!a.multiIndices || a.multiIndices.length === 0)) {
-      ElMessage.warning(`第 ${q.sortOrder} 题为必答`)
-      return
-    }
-    if (q.questionType === 'text' && !a.text?.trim()) {
-      ElMessage.warning(`第 ${q.sortOrder} 题为必答`)
+  for (const question of questions.value) {
+    if (!question.required) continue
+    if (!isAnswered(question)) {
+      ElMessage.warning(`第 ${question.sortOrder || question.id} 题为必答`)
       return
     }
   }
@@ -152,16 +205,18 @@ const handleSubmit = async () => {
   const payload = {
     userId,
     questionnaireId,
-    answers: questions.value.map((q: any) => {
-      const a = answers[q.id]
-      let optionIndices: number[] = []
-      if (q.questionType === 'single_choice' && a.singleIndex !== null)
-        optionIndices = [a.singleIndex]
-      else if (q.questionType === 'multiple_choice') optionIndices = a.multiIndices || []
+    answers: questions.value.map((question) => {
+      const answer = answers[question.id]
+      let optionIndices = []
+      if (question.questionType === 'single_choice' && answer.singleIndex !== null) {
+        optionIndices = [answer.singleIndex]
+      } else if (question.questionType === 'multiple_choice') {
+        optionIndices = answer.multiIndices || []
+      }
       return {
-        questionId: q.id,
+        questionId: question.id,
         optionIndices,
-        text: a.text || ''
+        text: answer.text || ''
       }
     })
   }
@@ -181,47 +236,168 @@ onMounted(fetchData)
 </script>
 
 <style scoped lang="scss">
-.card-header {
+.take-assessment-page {
+  .back-link {
+    padding: 0;
+    margin-bottom: 8px;
+  }
+}
+
+.progress-card {
+  min-width: 150px;
+  padding: 14px 16px;
+  background: var(--bg-color-container);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-1);
+
+  span {
+    display: block;
+    color: var(--text-color-secondary);
+    font-size: 12px;
+  }
+
+  strong {
+    display: block;
+    margin-top: 8px;
+    color: var(--primary-color);
+    font-size: 22px;
+  }
+}
+
+.assessment-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.assessment-aside {
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+.aside-card {
+  padding: 18px;
+  background: var(--bg-color-container);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-1);
+}
+
+.aside-label {
+  color: var(--text-color-secondary);
+  font-size: 13px;
+}
+
+.aside-title {
+  margin-top: 8px;
+  color: var(--text-color);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.aside-meta,
+.progress-text {
+  margin-top: 10px;
+  color: var(--text-color-muted);
+  font-size: 12px;
+}
+
+.question-list {
   display: flex;
-  align-items: center;
-  .title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-left: 8px;
-  }
+  flex-direction: column;
+  gap: 12px;
 }
-.intro {
-  margin-bottom: 16px;
-  p {
-    color: var(--el-text-color-secondary);
-    margin: 6px 0 0;
-  }
+
+.question-card {
+  padding: 18px;
+  background: var(--bg-color-container);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-1);
 }
-.q-block {
-  padding: 12px 0;
-  border-bottom: 1px dashed var(--el-border-color-lighter);
-  &:last-of-type {
-    border-bottom: none;
-  }
-}
-.q-title {
+
+.question-head {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+
+  > div:first-child {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  strong {
+    color: var(--text-color);
+    line-height: 1.6;
+  }
+}
+
+.question-index {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  color: var(--primary-color);
+  background: var(--primary-color-light);
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.question-tags {
+  display: flex;
   gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  .num {
-    color: var(--el-color-primary);
-  }
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
-.q-input {
-  padding-left: 20px;
+
+.question-input {
+  margin-top: 14px;
+  padding-left: 38px;
 }
+
+.option-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .submit-bar {
-  margin-top: 24px;
+  position: sticky;
+  bottom: 0;
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  padding: 14px 0 0;
+  background: var(--bg-color);
+}
+
+@media (max-width: 900px) {
+  .assessment-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .assessment-aside,
+  .submit-bar {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .page-header,
+  .question-head {
+    flex-direction: column;
+  }
+
+  .question-input {
+    padding-left: 0;
+  }
 }
 </style>

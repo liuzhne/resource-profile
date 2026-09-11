@@ -22,6 +22,17 @@ public class WarningSubscriberConfig {
 
     private final SseEmitterRegistry registry;
 
+    /**
+     * Creates and configures a RedisMessageListenerContainer that subscribes to the Redis channel
+     * identified by WarningPublisher.CHANNEL and forwards parsed JSON message payloads to the
+     * SseEmitterRegistry under the "warning" topic.
+     *
+     * The container logs the active subscription on startup and logs a warning if message parsing
+     * or broadcasting fails for an incoming message.
+     *
+     * @param cf the RedisConnectionFactory used to connect the container to Redis
+     * @return the configured RedisMessageListenerContainer subscribed to WarningPublisher.CHANNEL
+     */
     @Bean
     public RedisMessageListenerContainer warningListenerContainer(RedisConnectionFactory cf) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();

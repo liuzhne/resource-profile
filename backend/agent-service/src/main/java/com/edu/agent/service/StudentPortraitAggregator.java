@@ -124,6 +124,16 @@ public class StudentPortraitAggregator {
 
     @Value("${educare.debug.mock-data:false}")
     private boolean mockData;
+    /**
+     * Builds a masked JSON portrait for a student by aggregating profile, mental, and data metrics.
+     *
+     * During execution this method sets an AgentSecurityContext with role ROLE_COUNSELOR and
+     * sensitive data access disabled, clears the context on completion, and may inject
+     * mock/demo fields when the debug flag is enabled or aggregated data is sparse.
+     *
+     * @param studentId the student identifier; may be non-numeric (in which case base-profile lookup is skipped and a source note is recorded)
+     * @return a JSON string containing the aggregated student portrait after applying profile masking and LLM-specific masking
+     */
     public String buildMaskedProfile(String studentId) {
         AgentSecurityContext ctx = new AgentSecurityContext();
         ctx.setRole(AgentSecurityContext.ROLE_COUNSELOR);

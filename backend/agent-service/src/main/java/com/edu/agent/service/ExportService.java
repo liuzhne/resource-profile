@@ -6,25 +6,35 @@ import org.springframework.core.io.Resource;
 public interface ExportService {
 
     /**
-     * 创建一个 PDF 导出任务并提交异步渲染。
-     *
-     * @return 新建的 jobId
-     */
+ * Create a PDF export job and submit it for asynchronous rendering.
+ *
+ * @param taskId the identifier of the task to export
+ * @param userId the identifier of the user requesting the export
+ * @return the identifier of the newly created export job
+ */
     Long createExportJob(Long taskId, Long userId);
 
     /**
-     * 异步渲染入口。由 createExportJob 内部触发，public 仅为 @Async 代理需要。
-     */
+ * Trigger rendering of the PDF for the specified export job.
+ *
+ * @param jobId the identifier of the export job to render
+ */
     void renderPdfAsync(Long jobId);
 
     /**
-     * 查询导出任务状态（前端轮询用）。
-     */
+ * Retrieve the current status and details of an export job for polling.
+ *
+ * @param jobId the identifier of the export job to query
+ * @return an {@link AgentExportTask} containing the job's current status and metadata
+ */
     AgentExportTask getJobStatus(Long jobId);
 
     /**
-     * 加载已完成的 PDF 文件资源（下载端点用）。
-     * 任务非 DONE 或文件丢失时抛 IllegalStateException。
-     */
+ * Load the completed PDF file for the given export job as a Spring Resource.
+ *
+ * @param jobId the export job identifier
+ * @return the PDF file as a Spring {@code Resource}
+ * @throws IllegalStateException if the job is not in the DONE state or the file cannot be found
+ */
     Resource loadFile(Long jobId);
 }

@@ -7,28 +7,23 @@
   </el-breadcrumb>
 </template>
 
-<script setup lang="ts">
+<script setup>
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-interface Breadcrumb {
-  title: string
-  path: string
-}
-
 const route = useRoute()
 const router = useRouter()
-const breadcrumbs = ref<Breadcrumb[]>([])
+const breadcrumbs = ref([])
 
 const getBreadcrumb = () => {
   const matched = route.matched.filter((item) => item.meta?.title)
   breadcrumbs.value = matched.map((item) => ({
-    title: item.meta.title as string,
+    title: item.meta.title,
     path: item.path
   }))
 }
 
-const handleLink = (item: Breadcrumb) => {
+const handleLink = (item) => {
   router.push(item.path)
 }
 
