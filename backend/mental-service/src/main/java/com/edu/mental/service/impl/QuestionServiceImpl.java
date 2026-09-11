@@ -71,34 +71,6 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     /**
-     * Persists a list of questions for the specified questionnaire and updates the questionnaire's question count.
-     *
-     * For each question, ensures the questionnaireId is set; if sortOrder is null assigns index+1; if required is null sets it to 1; then inserts the question. If the provided list is null or empty, no inserts are performed but the questionnaire's question count is still synchronized.
-     *
-     * @param questionnaireId the id of the questionnaire to which the questions belong
-     * @param questions the questions to insert; may be null or empty
-     */
-    @Override
-    public void saveBatch(Long questionnaireId, List<Question> questions) {
-        if (questions == null || questions.isEmpty()) {
-            syncQuestionCount(questionnaireId);
-            return;
-        }
-        for (int i = 0; i < questions.size(); i++) {
-            Question question = questions.get(i);
-            question.setQuestionnaireId(questionnaireId);
-            if (question.getSortOrder() == null) {
-                question.setSortOrder(i + 1);
-            }
-            if (question.getRequired() == null) {
-                question.setRequired(1);
-            }
-            questionMapper.insert(question);
-        }
-        syncQuestionCount(questionnaireId);
-    }
-
-    /**
      * Update an existing Question record using the question's ID.
      *
      * @param question the Question entity containing updated fields; must have a valid `id` to identify the record to update

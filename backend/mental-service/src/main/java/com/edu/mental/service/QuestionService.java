@@ -19,13 +19,7 @@ public interface QuestionService {
  */
 Question save(Question question);
 
-    /**
- * Persists multiple Question entities and associates them with the specified questionnaire.
- *
- * @param questionnaireId the ID of the questionnaire to associate the saved questions with
- * @param questions the list of Question entities to persist
- */
-void saveBatch(Long questionnaireId, List<Question> questions);
+    void update(Question question);
 
     void delete(Long questionId);
 
