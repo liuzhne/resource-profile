@@ -13,9 +13,7 @@
         <h1 class="page-title">我的评估历史</h1>
         <div class="page-subtitle">查看过往心理测评记录与结果建议。</div>
       </div>
-      <el-button :icon="Refresh" :loading="loading" @click="fetchData">
-        刷新
-      </el-button>
+      <el-button :icon="Refresh" :loading="loading" @click="fetchData"> 刷新 </el-button>
     </div>
 
     <div class="history-summary">
@@ -51,37 +49,29 @@
         </div>
       </template>
 
-      <el-empty
-        v-if="!loading && rows.length === 0"
-        description="暂无评估记录"
-      />
+      <el-empty v-if="!loading && rows.length === 0" description="暂无评估记录" />
       <el-table v-else v-loading="loading" :data="rows" stripe>
         <el-table-column type="index" width="56" />
         <el-table-column prop="questionnaireId" label="问卷" min-width="120">
           <template #default="{ row }">
             <div class="questionnaire-id">问卷 #{{ row.questionnaireId }}</div>
-            <div class="time-text">{{ row.createTime || "-" }}</div>
+            <div class="time-text">{{ row.createTime || '-' }}</div>
           </template>
         </el-table-column>
         <el-table-column prop="score" label="得分" width="100" align="center">
           <template #default="{ row }">
-            <strong class="score-value">{{ row.score ?? "-" }}</strong>
+            <strong class="score-value">{{ row.score ?? '-' }}</strong>
           </template>
         </el-table-column>
         <el-table-column label="等级" width="120">
           <template #default="{ row }">
             <el-tag :type="levelTagColor(row.level)" effect="plain">
-              {{ row.level || "-" }}
+              {{ row.level || '-' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="suggestion"
-          label="建议"
-          min-width="260"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">{{ row.suggestion || "-" }}</template>
+        <el-table-column prop="suggestion" label="建议" min-width="260" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.suggestion || '-' }}</template>
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
@@ -101,46 +91,45 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
-import { ArrowLeft, Refresh, View } from "@element-plus/icons-vue";
-import { studentMyHistory } from "@/api/mental";
-import { useUserStore } from "@/store/modules/user";
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ArrowLeft, Refresh, View } from '@element-plus/icons-vue'
+import { studentMyHistory } from '@/api/mental'
+import { useUserStore } from '@/store/modules/user'
 
-const router = useRouter();
-const userStore = useUserStore();
-const loading = ref(false);
-const rows = ref([]);
+const router = useRouter()
+const userStore = useUserStore()
+const loading = ref(false)
+const rows = ref([])
 
 const levelSummary = computed(() => ({
-  good: rows.value.filter((row) => row.level === "正常").length,
-  attention: rows.value.filter((row) => ["轻度", "中度"].includes(row.level))
-    .length,
-  high: rows.value.filter((row) => ["重度", "高危"].includes(row.level)).length,
-}));
+  good: rows.value.filter((row) => row.level === '正常').length,
+  attention: rows.value.filter((row) => ['轻度', '中度'].includes(row.level)).length,
+  high: rows.value.filter((row) => ['重度', '高危'].includes(row.level)).length
+}))
 
 const levelTagColor = (level) =>
   ({
-    正常: "success",
-    轻度: "primary",
-    中度: "warning",
-    重度: "danger",
-    高危: "danger",
-  })[level] || "info";
+    正常: 'success',
+    轻度: 'primary',
+    中度: 'warning',
+    重度: 'danger',
+    高危: 'danger'
+  })[level] || 'info'
 
 const fetchData = async () => {
-  loading.value = true;
+  loading.value = true
   try {
-    const res = await studentMyHistory(userStore.userInfo?.id);
-    rows.value = res.data || [];
+    const res = await studentMyHistory(userStore.userInfo?.id)
+    rows.value = res.data || []
   } catch (e) {
-    console.error("加载历史失败", e);
+    console.error('加载历史失败', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
-onMounted(fetchData);
+onMounted(fetchData)
 </script>
 
 <style scoped lang="scss">

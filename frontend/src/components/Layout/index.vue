@@ -24,14 +24,14 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
-import { useAppStore } from "@/store/modules/app";
-import Sidebar from "./Sidebar.vue";
-import Navbar from "./Navbar.vue";
-import TagsView from "./TagsView.vue";
+import { computed } from 'vue'
+import { useAppStore } from '@/store/modules/app'
+import Sidebar from './Sidebar.vue'
+import Navbar from './Navbar.vue'
+import TagsView from './TagsView.vue'
 
-const appStore = useAppStore();
-const isMobile = computed(() => appStore.isMobile);
+const appStore = useAppStore()
+const isMobile = computed(() => appStore.isMobile)
 </script>
 
 <style scoped lang="scss">

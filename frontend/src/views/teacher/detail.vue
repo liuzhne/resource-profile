@@ -4,19 +4,13 @@
       <div>
         <el-button text class="back-btn" @click="goBack">返回列表</el-button>
         <h1 class="page-title">教师画像详情</h1>
-        <div class="page-subtitle">
-          查看教师基础档案、任职信息与教学科研画像。
-        </div>
+        <div class="page-subtitle">查看教师基础档案、任职信息与教学科研画像。</div>
       </div>
     </div>
 
     <el-skeleton v-if="loading" :rows="8" animated class="detail-content" />
 
-    <el-empty
-      v-else-if="!teacherInfo"
-      class="detail-content"
-      description="未找到教师信息"
-    />
+    <el-empty v-else-if="!teacherInfo" class="detail-content" description="未找到教师信息" />
 
     <el-row v-else :gutter="16" class="detail-content">
       <el-col :xs="24" :lg="8">
@@ -45,15 +39,11 @@
           <div class="info-list">
             <div class="info-item">
               <span class="label">工号</span>
-              <span class="value">{{
-                displayValue(teacherInfo.employeeId)
-              }}</span>
+              <span class="value">{{ displayValue(teacherInfo.employeeId) }}</span>
             </div>
             <div class="info-item">
               <span class="label">入职时间</span>
-              <span class="value">{{
-                displayValue(teacherInfo.joinDate)
-              }}</span>
+              <span class="value">{{ displayValue(teacherInfo.joinDate) }}</span>
             </div>
             <div class="info-item">
               <span class="label">联系电话</span>
@@ -129,10 +119,7 @@
             </el-tab-pane>
 
             <el-tab-pane label="教学成果" name="teaching">
-              <el-empty
-                v-if="teachingAchievements.length === 0"
-                description="暂无教学成果记录"
-              />
+              <el-empty v-if="teachingAchievements.length === 0" description="暂无教学成果记录" />
               <el-timeline v-else>
                 <el-timeline-item
                   v-for="(item, index) in teachingAchievements"
@@ -147,17 +134,13 @@
             </el-tab-pane>
 
             <el-tab-pane label="科研项目" name="research">
-              <el-table
-                :data="researchProjects"
-                stripe
-                empty-text="暂无科研项目记录"
-              >
+              <el-table :data="researchProjects" stripe empty-text="暂无科研项目记录">
                 <el-table-column prop="name" label="项目名称" min-width="220" />
                 <el-table-column prop="level" label="级别" width="120" />
                 <el-table-column prop="role" label="角色" width="100" />
                 <el-table-column prop="amount" label="经费" width="120">
                   <template #default="{ row }">
-                    {{ row.amount ? `${row.amount} 万` : "-" }}
+                    {{ row.amount ? `${row.amount} 万` : '-' }}
                   </template>
                 </el-table-column>
                 <el-table-column prop="period" label="周期" width="180" />
@@ -167,15 +150,11 @@
             <el-tab-pane label="教学评价" name="evaluation">
               <div class="evaluation-grid">
                 <div class="evaluation-card">
-                  <strong>{{
-                    displayValue(teacherInfo.evaluationScore)
-                  }}</strong>
+                  <strong>{{ displayValue(teacherInfo.evaluationScore) }}</strong>
                   <span>综合评分</span>
                 </div>
                 <div class="evaluation-card">
-                  <strong>{{
-                    displayValue(teacherInfo.evaluationCount)
-                  }}</strong>
+                  <strong>{{ displayValue(teacherInfo.evaluationCount) }}</strong>
                   <span>评价次数</span>
                 </div>
                 <div class="evaluation-card">
@@ -192,97 +171,95 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import { useRouter, useRoute } from "vue-router";
-import { getTeacherDetail } from "@/api/teacher";
-import { ElMessage } from "element-plus";
+import { computed, onMounted, ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { getTeacherDetail } from '@/api/teacher'
+import { ElMessage } from 'element-plus'
 
-const router = useRouter();
-const route = useRoute();
-const activeTab = ref("basic");
-const loading = ref(false);
-const teacherInfo = ref(null);
-const teachingAchievements = ref([]);
-const researchProjects = ref([]);
+const router = useRouter()
+const route = useRoute()
+const activeTab = ref('basic')
+const loading = ref(false)
+const teacherInfo = ref(null)
+const teachingAchievements = ref([])
+const researchProjects = ref([])
 
 const avatarText = computed(() =>
-  teacherInfo.value?.name ? teacherInfo.value.name.slice(0, 1) : "师",
-);
+  teacherInfo.value?.name ? teacherInfo.value.name.slice(0, 1) : '师'
+)
 
 const satisfactionText = computed(() => {
-  const value = teacherInfo.value?.satisfaction;
-  return value === "-" || value === undefined || value === null
-    ? "-"
-    : `${value}%`;
-});
+  const value = teacherInfo.value?.satisfaction
+  return value === '-' || value === undefined || value === null ? '-' : `${value}%`
+})
 
 const displayValue = (value) =>
-  value === null || value === undefined || value === "" ? "-" : value;
+  value === null || value === undefined || value === '' ? '-' : value
 
 const formatGender = (value) => {
-  if (value === 0) return "女";
-  if (value === 1) return "男";
-  return displayValue(value);
-};
+  if (value === 0) return '女'
+  if (value === 1) return '男'
+  return displayValue(value)
+}
 
 const formatStatus = (value) => {
-  if (value === 0) return "离职";
-  if (value === 1) return "在职";
-  return displayValue(value);
-};
+  if (value === 0) return '离职'
+  if (value === 1) return '在职'
+  return displayValue(value)
+}
 
 const titleTagType = (title) => {
-  if (title === "教授" || title === "研究员") return "success";
-  if (title === "副教授") return "warning";
-  if (title === "讲师") return "primary";
-  return "info";
-};
+  if (title === '教授' || title === '研究员') return 'success'
+  if (title === '副教授') return 'warning'
+  if (title === '讲师') return 'primary'
+  return 'info'
+}
 
 const statusTagType = (status) =>
-  status === "在职" ? "success" : status === "离职" ? "info" : "info";
+  status === '在职' ? 'success' : status === '离职' ? 'info' : 'info'
 
 const fetchDetail = async () => {
-  const id = route.params.id;
+  const id = route.params.id
   if (!id) {
-    ElMessage.error("教师ID不存在");
-    return;
+    ElMessage.error('教师ID不存在')
+    return
   }
-  loading.value = true;
+  loading.value = true
   try {
-    const res = await getTeacherDetail(id);
-    const data = res.data;
+    const res = await getTeacherDetail(id)
+    const data = res.data
     if (!data) {
-      ElMessage.warning("未找到该教师信息");
-      teacherInfo.value = null;
-      return;
+      ElMessage.warning('未找到该教师信息')
+      teacherInfo.value = null
+      return
     }
     teacherInfo.value = {
       ...data,
-      dept: data.deptName || data.dept || "-",
+      dept: data.deptName || data.dept || '-',
       gender: formatGender(data.gender),
       status: formatStatus(data.status),
-      political: data.political || "-",
-      phone: data.phone || "-",
-      email: data.email || "-",
-      evaluationScore: data.evaluationScore || "-",
-      evaluationCount: data.evaluationCount || "-",
-      satisfaction: data.satisfaction || "-",
-    };
-    teachingAchievements.value = data.teachingAchievements || [];
-    researchProjects.value = data.researchProjects || [];
+      political: data.political || '-',
+      phone: data.phone || '-',
+      email: data.email || '-',
+      evaluationScore: data.evaluationScore || '-',
+      evaluationCount: data.evaluationCount || '-',
+      satisfaction: data.satisfaction || '-'
+    }
+    teachingAchievements.value = data.teachingAchievements || []
+    researchProjects.value = data.researchProjects || []
   } catch (error) {
-    teacherInfo.value = null;
-    ElMessage.error("获取教师详情失败");
+    teacherInfo.value = null
+    ElMessage.error('获取教师详情失败')
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const goBack = () => {
-  router.back();
-};
+  router.back()
+}
 
-onMounted(fetchDetail);
+onMounted(fetchDetail)
 </script>
 
 <style scoped lang="scss">

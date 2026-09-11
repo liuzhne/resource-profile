@@ -23,9 +23,7 @@
           <el-avatar :size="32" :src="userInfo?.avatar">
             <el-icon><User /></el-icon>
           </el-avatar>
-          <span class="username">{{
-            userInfo?.nickname || userInfo?.username
-          }}</span>
+          <span class="username">{{ userInfo?.nickname || userInfo?.username }}</span>
           <el-icon><ArrowDown /></el-icon>
         </div>
         <template #dropdown>
@@ -47,58 +45,58 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
-import { useRouter } from "vue-router";
-import { ElMessageBox } from "element-plus";
-import { useAppStore } from "@/store/modules/app";
-import { useUserStore } from "@/store/modules/user";
-import Breadcrumb from "./Breadcrumb.vue";
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
+import { useAppStore } from '@/store/modules/app'
+import { useUserStore } from '@/store/modules/user'
+import Breadcrumb from './Breadcrumb.vue'
 
-const router = useRouter();
-const appStore = useAppStore();
-const userStore = useUserStore();
+const router = useRouter()
+const appStore = useAppStore()
+const userStore = useUserStore()
 
-const sidebarCollapsed = computed(() => appStore.sidebarCollapsed);
-const userInfo = computed(() => userStore.userInfo);
+const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
+const userInfo = computed(() => userStore.userInfo)
 
 const toggleSidebar = () => {
-  appStore.toggleSidebar();
-};
+  appStore.toggleSidebar()
+}
 
 const goToProfile = () => {
-  router.push("/profile");
-};
+  router.push('/profile')
+}
 
 const goToSettings = () => {
   // 可以跳转到系统设置页面
-};
+}
 
 const handleUserCommand = (command) => {
-  if (command === "profile") {
-    goToProfile();
-    return;
+  if (command === 'profile') {
+    goToProfile()
+    return
   }
-  if (command === "settings") {
-    goToSettings();
-    return;
+  if (command === 'settings') {
+    goToSettings()
+    return
   }
-  if (command === "logout") {
-    handleLogout();
+  if (command === 'logout') {
+    handleLogout()
   }
-};
+}
 
 const handleLogout = () => {
-  ElMessageBox.confirm("退出后需要重新登录平台账号。", "确认退出登录？", {
-    confirmButtonText: "确定",
-    cancelButtonText: "取消",
-    type: "warning",
-    customClass: "app-confirm-dialog",
+  ElMessageBox.confirm('退出后需要重新登录平台账号。', '确认退出登录？', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+    customClass: 'app-confirm-dialog',
     distinguishCancelAndClose: true,
-    showClose: false,
+    showClose: false
   }).then(() => {
-    userStore.logout();
-  });
-};
+    userStore.logout()
+  })
+}
 </script>
 
 <style scoped lang="scss">

@@ -39,7 +39,13 @@ buildNumber.properties
 *.iml
 *.ipr
 
-.claude/
+# Claude Code：共享配置（settings.json / commands / rules / skills / agents）提交到 git；
+# 仅忽略个人/本地文件与 git 工作树。
+.claude/worktrees/
+.claude/settings.local.json
+.claude/*.local.json
+.claude/.DS_Store
+CLAUDE.local.md
 
 # Eclipse
 .apt_generated
@@ -76,9 +82,34 @@ dist-ssr/
 build/
 *.local
 
+# Python (ai-inference-service / eval)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
 # Local env files
+.env
 .env.local
 .env.*.local
+docker/.env
+# 模板必须保留在版本库
+!.env.example
+!docker/.env.example
+
+# 生产 TLS 证书与私钥（勿提交；占位目录用 .gitkeep 保留）
+docker/certs/*
+!docker/certs/.gitkeep
+docker/certbot/www/*
+!docker/certbot/www/.gitkeep
+
+# 数据库备份产物（backup-mysql.sh 输出）
+backups/
+
+# 前端 unplugin 自动生成的类型声明（IDE 用，非 lint/build 必需）
+frontend/components.d.ts
 
 # Local configuration files (may contain sensitive info)
 application-local.yml
@@ -103,10 +134,16 @@ GATEWAY_ISSUE_SUMMARY.md
 
 */target
 
-docs/educare/ROADMAP.md
-
 # F-1: 中文字体不进 Git，部署时按 deploy.md 下载
 backend/agent-service/src/main/resources/fonts/*.ttf
 backend/agent-service/src/main/resources/fonts/*.otf
 
 .traces
+
+# 敏感个人信息：学生心理访谈记录 / 原生家庭访谈录 / 师生画像业务文档等。
+# 本地保留供开发，仅排除出 Git——防止 `git add .` 误提交导致未成年人个人信息泄露。
+师生画像系统/
+# 防御性兜底：知识库原始访谈语料目录（若被移动到别处）
+知识库数据/
+# 本地比赛交付材料（计划书 docx / 架构图 / 生成脚本），不纳入版本库
+deliverables/

@@ -7,9 +7,7 @@
           维护心理测评问卷、题目设计与完成情况，用于支撑学生心理状态动态评估。
         </div>
       </div>
-      <el-button type="primary" :icon="Plus" @click="handleAdd">
-        新建问卷
-      </el-button>
+      <el-button type="primary" :icon="Plus" @click="handleAdd"> 新建问卷 </el-button>
     </div>
 
     <div class="questionnaire-summary">
@@ -46,32 +44,22 @@
         </div>
       </template>
 
-      <el-table
-        v-loading="loading"
-        :data="questionnaires"
-        stripe
-        empty-text="暂无问卷数据"
-      >
+      <el-table v-loading="loading" :data="questionnaires" stripe empty-text="暂无问卷数据">
         <el-table-column type="index" width="56" />
         <el-table-column prop="title" label="问卷" min-width="240">
           <template #default="{ row }">
-            <div class="questionnaire-title">{{ row.title || "-" }}</div>
+            <div class="questionnaire-title">{{ row.title || '-' }}</div>
             <div class="questionnaire-desc">
-              {{ row.description || "暂无描述" }}
+              {{ row.description || '暂无描述' }}
             </div>
           </template>
         </el-table-column>
         <el-table-column prop="type" label="类型" width="120">
           <template #default="{ row }">
-            <el-tag effect="plain">{{ row.type || "-" }}</el-tag>
+            <el-tag effect="plain">{{ row.type || '-' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="questions"
-          label="题目数"
-          width="100"
-          align="center"
-        >
+        <el-table-column prop="questions" label="题目数" width="100" align="center">
           <template #default="{ row }">
             <strong class="question-count">{{ row.questions || 0 }}</strong>
           </template>
@@ -85,38 +73,21 @@
         </el-table-column>
         <el-table-column label="开放周期" min-width="210">
           <template #default="{ row }">
-            <div class="period-row">
-              <span>开始</span>{{ row.startTime || "-" }}
-            </div>
-            <div class="period-row">
-              <span>结束</span>{{ row.endTime || "-" }}
-            </div>
+            <div class="period-row"><span>开始</span>{{ row.startTime || '-' }}</div>
+            <div class="period-row"><span>结束</span>{{ row.endTime || '-' }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="300" fixed="right">
+        <el-table-column label="操作" width="380" fixed="right">
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              :icon="EditPen"
-              @click="handleDesign(row)"
-            >
+            <el-button link type="primary" @click="handleView(row)"> 查看 </el-button>
+            <el-button link type="primary" :icon="EditPen" @click="handleDesign(row)">
               设计题目
             </el-button>
-            <el-button
-              link
-              type="primary"
-              :icon="DataAnalysis"
-              @click="handleResult(row)"
-            >
+            <el-button link type="primary" :icon="DataAnalysis" @click="handleResult(row)">
               完成情况
             </el-button>
-            <el-button link type="primary" @click="handleEdit(row)">
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="handleDelete(row)">
-              删除
-            </el-button>
+            <el-button link type="primary" @click="handleEdit(row)"> 编辑 </el-button>
+            <el-button link type="danger" @click="handleDelete(row)"> 删除 </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -132,11 +103,7 @@
       />
     </el-card>
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="isEdit ? '编辑问卷' : '新建问卷'"
-      width="560px"
-    >
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑问卷' : '新建问卷'" width="560px">
       <el-form :model="formData" label-width="86px">
         <el-form-item label="问卷标题">
           <el-input v-model="formData.title" placeholder="请输入问卷标题" />
@@ -189,164 +156,183 @@
         <el-button type="primary" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="viewDialogVisible" title="问卷详情" width="500px">
+      <el-descriptions v-if="viewData" :column="1" border>
+        <el-descriptions-item label="问卷标题">{{ viewData.title }}</el-descriptions-item>
+        <el-descriptions-item label="问卷类型">{{ viewData.type }}</el-descriptions-item>
+        <el-descriptions-item label="描述">{{ viewData.description }}</el-descriptions-item>
+        <el-descriptions-item label="题目数量">{{ viewData.questions }}</el-descriptions-item>
+        <el-descriptions-item label="开始时间">{{ viewData.startTime }}</el-descriptions-item>
+        <el-descriptions-item label="结束时间">{{ viewData.endTime }}</el-descriptions-item>
+        <el-descriptions-item label="状态">{{ statusLabel(viewData.status) }}</el-descriptions-item>
+      </el-descriptions>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
-import { ElMessage, ElMessageBox } from "element-plus";
-import { Plus, EditPen, DataAnalysis } from "@element-plus/icons-vue";
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, EditPen, DataAnalysis } from '@element-plus/icons-vue'
 import {
   getQuestionnaireList,
   getQuestionnaireDetail,
   createQuestionnaire,
   updateQuestionnaire,
-  deleteQuestionnaire,
-} from "@/api/mental";
+  deleteQuestionnaire
+} from '@/api/mental'
 
-const router = useRouter();
-const handleDesign = (row) =>
-  router.push(`/mental/questionnaire/design/${row.id}`);
-const handleResult = (row) =>
-  router.push(`/mental/questionnaire/result/${row.id}`);
+const router = useRouter()
+const handleDesign = (row) => router.push(`/mental/questionnaire/design/${row.id}`)
+const handleResult = (row) => router.push(`/mental/questionnaire/result/${row.id}`)
 
-const loading = ref(false);
-const questionnaires = ref([]);
-const total = ref(0);
-const currentPage = ref(1);
-const pageSize = ref(10);
+const loading = ref(false)
+const questionnaires = ref([])
+const total = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(10)
 
-const dialogVisible = ref(false);
-const isEdit = ref(false);
-const editId = ref(null);
+const dialogVisible = ref(false)
+const isEdit = ref(false)
+const editId = ref(null)
 const formData = reactive({
-  title: "",
-  type: "",
-  description: "",
+  title: '',
+  type: '',
+  description: '',
   questions: 20,
-  startTime: "",
-  endTime: "",
-  status: 0,
-});
+  startTime: '',
+  endTime: '',
+  status: 0
+})
 
 const questionnaireSummary = computed(() => ({
   active: questionnaires.value.filter((item) => item.status === 1).length,
   pending: questionnaires.value.filter((item) => item.status === 0).length,
-  ended: questionnaires.value.filter((item) => item.status === 2).length,
-}));
+  ended: questionnaires.value.filter((item) => item.status === 2).length
+}))
 
 const statusLabel = (status) => {
-  const map = { 0: "未开始", 1: "进行中", 2: "已结束" };
-  return map[status] ?? "未知";
-};
+  const map = { 0: '未开始', 1: '进行中', 2: '已结束' }
+  return map[status] ?? '未知'
+}
 
 const statusTagType = (status) => {
-  const map = { 0: "info", 1: "success", 2: "warning" };
-  return map[status] ?? "info";
-};
+  const map = { 0: 'info', 1: 'success', 2: 'warning' }
+  return map[status] ?? 'info'
+}
 
 const fetchData = async () => {
-  loading.value = true;
+  loading.value = true
   try {
     const res = await getQuestionnaireList({
       page: currentPage.value,
-      size: pageSize.value,
-    });
-    const data = res.data || {};
-    questionnaires.value = data.records || [];
-    total.value = Number(data.total) || 0;
+      size: pageSize.value
+    })
+    const data = res.data || {}
+    questionnaires.value = data.records || []
+    total.value = Number(data.total) || 0
   } catch (e) {
-    console.error("获取问卷列表失败", e);
+    console.error('获取问卷列表失败', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const handlePageChange = (page) => {
-  currentPage.value = page;
-  fetchData();
-};
+  currentPage.value = page
+  fetchData()
+}
 
 const resetForm = () => {
-  formData.title = "";
-  formData.type = "";
-  formData.description = "";
-  formData.questions = 20;
-  formData.startTime = "";
-  formData.endTime = "";
-  formData.status = 0;
-};
+  formData.title = ''
+  formData.type = ''
+  formData.description = ''
+  formData.questions = 20
+  formData.startTime = ''
+  formData.endTime = ''
+  formData.status = 0
+}
+
+const viewDialogVisible = ref(false)
+const viewData = ref(null)
+
+const handleView = async (row) => {
+  try {
+    const res = await getQuestionnaireDetail(row.id)
+    viewData.value = res.data
+    viewDialogVisible.value = true
+  } catch (e) {
+    console.error('获取问卷详情失败', e)
+  }
+}
 
 const handleAdd = () => {
-  isEdit.value = false;
-  editId.value = null;
-  resetForm();
-  dialogVisible.value = true;
-};
+  isEdit.value = false
+  editId.value = null
+  resetForm()
+  dialogVisible.value = true
+}
 
 const handleEdit = async (row) => {
-  isEdit.value = true;
-  editId.value = row.id;
+  isEdit.value = true
+  editId.value = row.id
   try {
-    const res = await getQuestionnaireDetail(row.id);
-    const data = res.data || {};
-    formData.title = data.title || "";
-    formData.type = data.type || "";
-    formData.description = data.description || "";
-    formData.questions = data.questions || 20;
-    formData.startTime = data.startTime || "";
-    formData.endTime = data.endTime || "";
-    formData.status = data.status ?? 0;
-    dialogVisible.value = true;
+    const res = await getQuestionnaireDetail(row.id)
+    const data = res.data || {}
+    formData.title = data.title || ''
+    formData.type = data.type || ''
+    formData.description = data.description || ''
+    formData.questions = data.questions || 20
+    formData.startTime = data.startTime || ''
+    formData.endTime = data.endTime || ''
+    formData.status = data.status ?? 0
+    dialogVisible.value = true
   } catch (e) {
-    console.error("获取问卷详情失败", e);
+    console.error('获取问卷详情失败', e)
   }
-};
+}
 
 const handleDelete = (row) => {
-  ElMessageBox.confirm(
-    "删除后该问卷将不可恢复，请确认是否继续。",
-    "确认删除问卷？",
-    {
-      type: "warning",
-      confirmButtonText: "删除",
-      cancelButtonText: "取消",
-      customClass: "app-confirm-dialog",
-      showClose: false,
-    },
-  )
+  ElMessageBox.confirm('删除后该问卷将不可恢复，请确认是否继续。', '确认删除问卷？', {
+    type: 'warning',
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    customClass: 'app-confirm-dialog',
+    showClose: false
+  })
     .then(async () => {
       try {
-        await deleteQuestionnaire(row.id);
-        ElMessage.success("删除成功");
-        fetchData();
+        await deleteQuestionnaire(row.id)
+        ElMessage.success('删除成功')
+        fetchData()
       } catch (e) {
-        console.error("删除问卷失败", e);
+        console.error('删除问卷失败', e)
       }
     })
-    .catch(() => {});
-};
+    .catch(() => {})
+}
 
 const handleSubmit = async () => {
   try {
     if (isEdit.value && editId.value) {
-      await updateQuestionnaire(editId.value, { ...formData });
-      ElMessage.success("更新成功");
+      await updateQuestionnaire(editId.value, { ...formData })
+      ElMessage.success('更新成功')
     } else {
-      await createQuestionnaire({ ...formData });
-      ElMessage.success("创建成功");
+      await createQuestionnaire({ ...formData })
+      ElMessage.success('创建成功')
     }
-    dialogVisible.value = false;
-    fetchData();
+    dialogVisible.value = false
+    fetchData()
   } catch (e) {
-    console.error("提交问卷失败", e);
+    console.error('提交问卷失败', e)
   }
-};
+}
 
 onMounted(() => {
-  fetchData();
-});
+  fetchData()
+})
 </script>
 
 <style scoped lang="scss">

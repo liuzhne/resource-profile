@@ -31,47 +31,47 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
-import { isExternal } from "@/utils/validate";
+import { ref } from 'vue'
+import { isExternal } from '@/utils/validate'
 
 const props = defineProps({
   item: {
     type: Object,
-    required: true,
+    required: true
   },
   basePath: {
     type: String,
-    default: "",
-  },
-});
+    default: ''
+  }
+})
 
-const onlyOneChild = ref(null);
+const onlyOneChild = ref(null)
 
 const hasOneShowingChild = (children = [], parent) => {
-  const showingChildren = children.filter((item) => !item.meta?.hidden);
+  const showingChildren = children.filter((item) => !item.meta?.hidden)
 
   // 没有子菜单，显示父菜单
   if (showingChildren.length === 0) {
-    onlyOneChild.value = { ...parent };
-    return true;
+    onlyOneChild.value = { ...parent }
+    return true
   }
 
   // 只有一个子菜单
   if (showingChildren.length === 1) {
-    onlyOneChild.value = showingChildren[0];
-    return true;
+    onlyOneChild.value = showingChildren[0]
+    return true
   }
 
-  return false;
-};
+  return false
+}
 
 const resolvePath = (routePath) => {
   if (isExternal(routePath)) {
-    return routePath;
+    return routePath
   }
   if (isExternal(props.basePath)) {
-    return props.basePath;
+    return props.basePath
   }
-  return routePath;
-};
+  return routePath
+}
 </script>

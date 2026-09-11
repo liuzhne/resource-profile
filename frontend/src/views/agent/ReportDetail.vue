@@ -9,11 +9,9 @@
           :loading="exporting"
           :disabled="!canExport"
           @click="handleExport"
-          >{{ exporting ? "导出中..." : "导出 PDF" }}</el-button
+          >{{ exporting ? '导出中...' : '导出 PDF' }}</el-button
         >
-        <el-button :icon="Refresh" :loading="loading" @click="fetchDetail"
-          >刷新</el-button
-        >
+        <el-button :icon="Refresh" :loading="loading" @click="fetchDetail">刷新</el-button>
       </template>
     </el-page-header>
 
@@ -22,7 +20,7 @@
         <h2 class="page-title">干预报告</h2>
         <div class="page-subtitle">
           任务 #{{ taskId }} · 学生 {{ displayValue(task.studentId) }} ·
-          {{ formatTime(task.createdAt) || "-" }}
+          {{ formatTime(task.createdAt) || '-' }}
         </div>
       </div>
     </div>
@@ -32,21 +30,17 @@
         <div class="summary-main">
           <div class="summary-label">当前结论</div>
           <div class="summary-title">
-            {{ risk.primary_risk_type || "暂无主要风险结论" }}
+            {{ risk.primary_risk_type || '暂无主要风险结论' }}
           </div>
           <div class="summary-desc">
-            {{
-              plan.summary ||
-              risk.root_cause_analysis ||
-              "等待 AI 流程生成完整报告。"
-            }}
+            {{ plan.summary || risk.root_cause_analysis || '等待 AI 流程生成完整报告。' }}
           </div>
         </div>
         <div class="summary-metrics">
           <div class="metric-tile">
             <span>任务状态</span>
             <el-tag :type="statusType(task.status)" effect="plain">
-              {{ statusLabel(task.status) || "-" }}
+              {{ statusLabel(task.status) || '-' }}
             </el-tag>
           </div>
           <div class="metric-tile">
@@ -82,11 +76,11 @@
         </div>
         <div>
           <span>创建时间</span>
-          <strong>{{ formatTime(task.createdAt) || "-" }}</strong>
+          <strong>{{ formatTime(task.createdAt) || '-' }}</strong>
         </div>
         <div>
           <span>完成时间</span>
-          <strong>{{ formatTime(task.completedAt) || "-" }}</strong>
+          <strong>{{ formatTime(task.completedAt) || '-' }}</strong>
         </div>
       </section>
 
@@ -113,7 +107,7 @@
                   <h4>风险识别</h4>
                 </div>
                 <el-tag :type="stageType(1)" effect="plain">
-                  {{ hasStage(1) ? "已生成" : "未执行" }}
+                  {{ hasStage(1) ? '已生成' : '未执行' }}
                 </el-tag>
               </div>
 
@@ -127,9 +121,9 @@
                   </div>
                   <div class="risk-copy">
                     <el-tag :type="riskType(task.riskLevel)" effect="light">
-                      {{ riskLabel(task.riskLevel) || "-" }}
+                      {{ riskLabel(task.riskLevel) || '-' }}
                     </el-tag>
-                    <p>{{ risk.root_cause_analysis || "暂无根因分析。" }}</p>
+                    <p>{{ risk.root_cause_analysis || '暂无根因分析。' }}</p>
                   </div>
                 </div>
 
@@ -139,19 +133,12 @@
                   class="tag-block"
                 >
                   <div class="block-title">关键指标</div>
-                  <el-tag
-                    v-for="(k, i) in risk.key_indicators"
-                    :key="i"
-                    effect="plain"
-                  >
+                  <el-tag v-for="(k, i) in risk.key_indicators" :key="i" effect="plain">
                     {{ k }}
                   </el-tag>
                 </div>
 
-                <div
-                  v-if="risk.recommended_intervention_types?.length"
-                  class="tag-block"
-                >
+                <div v-if="risk.recommended_intervention_types?.length" class="tag-block">
                   <div class="block-title">推荐干预方向</div>
                   <el-tag
                     v-for="(t, i) in risk.recommended_intervention_types"
@@ -185,22 +172,14 @@
                   <h4>知识检索</h4>
                 </div>
                 <div class="stage-tags">
-                  <el-tag
-                    v-if="knowledge.reranked"
-                    type="success"
-                    effect="plain"
-                  >
+                  <el-tag v-if="knowledge.reranked" type="success" effect="plain">
                     Cross-Encoder 精排
                   </el-tag>
-                  <el-tag
-                    v-else-if="knowledge.fallback"
-                    type="info"
-                    effect="plain"
-                  >
+                  <el-tag v-else-if="knowledge.fallback" type="info" effect="plain">
                     示例数据降级
                   </el-tag>
                   <el-tag :type="stageType(2)" effect="plain">
-                    {{ hasStage(2) ? "已检索" : "未执行" }}
+                    {{ hasStage(2) ? '已检索' : '未执行' }}
                   </el-tag>
                 </div>
               </div>
@@ -254,7 +233,7 @@
                   <p v-if="plan.report_title">{{ plan.report_title }}</p>
                 </div>
                 <el-tag :type="stageType(3)" effect="plain">
-                  {{ hasStage(3) ? "已生成" : "未执行" }}
+                  {{ hasStage(3) ? '已生成' : '未执行' }}
                 </el-tag>
               </div>
 
@@ -264,22 +243,13 @@
                   <span>{{ plan.summary }}</span>
                 </div>
 
-                <div
-                  v-if="plan.immediate_actions?.length"
-                  class="content-block"
-                >
+                <div v-if="plan.immediate_actions?.length" class="content-block">
                   <div class="block-title">立即行动（7 天内）</div>
                   <el-table :data="plan.immediate_actions" size="small" stripe>
-                    <el-table-column
-                      prop="action"
-                      label="行动"
-                      min-width="280"
-                    />
+                    <el-table-column prop="action" label="行动" min-width="280" />
                     <el-table-column prop="owner" label="负责人" width="120" />
                     <el-table-column label="期限" width="90" align="center">
-                      <template #default="{ row }">
-                        {{ row.deadline_days || "-" }} 天
-                      </template>
+                      <template #default="{ row }"> {{ row.deadline_days || '-' }} 天 </template>
                     </el-table-column>
                     <el-table-column label="引用" min-width="180">
                       <template #default="{ row }">
@@ -339,11 +309,7 @@
                   <el-table :data="plan.resources" size="small" stripe>
                     <el-table-column prop="type" label="类型" width="120" />
                     <el-table-column prop="name" label="名称" min-width="220" />
-                    <el-table-column
-                      prop="link_or_contact"
-                      label="链接 / 联系"
-                      min-width="220"
-                    />
+                    <el-table-column prop="link_or_contact" label="链接 / 联系" min-width="220" />
                   </el-table>
                 </div>
               </template>
@@ -351,12 +317,7 @@
             </article>
           </el-timeline-item>
 
-          <el-timeline-item
-            :type="auditType"
-            :icon="auditIcon"
-            size="large"
-            :hollow="!hasStage(4)"
-          >
+          <el-timeline-item :type="auditType" :icon="auditIcon" size="large" :hollow="!hasStage(4)">
             <article class="stage-card">
               <div class="stage-head">
                 <div>
@@ -369,17 +330,13 @@
               </div>
 
               <template v-if="hasStage(4)">
-                <div
-                  :class="['notice', audit.audit_passed ? 'success' : 'danger']"
-                >
-                  <strong>{{
-                    audit.audit_passed ? "审核通过" : "转人工兜底"
-                  }}</strong>
+                <div :class="['notice', audit.audit_passed ? 'success' : 'danger']">
+                  <strong>{{ audit.audit_passed ? '审核通过' : '转人工兜底' }}</strong>
                   <span>
                     {{
                       audit.audit_passed
-                        ? "方案满足隐私、伦理与最小必要原则。"
-                        : "当前报告存在合规风险，建议人工复核后再进入干预流程。"
+                        ? '方案满足隐私、伦理与最小必要原则。'
+                        : '当前报告存在合规风险，建议人工复核后再进入干预流程。'
                     }}
                   </span>
                 </div>
@@ -389,36 +346,22 @@
                   <el-table :data="audit.audit_items" size="small" stripe>
                     <el-table-column label="维度" width="140">
                       <template #default="{ row }">
-                        <el-tag
-                          :type="row.passed ? 'success' : 'danger'"
-                          effect="plain"
-                        >
+                        <el-tag :type="row.passed ? 'success' : 'danger'" effect="plain">
                           {{ dimensionLabel(row.dimension) }}
                         </el-tag>
                       </template>
                     </el-table-column>
                     <el-table-column label="结果" width="90" align="center">
                       <template #default="{ row }">
-                        <el-icon v-if="row.passed" color="#2f9e44"
-                          ><SuccessFilled
-                        /></el-icon>
-                        <el-icon v-else color="#d64545"
-                          ><CircleCloseFilled
-                        /></el-icon>
+                        <el-icon v-if="row.passed" color="#2f9e44"><SuccessFilled /></el-icon>
+                        <el-icon v-else color="#d64545"><CircleCloseFilled /></el-icon>
                       </template>
                     </el-table-column>
-                    <el-table-column
-                      prop="issue"
-                      label="问题说明"
-                      min-width="300"
-                    />
+                    <el-table-column prop="issue" label="问题说明" min-width="300" />
                   </el-table>
                 </div>
 
-                <div
-                  v-if="audit.redacted_suggestions?.length"
-                  class="content-block"
-                >
+                <div v-if="audit.redacted_suggestions?.length" class="content-block">
                   <div class="block-title">整改建议</div>
                   <ul class="suggestion-list">
                     <li v-for="(s, i) in audit.redacted_suggestions" :key="i">
@@ -432,14 +375,59 @@
           </el-timeline-item>
         </el-timeline>
       </section>
+
+      <!-- I-5：干预反馈闭环（方案落地约 1 个月后由辅导员回填） -->
+      <el-card v-if="canExport" class="feedback-card">
+        <template #header>
+          <span>干预效果跟进</span>
+          <span class="fb-hint">建议方案落地约 1 个月后回填</span>
+        </template>
+        <el-form :model="feedback" label-width="92px" class="fb-form">
+          <el-form-item label="效果评分">
+            <el-rate v-model="feedback.score" :max="5" show-score score-template="{value} 分" />
+          </el-form-item>
+          <el-form-item label="跟进结果">
+            <el-select
+              v-model="feedback.outcome"
+              placeholder="请选择"
+              clearable
+              style="width: 220px"
+            >
+              <el-option label="有改善" value="improved" />
+              <el-option label="无变化" value="unchanged" />
+              <el-option label="恶化" value="worsened" />
+              <el-option label="已升级处理" value="escalated" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="文字反馈">
+            <el-input
+              v-model="feedback.comment"
+              type="textarea"
+              :rows="3"
+              maxlength="1000"
+              show-word-limit
+              placeholder="干预过程、学生反馈、后续建议等"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary"
+              :loading="feedbackSubmitting"
+              :disabled="!feedback.score"
+              @click="handleSubmitFeedback"
+              >提交反馈</el-button
+            >
+          </el-form-item>
+        </el-form>
+      </el-card>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import {
   Refresh,
   Download,
@@ -449,240 +437,262 @@ import {
   CircleCheck,
   CircleClose,
   SuccessFilled,
-  CircleCloseFilled,
-} from "@element-plus/icons-vue";
+  CircleCloseFilled
+} from '@element-plus/icons-vue'
 import {
   getAgentTaskDetail,
   exportReport,
   getExportStatus,
   downloadExport,
-} from "@/api/agent";
+  submitInterventionFeedback
+} from '@/api/agent'
 
-const route = useRoute();
-const router = useRouter();
-const taskId = route.params.id;
+const route = useRoute()
+const router = useRouter()
+const taskId = route.params.id
 
-const loading = ref(true);
-const task = ref({});
+const loading = ref(true)
+const task = ref({})
 
 const safeParse = (value) => {
-  if (!value) return {};
+  if (!value) return {}
   try {
-    return typeof value === "string" ? JSON.parse(value) : value;
+    return typeof value === 'string' ? JSON.parse(value) : value
   } catch (e) {
-    return {};
+    return {}
   }
-};
+}
 
-const risk = computed(() => safeParse(task.value.riskAnalysisResult));
-const knowledge = computed(() => safeParse(task.value.retrievedKnowledge));
-const plan = computed(() => safeParse(task.value.interventionPlan));
-const audit = computed(() => safeParse(task.value.complianceAudit));
+const risk = computed(() => safeParse(task.value.riskAnalysisResult))
+const knowledge = computed(() => safeParse(task.value.retrievedKnowledge))
+const plan = computed(() => safeParse(task.value.interventionPlan))
+const audit = computed(() => safeParse(task.value.complianceAudit))
 
 const hasStage = (n) => {
-  if (n === 1) return !!task.value.riskAnalysisResult;
-  if (n === 2) return !!task.value.retrievedKnowledge;
-  if (n === 3) return !!task.value.interventionPlan;
-  if (n === 4) return !!task.value.complianceAudit;
-  return false;
-};
+  if (n === 1) return !!task.value.riskAnalysisResult
+  if (n === 2) return !!task.value.retrievedKnowledge
+  if (n === 3) return !!task.value.interventionPlan
+  if (n === 4) return !!task.value.complianceAudit
+  return false
+}
 
-const completedStageCount = computed(
-  () => [1, 2, 3, 4].filter((stage) => hasStage(stage)).length,
-);
+const completedStageCount = computed(() => [1, 2, 3, 4].filter((stage) => hasStage(stage)).length)
 
-const stageType = (n) => (hasStage(n) ? "primary" : "info");
+const stageType = (n) => (hasStage(n) ? 'primary' : 'info')
 const auditType = computed(() => {
-  if (!hasStage(4)) return "info";
-  return audit.value.audit_passed ? "success" : "danger";
-});
-const auditIcon = computed(() =>
-  audit.value.audit_passed ? CircleCheck : CircleClose,
-);
+  if (!hasStage(4)) return 'info'
+  return audit.value.audit_passed ? 'success' : 'danger'
+})
+const auditIcon = computed(() => (audit.value.audit_passed ? CircleCheck : CircleClose))
 const auditBadge = computed(() => {
-  if (!hasStage(4)) return { label: "未执行", type: "info" };
+  if (!hasStage(4)) return { label: '未执行', type: 'info' }
   return audit.value.audit_passed
-    ? { label: "审核通过", type: "success" }
-    : { label: "需人工复核", type: "danger" };
-});
+    ? { label: '审核通过', type: 'success' }
+    : { label: '需人工复核', type: 'danger' }
+})
 
 const riskScoreClass = computed(() => {
-  const score = Number(risk.value.risk_score);
-  if (!Number.isFinite(score)) return "";
-  if (score >= 80) return "is-high";
-  if (score >= 60) return "is-medium";
-  return "is-low";
-});
+  const score = Number(risk.value.risk_score)
+  if (!Number.isFinite(score)) return ''
+  if (score >= 80) return 'is-high'
+  if (score >= 60) return 'is-medium'
+  return 'is-low'
+})
 
 const fetchDetail = async () => {
-  loading.value = true;
+  loading.value = true
   try {
-    const res = await getAgentTaskDetail(taskId);
-    task.value = res.data || {};
+    const res = await getAgentTaskDetail(taskId)
+    task.value = res.data || {}
   } catch (e) {
-    console.error("获取任务详情失败", e);
+    console.error('获取任务详情失败', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
-onMounted(fetchDetail);
+onMounted(fetchDetail)
 
-const goBack = () => router.back();
+const goBack = () => router.back()
 
 // ============== F-1：PDF 导出 ==============
-const exporting = ref(false);
-const exportJobId = ref(null);
-let pollTimer = null;
-let pollCount = 0;
-const MAX_POLL = 30; // 30 * 2s = 60s 超时
+const exporting = ref(false)
+const exportJobId = ref(null)
+let pollTimer = null
+let pollCount = 0
+const MAX_POLL = 30 // 30 * 2s = 60s 超时
 
 // 仅当任务为 COMPLETED 或 REJECTED（已有 4 阶段产物）时允许导出
 const canExport = computed(() => {
-  const s = task.value.status;
-  return s === "COMPLETED" || s === "REJECTED";
-});
+  const s = task.value.status
+  return s === 'COMPLETED' || s === 'REJECTED'
+})
 
 const stopPoll = () => {
   if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
+    clearInterval(pollTimer)
+    pollTimer = null
   }
-  pollCount = 0;
-};
+  pollCount = 0
+}
 
 const triggerDownload = async (jobId) => {
   try {
-    const response = await downloadExport(jobId);
-    const blob = response?.data instanceof Blob ? response.data : response;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `report-${taskId}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    ElMessage.success("PDF 已下载");
+    const response = await downloadExport(jobId)
+    const blob = response?.data instanceof Blob ? response.data : response
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `report-${taskId}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('PDF 已下载')
   } catch (e) {
-    console.error("下载 PDF 失败", e);
-    ElMessage.error("下载 PDF 失败");
+    console.error('下载 PDF 失败', e)
+    ElMessage.error('下载 PDF 失败')
   }
-};
+}
 
 const pollExportStatus = async () => {
-  if (!exportJobId.value) return;
-  pollCount += 1;
+  if (!exportJobId.value) return
+  pollCount += 1
   if (pollCount > MAX_POLL) {
-    stopPoll();
-    exporting.value = false;
-    ElMessage.error("导出超时，请稍后重试");
-    return;
+    stopPoll()
+    exporting.value = false
+    ElMessage.error('导出超时，请稍后重试')
+    return
   }
   try {
-    const res = await getExportStatus(exportJobId.value);
-    const status = res.data?.status;
-    if (status === "DONE") {
-      stopPoll();
-      const jid = exportJobId.value;
-      exportJobId.value = null;
-      exporting.value = false;
-      await triggerDownload(jid);
-    } else if (status === "FAILED") {
-      stopPoll();
-      exporting.value = false;
-      ElMessage.error(res.data?.errMsg || "PDF 渲染失败");
+    const res = await getExportStatus(exportJobId.value)
+    const status = res.data?.status
+    if (status === 'DONE') {
+      stopPoll()
+      const jid = exportJobId.value
+      exportJobId.value = null
+      exporting.value = false
+      await triggerDownload(jid)
+    } else if (status === 'FAILED') {
+      stopPoll()
+      exporting.value = false
+      ElMessage.error(res.data?.errMsg || 'PDF 渲染失败')
     }
   } catch (e) {
-    stopPoll();
-    exporting.value = false;
-    console.error("查询导出状态失败", e);
+    stopPoll()
+    exporting.value = false
+    console.error('查询导出状态失败', e)
   }
-};
+}
 
 const handleExport = async () => {
-  if (exporting.value) return;
-  exporting.value = true;
+  if (exporting.value) return
+  exporting.value = true
   try {
-    const res = await exportReport(taskId);
-    const jobId = res.data?.jobId;
-    if (!jobId) throw new Error("未拿到 jobId");
-    exportJobId.value = jobId;
-    pollCount = 0;
-    pollTimer = setInterval(pollExportStatus, 2000);
-    await pollExportStatus();
+    const res = await exportReport(taskId)
+    const jobId = res.data?.jobId
+    if (!jobId) throw new Error('未拿到 jobId')
+    exportJobId.value = jobId
+    pollCount = 0
+    pollTimer = setInterval(pollExportStatus, 2000)
+    await pollExportStatus()
   } catch (e) {
-    exporting.value = false;
-    console.error("触发导出失败", e);
+    exporting.value = false
+    console.error('触发导出失败', e)
     // request.js 拦截器已弹出错误提示，这里不再重复
   }
-};
+}
 
-onUnmounted(stopPoll);
+onUnmounted(stopPoll)
+
+// ============== I-5：干预反馈闭环 ==============
+const feedback = ref({ score: 0, outcome: '', comment: '' })
+const feedbackSubmitting = ref(false)
+
+const handleSubmitFeedback = async () => {
+  if (!feedback.value.score) {
+    ElMessage.warning('请先打分')
+    return
+  }
+  feedbackSubmitting.value = true
+  try {
+    await submitInterventionFeedback({
+      taskId: Number(taskId),
+      score: feedback.value.score,
+      outcome: feedback.value.outcome || null,
+      comment: feedback.value.comment || null
+    })
+    ElMessage.success('反馈已提交，感谢跟进')
+    feedback.value = { score: 0, outcome: '', comment: '' }
+  } catch (e) {
+    console.error('提交干预反馈失败', e)
+    // request.js 拦截器已弹错误提示
+  } finally {
+    feedbackSubmitting.value = false
+  }
+}
 
 const STATUS_LABELS = {
-  PENDING: "待处理",
-  RISK_ANALYZING: "风险识别中",
-  KNOWLEDGE_RETRIEVING: "知识检索中",
-  PLAN_GENERATING: "方案生成中",
-  COMPLIANCE_CHECKING: "合规审核中",
-  COMPLETED: "已完成",
-  REJECTED: "合规未通过",
-  FAILED: "系统异常",
-};
+  PENDING: '待处理',
+  RISK_ANALYZING: '风险识别中',
+  KNOWLEDGE_RETRIEVING: '知识检索中',
+  PLAN_GENERATING: '方案生成中',
+  COMPLIANCE_CHECKING: '合规审核中',
+  COMPLETED: '已完成',
+  REJECTED: '合规未通过',
+  FAILED: '系统异常'
+}
 const RISK_LABELS = {
-  NONE: "无风险",
-  LOW: "低风险",
-  MEDIUM: "中风险",
-  HIGH: "高风险",
-};
+  NONE: '无风险',
+  LOW: '低风险',
+  MEDIUM: '中风险',
+  HIGH: '高风险'
+}
 const SOURCE_LABELS = {
-  case: "案例库",
-  psychology: "心理学",
-  policy: "政策",
-  success: "成功转化",
-};
+  case: '案例库',
+  psychology: '心理学',
+  policy: '政策',
+  success: '成功转化'
+}
 const DIMENSION_LABELS = {
-  privacy: "隐私保护",
-  necessity: "最小必要",
-  ethics: "教育伦理",
-  third_party: "第三方风险",
-  system: "系统",
-};
+  privacy: '隐私保护',
+  necessity: '最小必要',
+  ethics: '教育伦理',
+  third_party: '第三方风险',
+  system: '系统'
+}
 
 const statusType = (s) =>
   ({
-    PENDING: "info",
-    RISK_ANALYZING: "warning",
-    KNOWLEDGE_RETRIEVING: "warning",
-    PLAN_GENERATING: "warning",
-    COMPLIANCE_CHECKING: "warning",
-    COMPLETED: "success",
-    REJECTED: "danger",
-    FAILED: "danger",
-  })[s] || "info";
-const statusLabel = (s) => STATUS_LABELS[s] || s;
+    PENDING: 'info',
+    RISK_ANALYZING: 'warning',
+    KNOWLEDGE_RETRIEVING: 'warning',
+    PLAN_GENERATING: 'warning',
+    COMPLIANCE_CHECKING: 'warning',
+    COMPLETED: 'success',
+    REJECTED: 'danger',
+    FAILED: 'danger'
+  })[s] || 'info'
+const statusLabel = (s) => STATUS_LABELS[s] || s
 const riskType = (r) =>
-  ({ NONE: "info", LOW: "success", MEDIUM: "warning", HIGH: "danger" })[r] ||
-  "info";
-const riskLabel = (r) => RISK_LABELS[r] || r;
+  ({ NONE: 'info', LOW: 'success', MEDIUM: 'warning', HIGH: 'danger' })[r] || 'info'
+const riskLabel = (r) => RISK_LABELS[r] || r
 const sourceTagType = (s) =>
   ({
-    case: "primary",
-    psychology: "success",
-    policy: "warning",
-    success: "info",
-  })[s] || "info";
-const sourceLabel = (s) => SOURCE_LABELS[s] || s;
-const dimensionLabel = (d) => DIMENSION_LABELS[d] || d;
-const displayValue = (value) => value ?? "-";
+    case: 'primary',
+    psychology: 'success',
+    policy: 'warning',
+    success: 'info'
+  })[s] || 'info'
+const sourceLabel = (s) => SOURCE_LABELS[s] || s
+const dimensionLabel = (d) => DIMENSION_LABELS[d] || d
+const displayValue = (value) => value ?? '-'
 
 const formatScore = (value) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n.toFixed(3) : "-";
-};
-const formatTime = (value) =>
-  value ? String(value).replace("T", " ").slice(0, 19) : "";
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toFixed(3) : '-'
+}
+const formatTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 19) : '')
 </script>
 
 <style scoped lang="scss">
@@ -690,6 +700,18 @@ const formatTime = (value) =>
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.feedback-card {
+  .fb-hint {
+    margin-left: 12px;
+    font-size: 12px;
+    color: var(--text-color-secondary);
+  }
+  .fb-form {
+    max-width: 560px;
+    margin-top: 8px;
+  }
 }
 
 .summary-panel,

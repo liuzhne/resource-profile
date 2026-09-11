@@ -7,22 +7,23 @@
 import logging
 from typing import Optional
 
-from redis.asyncio import Redis
-
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_client: Optional[Redis] = None
+# 懒加载：redis 包未安装（如纯逻辑单测环境）时，模块仍可 import，仅 get_redis() 返回 None 降级
+_client = None
 _unavailable_logged: bool = False
 
 
-async def get_redis() -> Optional[Redis]:
-    """返回可用的 Redis 客户端。连接异常时返回 None，且只 warn 一次。"""
+async def get_redis():
+    """返回可用的 Redis 客户端。连接异常 / redis 包缺失时返回 None，且只 warn 一次。"""
     global _client, _unavailable_logged
     if _client is not None:
         return _client
     try:
+        from redis.asyncio import Redis  # 延迟 import
+
         client = Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,

@@ -18,30 +18,30 @@
 </template>
 
 <script setup>
-import CountTo from "./CountTo.vue";
+import CountTo from './CountTo.vue'
 
 defineProps({
   title: {
     type: String,
-    required: true,
+    required: true
   },
   value: {
     type: Number,
-    required: true,
+    required: true
   },
   icon: {
     type: String,
-    required: true,
+    required: true
   },
   color: {
     type: String,
-    required: true,
+    required: true
   },
   suffix: {
     type: String,
-    default: "",
-  },
-});
+    default: ''
+  }
+})
 </script>
 
 <style scoped lang="scss">

@@ -12,17 +12,17 @@
 </template>
 
 <script setup>
-import { useRouter } from "vue-router";
+import { useRouter } from 'vue-router'
 
-const router = useRouter();
+const router = useRouter()
 
 const goHome = () => {
-  router.push("/");
-};
+  router.push('/')
+}
 
 const goBack = () => {
-  router.back();
-};
+  router.back()
+}
 </script>
 
 <style scoped lang="scss">

@@ -1,0 +1,13 @@
+# Grafana 启动时自动从 /var/lib/grafana/dashboards 加载看板 JSON
+apiVersion: 1
+providers:
+  - name: edu-portrait
+    orgId: 1
+    folder: EduCare
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

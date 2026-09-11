@@ -1,0 +1,22 @@
+# 通用 Spring Boot 模块镜像（按 MODULE 构建参数打不同微服务的 jar）。
+# 用法（compose）：
+#   build:
+#     context: ../backend
+#     dockerfile: ../docker/Dockerfile.springboot
+#     args: { MODULE: agent-service }
+FROM eclipse-temurin:17-jdk-jammy AS builder
+ARG MODULE
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends maven \
+    && rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN mvn -B -pl ${MODULE} -am clean package -DskipTests
+
+FROM eclipse-temurin:17-jre-jammy
+ARG MODULE
+WORKDIR /app
+# curl 供 compose healthcheck 探活 /actuator/health
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/${MODULE}/target/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]

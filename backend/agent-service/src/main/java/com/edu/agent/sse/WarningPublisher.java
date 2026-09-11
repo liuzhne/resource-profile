@@ -20,8 +20,26 @@ import java.util.Map;
 public class WarningPublisher {
 
     public static final String CHANNEL = "edu:agent:warning:new";
+    /** J-3.2：AgentLoop 过程流式事件频道（思考/工具/进度），与终态频道分离。 */
+    public static final String PROGRESS_CHANNEL = "edu:agent:progress";
 
     private final StringRedisTemplate redisTemplate;
+
+    /** J-3.2：发布一条 AgentLoop 过程进度事件（每轮一条），供前端流式展示。失败 fail-soft。 */
+    public void publishProgress(String taskTag, int iteration, String thought, String tool, int observationLen) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("taskTag", taskTag);
+        payload.put("iteration", iteration);
+        payload.put("thought", thought);
+        payload.put("tool", tool);
+        payload.put("observationLen", observationLen);
+        payload.put("ts", System.currentTimeMillis());
+        try {
+            redisTemplate.convertAndSend(PROGRESS_CHANNEL, JSON.toJSONString(payload));
+        } catch (Exception e) {
+            log.debug("J-3.2：发布进度到 {} 失败：{}", PROGRESS_CHANNEL, e.getMessage());
+        }
+    }
 
     /**
      * Publishes a risk task terminal-state event to the Redis Pub/Sub channel.

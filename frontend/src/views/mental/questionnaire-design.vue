@@ -5,27 +5,21 @@
         <el-button link :icon="ArrowLeft" class="back-link" @click="goBack">
           返回问卷列表
         </el-button>
-        <h1 class="page-title">{{ questionnaire?.title || "问卷设计" }}</h1>
+        <h1 class="page-title">{{ questionnaire?.title || '问卷设计' }}</h1>
         <div class="page-subtitle">
-          {{
-            questionnaire?.description || "配置问卷题目、选项分值与等级规则。"
-          }}
+          {{ questionnaire?.description || '配置问卷题目、选项分值与等级规则。' }}
         </div>
       </div>
       <div class="page-actions">
-        <el-button :icon="Setting" @click="rulesDialogVisible = true">
-          编辑等级规则
-        </el-button>
-        <el-button type="primary" :icon="Plus" @click="openAddDialog">
-          新增题目
-        </el-button>
+        <el-button :icon="Setting" @click="rulesDialogVisible = true"> 编辑等级规则 </el-button>
+        <el-button type="primary" :icon="Plus" @click="openAddDialog"> 新增题目 </el-button>
       </div>
     </div>
 
     <div class="design-summary">
       <div class="summary-card">
         <span>问卷类型</span>
-        <strong>{{ questionnaire?.type || "-" }}</strong>
+        <strong>{{ questionnaire?.type || '-' }}</strong>
         <p>用于区分测评场景</p>
       </div>
       <div class="summary-card is-primary">
@@ -56,18 +50,15 @@
         </div>
       </template>
 
-      <el-empty
-        v-if="!loading && questions.length === 0"
-        description="尚无题目，请先新增题目"
-      />
+      <el-empty v-if="!loading && questions.length === 0" description="尚无题目，请先新增题目" />
       <el-table v-else v-loading="loading" :data="questions" stripe>
         <el-table-column type="index" label="#" width="56" />
         <el-table-column label="题目内容" min-width="320">
           <template #default="{ row }">
-            <div class="question-content">{{ row.content || "-" }}</div>
+            <div class="question-content">{{ row.content || '-' }}</div>
             <div class="question-meta">
-              排序 {{ row.sortOrder || "-" }} ·
-              {{ row.required ? "必答" : "选答" }}
+              排序 {{ row.sortOrder || '-' }} ·
+              {{ row.required ? '必答' : '选答' }}
             </div>
           </template>
         </el-table-column>
@@ -80,27 +71,15 @@
         </el-table-column>
         <el-table-column label="选项数" width="90" align="center">
           <template #default="{ row }">
-            <strong class="option-count">{{
-              parseOpts(row.options).length
-            }}</strong>
+            <strong class="option-count">{{ parseOpts(row.options).length }}</strong>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              :icon="EditPen"
-              @click="openEditDialog(row)"
-            >
+            <el-button link type="primary" :icon="EditPen" @click="openEditDialog(row)">
               编辑
             </el-button>
-            <el-button
-              link
-              type="danger"
-              :icon="Delete"
-              @click="handleDelete(row)"
-            >
+            <el-button link type="danger" :icon="Delete" @click="handleDelete(row)">
               删除
             </el-button>
           </template>
@@ -108,11 +87,7 @@
       </el-table>
     </el-card>
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="isEdit ? '编辑题目' : '新增题目'"
-      width="680px"
-    >
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑题目' : '新增题目'" width="680px">
       <el-form :model="form" label-width="86px">
         <el-form-item label="题型">
           <el-select v-model="form.questionType" :disabled="isEdit">
@@ -122,19 +97,10 @@
           </el-select>
         </el-form-item>
         <el-form-item label="题干">
-          <el-input
-            v-model="form.content"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入题目内容"
-          />
+          <el-input v-model="form.content" type="textarea" :rows="3" placeholder="请输入题目内容" />
         </el-form-item>
         <el-form-item label="必答">
-          <el-switch
-            v-model="form.required"
-            :active-value="1"
-            :inactive-value="0"
-          />
+          <el-switch v-model="form.required" :active-value="1" :inactive-value="0" />
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="form.sortOrder" :min="1" />
@@ -143,18 +109,9 @@
         <template v-if="form.questionType !== 'text'">
           <el-divider>选项与分值</el-divider>
           <div class="option-list">
-            <div
-              v-for="(opt, idx) in form.optionList"
-              :key="idx"
-              class="option-row"
-            >
+            <div v-for="(opt, idx) in form.optionList" :key="idx" class="option-row">
               <el-input v-model="opt.label" placeholder="选项内容" />
-              <el-input-number
-                v-model="opt.score"
-                :min="0"
-                :max="100"
-                controls-position="right"
-              />
+              <el-input-number v-model="opt.score" :min="0" :max="100" controls-position="right" />
               <el-button
                 link
                 type="danger"
@@ -165,9 +122,7 @@
               </el-button>
             </div>
           </div>
-          <el-button link type="primary" :icon="Plus" @click="addOption">
-            添加选项
-          </el-button>
+          <el-button link type="primary" :icon="Plus" @click="addOption"> 添加选项 </el-button>
         </template>
       </el-form>
       <template #footer>
@@ -186,21 +141,10 @@
       />
       <div class="rule-list">
         <div v-for="(rule, idx) in editingRules" :key="idx" class="rule-row">
-          <el-input
-            v-model="rule.level"
-            placeholder="等级名"
-            style="width: 120px"
-          />
-          <el-input-number
-            v-model="rule.minScore"
-            :min="0"
-            :max="9999"
-            controls-position="right"
-          />
+          <el-input v-model="rule.level" placeholder="等级名" style="width: 120px" />
+          <el-input-number v-model="rule.minScore" :min="0" :max="9999" controls-position="right" />
           <el-input v-model="rule.suggestion" placeholder="处理建议" />
-          <el-button link type="danger" @click="editingRules.splice(idx, 1)">
-            删除
-          </el-button>
+          <el-button link type="danger" @click="editingRules.splice(idx, 1)"> 删除 </el-button>
         </div>
       </div>
       <el-button
@@ -220,189 +164,177 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { ElMessage, ElMessageBox } from "element-plus";
-import {
-  ArrowLeft,
-  Delete,
-  EditPen,
-  Plus,
-  Setting,
-} from "@element-plus/icons-vue";
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowLeft, Delete, EditPen, Plus, Setting } from '@element-plus/icons-vue'
 import {
   getQuestionnaireFull,
   addQuestion,
   updateQuestion,
   deleteQuestion,
-  updateQuestionnaire,
-} from "@/api/mental";
+  updateQuestionnaire
+} from '@/api/mental'
 
-const route = useRoute();
-const router = useRouter();
-const questionnaireId = Number(route.params.id);
+const route = useRoute()
+const router = useRouter()
+const questionnaireId = Number(route.params.id)
 
-const loading = ref(false);
-const questionnaire = ref(null);
-const questions = ref([]);
-const editingRules = ref([]);
+const loading = ref(false)
+const questionnaire = ref(null)
+const questions = ref([])
+const editingRules = ref([])
 
-const dialogVisible = ref(false);
-const isEdit = ref(false);
-const editId = ref(null);
+const dialogVisible = ref(false)
+const isEdit = ref(false)
+const editId = ref(null)
 const form = reactive({
-  questionType: "single_choice",
-  content: "",
+  questionType: 'single_choice',
+  content: '',
   required: 1,
   sortOrder: 1,
-  optionList: [{ label: "", score: 0 }],
-});
+  optionList: [{ label: '', score: 0 }]
+})
 
-const rulesDialogVisible = ref(false);
+const rulesDialogVisible = ref(false)
 
 const designSummary = computed(() => ({
-  choice: questions.value.filter((item) => item.questionType !== "text").length,
-}));
+  choice: questions.value.filter((item) => item.questionType !== 'text').length
+}))
 
 const typeLabel = (type) =>
   ({
-    single_choice: "单选",
-    multiple_choice: "多选",
-    text: "简答",
-    scale: "量表",
+    single_choice: '单选',
+    multiple_choice: '多选',
+    text: '简答',
+    scale: '量表'
   })[type] ||
   type ||
-  "-";
+  '-'
 const typeTagColor = (type) =>
   ({
-    single_choice: "primary",
-    multiple_choice: "success",
-    text: "info",
-    scale: "warning",
-  })[type] || "info";
+    single_choice: 'primary',
+    multiple_choice: 'success',
+    text: 'info',
+    scale: 'warning'
+  })[type] || 'info'
 
 const parseOpts = (raw) => {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw)
   } catch {
-    return [];
+    return []
   }
-};
+}
 
 const fetchData = async () => {
-  loading.value = true;
+  loading.value = true
   try {
-    const res = await getQuestionnaireFull(questionnaireId);
-    const data = res.data || {};
-    questionnaire.value = data.questionnaire || null;
-    questions.value = data.questions || [];
-    editingRules.value = (data.levelRules || []).map((rule) => ({ ...rule }));
+    const res = await getQuestionnaireFull(questionnaireId)
+    const data = res.data || {}
+    questionnaire.value = data.questionnaire || null
+    questions.value = data.questions || []
+    editingRules.value = (data.levelRules || []).map((rule) => ({ ...rule }))
   } catch (e) {
-    console.error("加载问卷失败", e);
+    console.error('加载问卷失败', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const resetForm = () => {
-  form.questionType = "single_choice";
-  form.content = "";
-  form.required = 1;
-  form.sortOrder = questions.value.length + 1;
-  form.optionList = [{ label: "", score: 0 }];
-};
+  form.questionType = 'single_choice'
+  form.content = ''
+  form.required = 1
+  form.sortOrder = questions.value.length + 1
+  form.optionList = [{ label: '', score: 0 }]
+}
 
 const openAddDialog = () => {
-  isEdit.value = false;
-  editId.value = null;
-  resetForm();
-  dialogVisible.value = true;
-};
+  isEdit.value = false
+  editId.value = null
+  resetForm()
+  dialogVisible.value = true
+}
 
 const openEditDialog = (row) => {
-  isEdit.value = true;
-  editId.value = row.id;
-  form.questionType = row.questionType;
-  form.content = row.content || "";
-  form.required = row.required;
-  form.sortOrder = row.sortOrder || 1;
-  const opts = parseOpts(row.options);
+  isEdit.value = true
+  editId.value = row.id
+  form.questionType = row.questionType
+  form.content = row.content || ''
+  form.required = row.required
+  form.sortOrder = row.sortOrder || 1
+  const opts = parseOpts(row.options)
   form.optionList = opts.length
     ? opts.map((option) => ({
         label: option.label,
-        score: option.score ?? 0,
+        score: option.score ?? 0
       }))
-    : [{ label: "", score: 0 }];
-  dialogVisible.value = true;
-};
+    : [{ label: '', score: 0 }]
+  dialogVisible.value = true
+}
 
 const addOption = () => {
-  form.optionList.push({ label: "", score: 0 });
-};
+  form.optionList.push({ label: '', score: 0 })
+}
 
 const removeOption = (idx) => {
-  form.optionList.splice(idx, 1);
-};
+  form.optionList.splice(idx, 1)
+}
 
 const handleSubmit = async () => {
   if (!form.content.trim()) {
-    ElMessage.warning("请输入题干");
-    return;
+    ElMessage.warning('请输入题干')
+    return
   }
   const payload = {
     content: form.content,
     questionType: form.questionType,
     required: form.required,
-    sortOrder: form.sortOrder,
-  };
-  if (form.questionType !== "text") {
-    const cleanOpts = form.optionList.filter(
-      (option) => option.label && option.label.trim(),
-    );
+    sortOrder: form.sortOrder
+  }
+  if (form.questionType !== 'text') {
+    const cleanOpts = form.optionList.filter((option) => option.label && option.label.trim())
     if (cleanOpts.length < 2) {
-      ElMessage.warning("选择题至少需要 2 个选项");
-      return;
+      ElMessage.warning('选择题至少需要 2 个选项')
+      return
     }
-    payload.options = JSON.stringify(cleanOpts);
+    payload.options = JSON.stringify(cleanOpts)
   } else {
-    payload.options = null;
+    payload.options = null
   }
   try {
     if (isEdit.value && editId.value) {
-      await updateQuestion(editId.value, payload);
-      ElMessage.success("已更新");
+      await updateQuestion(editId.value, payload)
+      ElMessage.success('已更新')
     } else {
-      await addQuestion(questionnaireId, payload);
-      ElMessage.success("已添加");
+      await addQuestion(questionnaireId, payload)
+      ElMessage.success('已添加')
     }
-    dialogVisible.value = false;
-    fetchData();
+    dialogVisible.value = false
+    fetchData()
   } catch (e) {
-    console.error("保存题目失败", e);
+    console.error('保存题目失败', e)
   }
-};
+}
 
 const handleDelete = (row) => {
-  ElMessageBox.confirm(
-    `删除后不可恢复：${(row.content || "").slice(0, 24)}…`,
-    "确认删除题目？",
-    {
-      type: "warning",
-      confirmButtonText: "删除",
-      cancelButtonText: "取消",
-      customClass: "app-confirm-dialog",
-      showClose: false,
-    },
-  )
+  ElMessageBox.confirm(`删除后不可恢复：${(row.content || '').slice(0, 24)}…`, '确认删除题目？', {
+    type: 'warning',
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    customClass: 'app-confirm-dialog',
+    showClose: false
+  })
     .then(async () => {
-      await deleteQuestion(row.id);
-      ElMessage.success("已删除");
-      fetchData();
+      await deleteQuestion(row.id)
+      ElMessage.success('已删除')
+      fetchData()
     })
-    .catch(() => {});
-};
+    .catch(() => {})
+}
 
 const saveLevelRules = async () => {
   const cleaned = editingRules.value
@@ -410,24 +342,24 @@ const saveLevelRules = async () => {
     .map((rule) => ({
       level: rule.level.trim(),
       minScore: Number(rule.minScore) || 0,
-      suggestion: rule.suggestion || "",
-    }));
+      suggestion: rule.suggestion || ''
+    }))
   try {
     await updateQuestionnaire(questionnaireId, {
       ...questionnaire.value,
-      levelRules: JSON.stringify(cleaned),
-    });
-    ElMessage.success("等级规则已保存");
-    rulesDialogVisible.value = false;
-    fetchData();
+      levelRules: JSON.stringify(cleaned)
+    })
+    ElMessage.success('等级规则已保存')
+    rulesDialogVisible.value = false
+    fetchData()
   } catch (e) {
-    console.error("保存等级规则失败", e);
+    console.error('保存等级规则失败', e)
   }
-};
+}
 
-const goBack = () => router.push("/mental/questionnaire");
+const goBack = () => router.push('/mental/questionnaire')
 
-onMounted(fetchData);
+onMounted(fetchData)
 </script>
 
 <style scoped lang="scss">

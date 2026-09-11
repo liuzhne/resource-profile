@@ -1,0 +1,14 @@
+# 多阶段：Node 构建 Vue 产物 → nginx 提供静态资源（反代/TLS 配置运行时挂载）
+# build context = ../frontend（见 docker-compose.prod.yml）
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM nginx:1.27-alpine
+# 站点配置（docker/nginx/edu-portrait.conf）与证书在运行时由 compose 挂载到
+#   /etc/nginx/conf.d/default.conf 和 /etc/nginx/certs
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80 443

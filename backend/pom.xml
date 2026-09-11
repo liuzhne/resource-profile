@@ -30,6 +30,7 @@
         <module>mental-service</module>
         <module>data-service</module>
         <module>agent-service</module>
+        <module>mcp-student-data</module>
     </modules>
 
     <properties>
@@ -44,8 +45,9 @@
         <spring-cloud.version>2023.0.1</spring-cloud.version>
         <spring-cloud-alibaba.version>2023.0.1.0</spring-cloud-alibaba.version>
 
-        <!-- Spring AI -->
-        <spring-ai.version>1.0.0-M6</spring-ai.version>
+        <!-- Spring AI 1.1.6 GA：升级以启用 MCP Streamable HTTP transport
+             （H-1.1.6 决策；1.0.x 仅支持 SSE/STDIO） -->
+        <spring-ai.version>1.1.6</spring-ai.version>
 
         <!-- 其他依赖 -->
         <mybatis-plus.version>3.5.11</mybatis-plus.version>
@@ -54,17 +56,7 @@
         <poi.version>5.2.5</poi.version>
     </properties>
 
-    <!-- 关键：Spring AI 里程碑仓库 -->
-    <repositories>
-        <repository>
-            <id>spring-milestones</id>
-            <name>Spring Milestones</name>
-            <url>https://repo.spring.io/milestone</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
+    <!-- Spring AI 1.1.6 GA 已上 Maven Central，无需 milestone 仓库 -->
 
     <dependencyManagement>
         <dependencies>
@@ -170,6 +162,29 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-java-17</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <!-- Spring Boot 3.2/Lombok 1.18.30 构建链仅在 JDK 17 验证；错误 JDK 立即失败。 -->
+                                <requireJavaVersion>
+                                    <version>[17,18)</version>
+                                    <message>EduCare backend requires JDK 17. Set JAVA_HOME to a JDK 17 installation.</message>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
@@ -179,6 +194,65 @@
                         <arg>-parameters</arg>
                     </compilerArgs>
                 </configuration>
+            </plugin>
+            <!--
+              JaCoCo：全模块出覆盖率报告（target/site/jacoco）。
+              覆盖率门采「按类 includes 的定向门」而非全局百分比——历史业务模块覆盖稀疏，
+              全局阈值会误红；这里只对已补齐单测的安全关键类设硬阈值，其余模块无匹配类即自动通过。
+              补齐更多核心模块单测后，往 check 的 includes 里追加类即可逐步收紧。
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check-security-critical</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <haltOnFailure>true</haltOnFailure>
+                            <rules>
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <!-- 登录/发 token/会话白名单核心，已有 AuthServiceImplTest 覆盖 -->
+                                        <include>com.edu.auth.service.impl.AuthServiceImpl</include>
+                                        <!-- U-5 扩项（2026-08-26）：JWT 原语与 Prompt 注入清洗，JwtUtilTest/PromptSanitizerTest 覆盖 -->
+                                        <include>com.edu.common.util.JwtUtil</include>
+                                        <include>com.edu.common.util.PromptSanitizer</include>
+                                        <!-- R-4.2：用户/教师管理授权与 MCP 应用层凭据门 -->
+                                        <include>com.edu.user.controller.UserController</include>
+                                        <include>com.edu.teacher.controller.TeacherController</include>
+                                        <include>com.edu.mcp.student.security.McpTokenFilter</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
         <pluginManagement>

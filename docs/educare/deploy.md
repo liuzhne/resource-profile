@@ -18,7 +18,7 @@
 | 磁盘 | ≥ 30GB（Qwen2.5-14B Q5_K_M ≈ 10GB；BGE-large ≈ 1GB；BGE-reranker ≈ 250MB） |
 | 内存 | ≥ 24GB（LLM 进程常驻 ~12GB） |
 
-llama.cpp 模型与启动脚本约定放在 `~/edu-ai/`（与 ROADMAP 一致）。
+llama.cpp 模型与启动脚本约定放在 `~/edu-ai/`。
 
 ---
 
@@ -48,7 +48,30 @@ docker exec -i $(docker compose -f docker/docker-compose.yml ps -q mysql) \
     mysql -uroot -proot edu_portrait < sql/init/03_agent_init.sql
 ```
 
-> `01_init.sql` / `02_questionnaire_extension.sql` 由 docker-compose 在初始化时自动加载；只有 03 是 EduCare 增量。
+> `01_init.sql` / `02_questionnaire_extension.sql` 由 docker-compose 在初始化时自动加载；EduCare 增量是 `03_agent_init.sql`（agent 任务表）+ `04_student_extras.sql`（H-1.2 成绩 / 考勤表）。
+
+加载 H-1.2 学生扩展表：
+```bash
+docker exec -i $(docker compose -f docker/docker-compose.yml ps -q mysql) \
+    mysql -uroot -proot edu_portrait < sql/init/04_student_extras.sql
+```
+
+**服务端口对照**（Docker / 本地裸跑通用）：
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| gateway | 8080 | API gateway，外部入口 |
+| auth-service | 8081 | 登录 / JWT |
+| user-service | 8082 | 用户管理 |
+| teacher-service | 8083 | 教师档案 |
+| student-service | 8084 | 学生档案 + H-1.2 成绩/考勤端点 |
+| mental-service | 8085 | 心理评估 |
+| data-service | 8086 | 数据分析 |
+| agent-service | 8087 | LLM/Agent 编排 |
+| ai-inference-service | 8090 | Python FastAPI（LLM+RAG） |
+| llama.cpp llm | 8091 | 宿主机 LLM 服务 |
+| **mcp-student-data** | **8094** | **H-1.2 + H-1.1.6：student-data MCP server（Streamable HTTP，单端点 `/mcp`）** |
+| **knowledge-rag MCP** | **8095** | **H-1.3：Python FastMCP knowledge-rag server（Streamable HTTP，单端点 `/mcp`），3 个 search tool（cases/policies/psychology）** |
 
 ### 2.3 启动 ai-inference-service（容器）
 
@@ -56,6 +79,17 @@ docker exec -i $(docker compose -f docker/docker-compose.yml ps -q mysql) \
 docker compose -f docker/docker-compose.yml up -d --build ai-inference-service
 docker compose -f docker/docker-compose.yml logs -f ai-inference-service | head -50
 ```
+
+H-1.3 起额外多一个独立进程的 MCP server（不合入 FastAPI 主进程，端口 8095，Streamable HTTP）：
+
+```bash
+cd ai-inference-service
+pip install -r requirements.txt    # 引入 fastmcp>=2.3,<3.0
+python -m app.mcp.knowledge_rag_server
+# 日志出现 "knowledge-rag MCP server 启动 transport=streamable-http host=0.0.0.0 port=8095 path=/mcp" 即就绪
+```
+
+> docker-compose 编排该 server 留 H-1.4 smoke 时一并加入；当前阶段可本地裸跑。
 
 ### 2.4 启动宿主机 LLM 三件套
 
@@ -141,6 +175,39 @@ GATEWAY=http://localhost:8080 STUDENT_ID=1 bash scripts/smoke_test_agent.sh
 ```
 
 通过后再考虑放开定时扫描（见 §4.1）。
+
+### 2.8.1 MCP 双端冒烟（H-1.4）
+
+H-1.4 起新增 `scripts/mcp_smoke_test.sh`，一键回归 student-data(8094) + knowledge-rag(8095) 两个 MCP server 的 Streamable HTTP 握手 + `tools/list` + 7 个 tool 各调一次 happy path：
+
+```bash
+# 前置：mcp-student-data (8094) + knowledge-rag (8095) 均已启动
+bash scripts/mcp_smoke_test.sh
+
+# 或自定义参数：
+STUDENT_ID=1 \
+    STUDENT_DATA_URL=http://localhost:8094 \
+    KNOWLEDGE_RAG_URL=http://localhost:8095 \
+    bash scripts/mcp_smoke_test.sh
+```
+
+依赖：
+
+- **bash ≥ 4**（mac 默认是 3.2 → `brew install bash`，并显式用 `/opt/homebrew/bin/bash scripts/mcp_smoke_test.sh`）
+- `curl`、`jq`（mac 默认装，缺则 `brew install jq`）
+
+预期输出：两端各打印 `▸ 握手` + `▸ tools/list` + 4/3 个 `✓ tool_name → <preview>` 行；末尾 `✓ H-1.4 smoke 全部通过`，退出码 0。
+
+降级（不 fail，仅 ⚠）：
+
+- student-data 4 tool 返回 `null` / `found=false` → student-service / mental-service / mysql 未起；脚本继续推进
+- knowledge-rag 3 tool 返回 `fallback=true && count=0` → Milvus / embedding / reranker 未起；脚本继续推进
+
+失败（exit 1）：
+
+- handshake 失败、`tools/list` 缺失指定 tool、`tools/call` 返回 `error` 字段
+
+取代了原 H-1.2 / H-1.3 文档里"手开 `npx @modelcontextprotocol/inspector` 选 Streamable HTTP 一个个点击"的流程；用作 Spring AI / FastMCP / Milvus 升级的回归 baseline。
 
 ---
 
@@ -316,4 +383,5 @@ docker exec edu-mysql sh -c 'mysqldump -uroot -proot edu_portrait' > backup_$(da
 - **更换 LLM 模型**：改 `LLM_MODEL` 与 `~/edu-ai/start-llm-server.sh` 的模型路径，无需改代码。
 - **更换 Embedding 模型**：必须同步更新 `EMBEDDING_DIM`（Milvus 集合 schema 也要重建）；走 §4.2 流程。
 - **新增 Milvus 集合**：在 `app/core/config.py::MILVUS_COLLECTIONS` 添加 → 重跑 `init_milvus`。
-- **Spring AI 升级**：1.0.0-M6 → 正式版后，仍在 `repo.spring.io/milestone` 拉则继续保留仓库声明；切到中央仓时移除即可。
+- **Spring AI 升级**：1.0.0-M6 → 正式版后，仍在 `repo.spring.io/milestone` 拉则继续保留仓库声明；切到中央仓时移除即可。H-1.1.6（2026-05-20）已升到 **1.1.6 GA**（Maven Central），同步把 MCP server 传输从 SSE 切到 **Streamable HTTP**（`spring.ai.mcp.server.protocol=STREAMABLE`，单端点 `/mcp`）。1.0→1.1 主线 API 完全兼容。
+- **新增 MCP server**：Python 侧（H-1.3）落地后新增依赖 `fastmcp>=2.3,<3.0`，独立进程跑端口 8095，传输 Streamable HTTP 单端点 `/mcp`。环境变量可调 `MCP_KNOWLEDGE_RAG_PORT` / `MCP_KNOWLEDGE_RAG_PATH` / `MCP_KNOWLEDGE_RAG_HOST`；Milvus / embedding / reranker / Redis 沿用既有 `Settings`，零新增连接配置。

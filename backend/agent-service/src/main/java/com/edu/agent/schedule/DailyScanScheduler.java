@@ -3,6 +3,10 @@ package com.edu.agent.schedule;
 import com.edu.agent.feign.StudentServiceClient;
 import com.edu.agent.service.AgentTaskService;
 import com.edu.common.result.Result;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
@@ -31,11 +35,30 @@ public class DailyScanScheduler {
     private final StringRedisTemplate redisTemplate;
     private final StudentServiceClient studentServiceClient;
     private final AgentTaskService agentTaskService;
+    private final MeterRegistry meterRegistry;
 
     private static final String LOCK_KEY = "edu:agent:schedule:daily-scan";
     private static final long LOCK_TTL_SECONDS = 60L * 60L;
     private static final String UNLOCK_LUA =
             "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+
+    // G-3.2：Micrometer 指标。预创建避免首次抓取缺指标。
+    private Counter triggeredCounter;
+    private Counter failedCounter;
+    private Timer scanTimer;
+
+    @PostConstruct
+    void initMetrics() {
+        triggeredCounter = Counter.builder("educare.daily_scan.triggered")
+                .description("Number of successful per-student task triggers during daily scan")
+                .register(meterRegistry);
+        failedCounter = Counter.builder("educare.daily_scan.failed")
+                .description("Number of per-student triggers that threw during daily scan")
+                .register(meterRegistry);
+        scanTimer = Timer.builder("educare.daily_scan.duration")
+                .description("Wall-clock duration of one daily scan invocation")
+                .register(meterRegistry);
+    }
 
     @Scheduled(cron = "${educare.schedule.cron:0 0 2 * * ?}")
     public void scanAll() {
@@ -67,18 +90,21 @@ public class DailyScanScheduler {
                 try {
                     agentTaskService.triggerTask(studentId);
                     triggered++;
+                    triggeredCounter.increment();
                 } catch (Exception e) {
                     failed++;
+                    failedCounter.increment();
                     log.warn("定时扫描触发失败：studentId={}", studentId, e);
                 }
             }
         } catch (Exception e) {
             log.error("定时扫描整体异常", e);
         } finally {
+            long elapsedMs = System.currentTimeMillis() - start;
+            scanTimer.record(elapsedMs, TimeUnit.MILLISECONDS);
             redisTemplate.execute(new DefaultRedisScript<>(UNLOCK_LUA, Long.class),
                     Collections.singletonList(LOCK_KEY), lockValue);
-            log.info("定时扫描结束：成功触发 {}，失败 {}，耗时 {} ms",
-                    triggered, failed, System.currentTimeMillis() - start);
+            log.info("定时扫描结束：成功触发 {}，失败 {}，耗时 {} ms", triggered, failed, elapsedMs);
         }
     }
 }

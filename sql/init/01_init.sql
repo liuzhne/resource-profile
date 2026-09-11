@@ -118,11 +118,11 @@ CREATE TABLE IF NOT EXISTS student_info (
     UNIQUE KEY uk_student_id (student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学生信息表';
 
--- 插入默认数据
+-- 插入默认数据（口令约定：password = username；U-9 轮换 2026-08-26，原哈希为来源不明孤儿凭据）
 INSERT INTO sys_user (username, password, nickname, user_type, status) VALUES
-('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '管理员', 0, 1),
-('teacher', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '测试教师', 1, 1),
-('student', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '测试学生', 2, 1);
+('admin', '$2a$10$kSW6bhnZl4yxdqpyasyXSus06DUHTzsgkD3OZYvVed7P5UtykFKGe', '管理员', 0, 1),
+('teacher', '$2a$10$OnV5fZmbtiEpppXjdpYrI.P02/zX9BnS0RRT/3F5oD5bY56bK0Z8.', '测试教师', 1, 1),
+('student', '$2a$10$ng9lo6M8mJbf0xeT22Jx.OpKMNFls8YHpsnWIgDNTdXEq/0ZrBlxS', '测试学生', 2, 1);
 
 INSERT INTO sys_role (name, code, description) VALUES
 ('系统管理员', 'admin', '拥有系统所有权限'),
@@ -147,9 +147,8 @@ CREATE TABLE IF NOT EXISTS mental_questionnaire (
     status TINYINT DEFAULT 1 COMMENT '状态：0-禁用，1-启用',
     deleted TINYINT DEFAULT 0 COMMENT '删除标记',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
-    template_content JSON DEFAULT NULL COMMENT '上传的问卷模板JSON原文',
-    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    template_content JSON DEFAULT NULL COMMENT '上传的问卷模板JSON原文'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='心理健康问卷表';
 
 -- 问卷题目表

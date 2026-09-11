@@ -3,9 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">我的画像</h1>
-        <div class="page-subtitle">
-          查看当前账号信息、角色权限与基础安全设置。
-        </div>
+        <div class="page-subtitle">查看当前账号信息、角色权限与基础安全设置。</div>
       </div>
     </div>
 
@@ -92,19 +90,13 @@
                   />
                 </el-form-item>
                 <el-form-item>
-                  <el-button type="primary" @click="handleSaveProfile">
-                    保存
-                  </el-button>
+                  <el-button type="primary" @click="handleSaveProfile"> 保存 </el-button>
                 </el-form-item>
               </el-form>
             </el-tab-pane>
 
             <el-tab-pane label="安全设置" name="security">
-              <el-form
-                :model="passwordForm"
-                label-width="100px"
-                class="settings-form"
-              >
+              <el-form :model="passwordForm" label-width="100px" class="settings-form">
                 <el-form-item label="原密码">
                   <el-input
                     v-model="passwordForm.oldPassword"
@@ -130,9 +122,7 @@
                   />
                 </el-form-item>
                 <el-form-item>
-                  <el-button type="primary" @click="handleChangePassword">
-                    修改密码
-                  </el-button>
+                  <el-button type="primary" @click="handleChangePassword"> 修改密码 </el-button>
                 </el-form-item>
               </el-form>
             </el-tab-pane>
@@ -144,109 +134,109 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watchEffect } from "vue";
-import { ElMessage } from "element-plus";
-import { useUserStore } from "@/store/modules/user";
+import { computed, reactive, ref, watchEffect } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useUserStore } from '@/store/modules/user'
 
-const userStore = useUserStore();
-const activeTab = ref("basic");
+const userStore = useUserStore()
+const activeTab = ref('basic')
 
 const displayValue = (value) =>
-  value === null || value === undefined || value === "" ? "-" : value;
+  value === null || value === undefined || value === '' ? '-' : value
 
 const profile = computed(() => {
-  const info = userStore.userInfo || {};
-  const roles = info.roles || (info.role ? [info.role] : []);
+  const info = userStore.userInfo || {}
+  const roles = info.roles || (info.role ? [info.role] : [])
   return {
-    name: info.nickname || info.name || info.username || "当前用户",
-    username: info.username || "-",
-    avatar: info.avatar || "",
-    email: info.email || "",
-    phone: info.phone || "",
-    dept: info.deptName || info.dept || info.department || "",
+    name: info.nickname || info.name || info.username || '当前用户',
+    username: info.username || '-',
+    avatar: info.avatar || '',
+    email: info.email || '',
+    phone: info.phone || '',
+    dept: info.deptName || info.dept || info.department || '',
     status: info.status,
-    roles,
-  };
-});
+    roles
+  }
+})
 
 const form = reactive({
-  nickname: "",
-  email: "",
-  phone: "",
-  bio: "",
-});
+  nickname: '',
+  email: '',
+  phone: '',
+  bio: ''
+})
 
 const passwordForm = reactive({
-  oldPassword: "",
-  newPassword: "",
-  confirmPassword: "",
-});
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
 
 watchEffect(() => {
-  form.nickname = profile.value.name === "当前用户" ? "" : profile.value.name;
-  form.email = profile.value.email;
-  form.phone = profile.value.phone;
-});
+  form.nickname = profile.value.name === '当前用户' ? '' : profile.value.name
+  form.email = profile.value.email
+  form.phone = profile.value.phone
+})
 
-const avatarText = computed(() => profile.value.name.slice(0, 1));
+const avatarText = computed(() => profile.value.name.slice(0, 1))
 
 const roleText = (role) =>
   ({
-    admin: "管理员",
-    teacher: "教师",
-    student: "学生",
-    psychologist: "心理教师",
-    mental_teacher: "心理教师",
-  })[role] || role;
+    admin: '管理员',
+    teacher: '教师',
+    student: '学生',
+    psychologist: '心理教师',
+    mental_teacher: '心理教师'
+  })[role] || role
 
 const roleTagType = (role) =>
   ({
-    admin: "danger",
-    teacher: "success",
-    student: "primary",
-    psychologist: "warning",
-    mental_teacher: "warning",
-  })[role] || "info";
+    admin: 'danger',
+    teacher: 'success',
+    student: 'primary',
+    psychologist: 'warning',
+    mental_teacher: 'warning'
+  })[role] || 'info'
 
 const roleLabel = computed(() => {
-  if (!profile.value.roles.length) return "未分配角色";
-  return profile.value.roles.map((role) => roleText(role)).join(" / ");
-});
+  if (!profile.value.roles.length) return '未分配角色'
+  return profile.value.roles.map((role) => roleText(role)).join(' / ')
+})
 
 const statusText = computed(() => {
-  if (profile.value.status === 0) return "停用";
-  if (profile.value.status === 1) return "启用";
-  return userStore.isLoggedIn ? "已登录" : "未登录";
-});
+  if (profile.value.status === 0) return '停用'
+  if (profile.value.status === 1) return '启用'
+  return userStore.isLoggedIn ? '已登录' : '未登录'
+})
 
 const completionRate = computed(() => {
   const fields = [
     profile.value.username,
     profile.value.email,
     profile.value.phone,
-    profile.value.dept,
-  ];
+    profile.value.dept
+  ]
   const filled = fields.filter(
-    (value) => value !== null && value !== undefined && value !== "",
-  ).length;
-  return Math.round((filled / fields.length) * 100);
-});
+    (value) => value !== null && value !== undefined && value !== ''
+  ).length
+  return Math.round((filled / fields.length) * 100)
+})
 
 const handleSaveProfile = () => {
-  ElMessage.info("个人资料保存接口暂未接入");
-};
+  ElMessage.info('个人资料保存接口暂未接入')
+}
 
 const handleChangePassword = () => {
   if (!passwordForm.oldPassword || !passwordForm.newPassword) {
-    ElMessage.warning("请输入原密码和新密码");
-    return;
+    ElMessage.warning('请输入原密码和新密码')
+    return
   }
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-    ElMessage.warning("两次输入的新密码不一致");
-    return;
+    ElMessage.warning('两次输入的新密码不一致')
+    return
   }
-  ElMessage.info("密码修改接口暂未接入");
-};
+  ElMessage.info('密码修改接口暂未接入')
+}
 </script>
 
 <style scoped lang="scss">

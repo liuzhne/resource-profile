@@ -1,6 +1,8 @@
 package com.edu.teacher.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.edu.common.security.SensitiveField;
+import com.edu.common.security.Sensitivity;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -24,6 +26,7 @@ public class Teacher {
     private Integer gender;
 
     @TableField("birth_date")
+    @SensitiveField(Sensitivity.HIGH)
     private LocalDate birthDate;
 
     @TableField("dept_id")
@@ -34,6 +37,7 @@ public class Teacher {
 
     private String title;
 
+    @SensitiveField(Sensitivity.MEDIUM)
     private String education;
 
     private String school;

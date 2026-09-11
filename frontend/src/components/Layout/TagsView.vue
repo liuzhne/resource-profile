@@ -8,10 +8,7 @@
         :class="['tags-view-item', { active: isActive(tag) }]"
       >
         {{ tag.title }}
-        <el-icon
-          v-if="!isAffix(tag)"
-          @click.prevent.stop="closeSelectedTag(tag)"
-        >
+        <el-icon v-if="!isAffix(tag)" @click.prevent.stop="closeSelectedTag(tag)">
           <Close />
         </el-icon>
       </router-link>
@@ -20,54 +17,54 @@
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
-const route = useRoute();
-const router = useRouter();
+const route = useRoute()
+const router = useRouter()
 const visitedViews = ref([
-  { name: "Dashboard", path: "/dashboard", title: "数据面板", affix: true },
-]);
+  { name: 'Dashboard', path: '/dashboard', title: '数据面板', affix: true }
+])
 
 const isActive = (tag) => {
-  return tag.path === route.path;
-};
+  return tag.path === route.path
+}
 
 const isAffix = (tag) => {
-  return tag.affix;
-};
+  return tag.affix
+}
 
 const addView = (view) => {
-  if (visitedViews.value.some((v) => v.path === view.path)) return;
+  if (visitedViews.value.some((v) => v.path === view.path)) return
 
   visitedViews.value.push({
     name: view.name,
     path: view.path,
-    title: view.meta.title || "no-name",
-  });
-};
+    title: view.meta.title || 'no-name'
+  })
+}
 
 const closeSelectedTag = (view) => {
-  const index = visitedViews.value.findIndex((v) => v.path === view.path);
-  visitedViews.value.splice(index, 1);
+  const index = visitedViews.value.findIndex((v) => v.path === view.path)
+  visitedViews.value.splice(index, 1)
 
   if (isActive(view)) {
-    const latestView = visitedViews.value.slice(-1)[0];
+    const latestView = visitedViews.value.slice(-1)[0]
     if (latestView) {
-      router.push(latestView.path);
+      router.push(latestView.path)
     } else {
-      router.push("/");
+      router.push('/')
     }
   }
-};
+}
 
 watch(
   () => route.path,
   () => {
-    addView(route);
+    addView(route)
   },
-  { immediate: true },
-);
+  { immediate: true }
+)
 </script>
 
 <style scoped lang="scss">
@@ -119,7 +116,7 @@ watch(
         border-color: rgba(31, 95, 191, 0.18);
 
         &::before {
-          content: "";
+          content: '';
           background: var(--primary-color);
           display: inline-block;
           width: 6px;

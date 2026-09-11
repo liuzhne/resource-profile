@@ -1,0 +1,4 @@
+{"student_id": 1, "expected_level": "high", "note": "GPA 1.9 + 高数 II 连续挂科（04_student_extras 种子）"}
+{"student_id": 2, "expected_level": "medium", "note": "单维出勤异常"}
+{"student_id": 3, "expected_level": "low", "note": "轻微学业波动"}
+{"student_id": 4, "expected_level": "none", "note": "各维正常对照组"}

@@ -1,5 +1,12 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
+
+# P0 鉴权门：默认开（校验 JWT 签名 + 未过期，拦截未登录直达业务服务）。
+# 本地免登录联调 / 灰度排障可改 false（@Value 非 @RefreshScope，改后重启网关生效）。
+educare:
+  gateway:
+    auth:
+      enabled: true
 
 spring:
   application:
@@ -11,18 +18,22 @@ spring:
   profiles:
     active: dev
 
-  # Nacos 配置导入
-  config:
-    import:
-      - optional:nacos:gateway-service.yml?group=DEFAULT_GROUP
-      - optional:nacos:common.yml?group=DEFAULT_GROUP
+  # A6 登出撤销：网关读会话白名单（token:{userId}）所在 Redis，与 auth-service 登录写入同实例。
+  # 注：Boot 3.2 正确命名空间为 spring.data.redis.*；默认 localhost:6379 与 auth-service 一致。
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+
 
   cloud:
     nacos:
       # 注册中心
       discovery:
-        enabled: true
-        register-enabled: true
+        enabled: ${SPRING_CLOUD_NACOS_DISCOVERY_ENABLED:true}
+        register-enabled: ${SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED:true}
         server-addr: ${NACOS_SERVER:localhost:8848}
         namespace: ${NACOS_NAMESPACE:}
         username: ${NACOS_USERNAME:nacos}
@@ -33,6 +44,7 @@ spring:
 
       # 配置中心
       config:
+        enabled: ${SPRING_CLOUD_NACOS_CONFIG_ENABLED:true}
         import-check:
           enabled: false
         server-addr: ${NACOS_SERVER:localhost:8848}
@@ -53,7 +65,7 @@ spring:
       routes:
         # 引擎服务
         - id: agent-service
-          uri: lb://agent-service
+          uri: ${AGENT_SERVICE_URL:lb://agent-service}
           predicates:
             - Path=/agent/**
           filters:
@@ -61,7 +73,7 @@ spring:
 
         # 认证服务
         - id: auth-service
-          uri: lb://auth-service
+          uri: ${AUTH_SERVICE_URL:lb://auth-service}
           predicates:
             - Path=/auth/**
           filters:
@@ -69,7 +81,7 @@ spring:
 
         # 用户服务
         - id: user-service
-          uri: lb://user-service
+          uri: ${USER_SERVICE_URL:lb://user-service}
           predicates:
             - Path=/user/**
           filters:
@@ -77,7 +89,7 @@ spring:
 
         # 教师服务
         - id: teacher-service
-          uri: lb://teacher-service
+          uri: ${TEACHER_SERVICE_URL:lb://teacher-service}
           predicates:
             - Path=/teacher/**
           filters:
@@ -85,7 +97,7 @@ spring:
 
         # 学生服务
         - id: student-service
-          uri: lb://student-service
+          uri: ${STUDENT_SERVICE_URL:lb://student-service}
           predicates:
             - Path=/student/**
           filters:
@@ -93,7 +105,7 @@ spring:
 
         # 心理健康服务
         - id: mental-service
-          uri: lb://mental-service
+          uri: ${MENTAL_SERVICE_URL:lb://mental-service}
           predicates:
             - Path=/mental/**
           filters:
@@ -101,7 +113,7 @@ spring:
 
         # 数据分析服务
         - id: data-service
-          uri: lb://data-service
+          uri: ${DATA_SERVICE_URL:lb://data-service}
           predicates:
             - Path=/data/**
           filters:
@@ -114,6 +126,25 @@ spring:
             allowedMethods: "*"
             allowedHeaders: "*"
             allowCredentials: false
+
+# Actuator + Prometheus：公网入口指标（http.server.requests 速率/错误/时延）。
+# 只放 health/info/prometheus；filter 已放行 /actuator/（PUBLIC_PREFIXES），且不在 /api 下故不经 nginx 对外。
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: false
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 logging:
   level:

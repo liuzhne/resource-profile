@@ -71,34 +71,6 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     /**
-     * Persists a list of questions for the specified questionnaire and updates the questionnaire's question count.
-     *
-     * For each question, ensures the questionnaireId is set; if sortOrder is null assigns index+1; if required is null sets it to 1; then inserts the question. If the provided list is null or empty, no inserts are performed but the questionnaire's question count is still synchronized.
-     *
-     * @param questionnaireId the id of the questionnaire to which the questions belong
-     * @param questions the questions to insert; may be null or empty
-     */
-    @Override
-    public void saveBatch(Long questionnaireId, List<Question> questions) {
-        if (questions == null || questions.isEmpty()) {
-            syncQuestionCount(questionnaireId);
-            return;
-        }
-        for (int i = 0; i < questions.size(); i++) {
-            Question question = questions.get(i);
-            question.setQuestionnaireId(questionnaireId);
-            if (question.getSortOrder() == null) {
-                question.setSortOrder(i + 1);
-            }
-            if (question.getRequired() == null) {
-                question.setRequired(1);
-            }
-            questionMapper.insert(question);
-        }
-        syncQuestionCount(questionnaireId);
-    }
-
-    /**
      * Update an existing Question record using the question's ID.
      *
      * @param question the Question entity containing updated fields; must have a valid `id` to identify the record to update
@@ -122,27 +94,34 @@ public class QuestionServiceImpl implements QuestionService {
         }
     }
 
-    /**
-     * Deletes all questions belonging to the specified questionnaire and updates that questionnaire's stored question count.
-     *
-     * @param questionnaireId the id of the questionnaire whose questions should be removed
-     */
     @Override
     public void deleteByQuestionnaireId(Long questionnaireId) {
-        questionMapper.delete(
-                new LambdaQueryWrapper<Question>().eq(Question::getQuestionnaireId, questionnaireId)
-        );
+        questionMapper.delete(new LambdaQueryWrapper<Question>()
+                .eq(Question::getQuestionnaireId, questionnaireId));
         syncQuestionCount(questionnaireId);
     }
 
-    /**
-     * Updates the stored number of questions for the questionnaire with the given id.
-     *
-     * Counts Question records associated with the questionnaire and updates the Questionnaire
-     * record's `questions` field to that count.
-     *
-     * @param questionnaireId the id of the questionnaire whose question count should be synchronized
-     */
+    @Override
+    public void saveBatch(Long questionnaireId, List<Question> questions) {
+        if (questions == null || questions.isEmpty()) {
+            syncQuestionCount(questionnaireId);
+            return;
+        }
+        int order = 1;
+        for (Question question : questions) {
+            question.setQuestionnaireId(questionnaireId);
+            if (question.getSortOrder() == null) {
+                question.setSortOrder(order);
+            }
+            if (question.getRequired() == null) {
+                question.setRequired(1);
+            }
+            questionMapper.insert(question);
+            order++;
+        }
+        syncQuestionCount(questionnaireId);
+    }
+
     private void syncQuestionCount(Long questionnaireId) {
         Long count = questionMapper.selectCount(
                 new LambdaQueryWrapper<Question>().eq(Question::getQuestionnaireId, questionnaireId)

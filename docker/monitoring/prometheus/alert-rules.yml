@@ -1,0 +1,51 @@
+# 告警规则：可用性 + HTTP 错误率/时延 + JVM 堆。
+# 指标名为 micrometer→prometheus 命名（http_server_requests_seconds_*、jvm_memory_*）。
+# application 标签来自各服务 management.metrics.tags.application。
+groups:
+  - name: edu-portrait-availability
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} 实例不可达"
+          description: "{{ $labels.instance }} 已 down 超过 1 分钟。"
+
+  - name: edu-portrait-http
+    rules:
+      - alert: HighHttpErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) by (application)
+          / sum(rate(http_server_requests_seconds_count[5m])) by (application) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} 5xx 错误率 > 5%"
+          description: "近 5 分钟 5xx 占比超过 5%，检查后端异常。"
+
+      - alert: HighRequestLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket[5m])) by (le, application)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} P95 时延 > 1s"
+          description: "近 5 分钟 P95 请求时延超过 1 秒。"
+
+  - name: edu-portrait-jvm
+    rules:
+      - alert: JvmHeapPressure
+        expr: |
+          sum(jvm_memory_used_bytes{area="heap"}) by (application)
+          / sum(jvm_memory_max_bytes{area="heap"}) by (application) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} JVM 堆使用 > 90%"
+          description: "堆持续高位 10 分钟，关注 GC/内存泄漏或扩容。"

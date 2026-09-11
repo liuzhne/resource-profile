@@ -65,7 +65,7 @@
 
         <div class="login-footer">
           <span>演示账号</span>
-          <strong>admin / 123456</strong>
+          <strong>admin / admin</strong>
         </div>
       </div>
     </section>
@@ -73,46 +73,43 @@
 </template>
 
 <script setup>
-import { ref, reactive } from "vue";
-import { ElMessage } from "element-plus";
-import { User, Lock } from "@element-plus/icons-vue";
-import { useUserStore } from "@/store/modules/user";
+import { ref, reactive } from 'vue'
+import { ElMessage } from 'element-plus'
+import { User, Lock } from '@element-plus/icons-vue'
+import { useUserStore } from '@/store/modules/user'
 
-const userStore = useUserStore();
-const loading = ref(false);
-const loginFormRef = ref();
+const userStore = useUserStore()
+const loading = ref(false)
+const loginFormRef = ref()
 
 const loginForm = reactive({
-  username: "admin",
-  password: "123456",
-  remember: false,
-});
+  username: 'admin',
+  password: 'admin',
+  remember: false
+})
 
 const loginRules = {
-  username: [{ required: true, message: "请输入用户名", trigger: "blur" }],
-  password: [
-    { required: true, message: "请输入密码", trigger: "blur" },
-    { min: 6, message: "密码长度不能少于6位", trigger: "blur" },
-  ],
-};
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+}
 
 const handleLogin = async () => {
-  if (!loginFormRef.value) return;
+  if (!loginFormRef.value) return
 
   await loginFormRef.value.validate(async (valid) => {
     if (valid) {
-      loading.value = true;
+      loading.value = true
       try {
-        await userStore.loginAction(loginForm);
-        ElMessage.success("登录成功");
+        await userStore.loginAction(loginForm)
+        ElMessage.success('登录成功')
       } catch (error) {
-        ElMessage.error("登录失败，请检查用户名和密码");
+        ElMessage.error('登录失败，请检查用户名和密码')
       } finally {
-        loading.value = false;
+        loading.value = false
       }
     }
-  });
-};
+  })
+}
 </script>
 
 <style scoped lang="scss">
@@ -121,9 +118,7 @@ const handleLogin = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    linear-gradient(180deg, rgba(31, 95, 191, 0.08), rgba(31, 95, 191, 0)),
-    #f4f7fb;
+  background: linear-gradient(180deg, rgba(31, 95, 191, 0.08), rgba(31, 95, 191, 0)), #f4f7fb;
   padding: 32px;
 }
 

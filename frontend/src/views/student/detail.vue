@@ -10,11 +10,7 @@
 
     <el-skeleton v-if="loading" :rows="8" animated class="detail-content" />
 
-    <el-empty
-      v-else-if="!studentInfo"
-      class="detail-content"
-      description="未找到学生信息"
-    />
+    <el-empty v-else-if="!studentInfo" class="detail-content" description="未找到学生信息" />
 
     <el-row v-else :gutter="16" class="detail-content">
       <el-col :xs="24" :lg="8">
@@ -41,27 +37,19 @@
           <div class="info-list">
             <div class="info-item">
               <span class="label">学号：</span>
-              <span class="value">{{
-                displayValue(studentInfo.studentId)
-              }}</span>
+              <span class="value">{{ displayValue(studentInfo.studentId) }}</span>
             </div>
             <div class="info-item">
               <span class="label">入学时间：</span>
-              <span class="value">{{
-                displayValue(studentInfo.enrollmentDate)
-              }}</span>
+              <span class="value">{{ displayValue(studentInfo.enrollmentDate) }}</span>
             </div>
             <div class="info-item">
               <span class="label">班级：</span>
-              <span class="value">{{
-                displayValue(studentInfo.className)
-              }}</span>
+              <span class="value">{{ displayValue(studentInfo.className) }}</span>
             </div>
             <div class="info-item">
               <span class="label">预计毕业：</span>
-              <span class="value">{{
-                displayValue(studentInfo.expectedGraduation)
-              }}</span>
+              <span class="value">{{ displayValue(studentInfo.expectedGraduation) }}</span>
             </div>
           </div>
         </el-card>
@@ -118,15 +106,7 @@
                 <el-table-column prop="credit" label="学分" width="80" />
                 <el-table-column prop="score" label="成绩" width="100">
                   <template #default="{ row }">
-                    <el-tag
-                      :type="
-                        row.score >= 90
-                          ? 'success'
-                          : row.score >= 60
-                            ? ''
-                            : 'danger'
-                      "
-                    >
+                    <el-tag :type="row.score >= 90 ? 'success' : row.score >= 60 ? '' : 'danger'">
                       {{ row.score }}
                     </el-tag>
                   </template>
@@ -136,10 +116,7 @@
             </el-tab-pane>
 
             <el-tab-pane label="综合素质" name="quality">
-              <el-empty
-                v-if="qualityRecords.length === 0"
-                description="暂无综合素质记录"
-              />
+              <el-empty v-if="qualityRecords.length === 0" description="暂无综合素质记录" />
               <el-timeline v-else>
                 <el-timeline-item
                   v-for="(item, index) in qualityRecords"
@@ -160,12 +137,10 @@
                   displayValue(studentInfo.lastMentalTest)
                 }}</el-descriptions-item>
                 <el-descriptions-item label="测评结果">
-                  <el-tag type="info">{{
-                    displayValue(studentInfo.mentalStatus)
-                  }}</el-tag>
+                  <el-tag type="info">{{ displayValue(studentInfo.mentalStatus) }}</el-tag>
                 </el-descriptions-item>
                 <el-descriptions-item label="辅导员关注" :span="2">{{
-                  studentInfo.counselorNotes || "暂无记录"
+                  studentInfo.counselorNotes || '暂无记录'
                 }}</el-descriptions-item>
               </el-descriptions>
             </el-tab-pane>
@@ -177,59 +152,57 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { getStudentDetail } from "@/api/student";
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { getStudentDetail } from '@/api/student'
 
-const router = useRouter();
-const route = useRoute();
-const activeTab = ref("grades");
-const loading = ref(false);
-const studentInfo = ref(null);
-const gradeRecords = ref([]);
-const qualityRecords = ref([]);
+const router = useRouter()
+const route = useRoute()
+const activeTab = ref('grades')
+const loading = ref(false)
+const studentInfo = ref(null)
+const gradeRecords = ref([])
+const qualityRecords = ref([])
 
 const avatarText = computed(() => {
-  return studentInfo.value?.name ? studentInfo.value.name.slice(0, 1) : "学";
-});
+  return studentInfo.value?.name ? studentInfo.value.name.slice(0, 1) : '学'
+})
 
 const displayValue = (value) => {
-  return value === null || value === undefined || value === "" ? "-" : value;
-};
+  return value === null || value === undefined || value === '' ? '-' : value
+}
 
 const gradeLabel = (grade) => {
-  return grade ? `${grade}级` : "-";
-};
+  return grade ? `${grade}级` : '-'
+}
 
 const formatGpa = (gpa) => {
-  const n = Number(gpa);
-  return Number.isFinite(n) ? n.toFixed(2) : "-";
-};
+  const n = Number(gpa)
+  return Number.isFinite(n) ? n.toFixed(2) : '-'
+}
 
-const statusLabel = (status) =>
-  ({ 0: "退学", 1: "在读", 2: "毕业" })[status] ?? "-";
+const statusLabel = (status) => ({ 0: '退学', 1: '在读', 2: '毕业' })[status] ?? '-'
 
-const statusTagType = (status) =>
-  ({ 0: "danger", 1: "success", 2: "info" })[status] ?? "info";
+const statusTagType = (status) => ({ 0: 'danger', 1: 'success', 2: 'info' })[status] ?? 'info'
 
 const fetchDetail = async () => {
-  loading.value = true;
+  loading.value = true
   try {
-    const res = await getStudentDetail(route.params.id);
-    studentInfo.value = res.data || null;
+    const res = await getStudentDetail(route.params.id)
+    studentInfo.value = res.data || null
   } catch (e) {
-    console.error("获取学生详情失败", e);
-    studentInfo.value = null;
+    console.error('获取学生详情失败', e)
+    studentInfo.value = null
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const goBack = () => {
-  router.back();
-};
+  router.back()
+}
 
-onMounted(fetchDetail);
+onMounted(fetchDetail)
 </script>
 
 <style scoped lang="scss">

@@ -21,6 +21,16 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- G-3.1：Actuator + Micrometer/Prometheus，暴露 /actuator/prometheus 给运维抓取 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Nacos 服务发现 -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
@@ -33,15 +43,18 @@
             <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
         </dependency>
 
-        <!--Spring AI-->
+        <!-- Spring AI 1.0.0 GA：starter 重命名为 spring-ai-starter-model-{model} -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
 
+        <!-- H-2.2：Spring AI 1.1.6 MCP client（默认走 JDK HttpClient transport，适配 servlet/MVC）。
+             启动 auto-config 读 spring.ai.mcp.client.streamable-http.connections.* 起 McpSyncClient，
+             暴露合并 ToolCallbackProvider Bean 供 AgentLoop 调用方注入。 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-core</artifactId>
+            <artifactId>spring-ai-starter-mcp-client</artifactId>
         </dependency>
 
         <!-- 在 dependencies 中追加 -->
@@ -118,6 +131,13 @@
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
+        </dependency>
+
+        <!-- H-2.1：单测用 JUnit 5 + Mockito（spring-boot-starter-test 自带） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <!-- F-1：PDF 报告异步导出 -->

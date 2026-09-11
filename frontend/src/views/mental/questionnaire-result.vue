@@ -5,10 +5,8 @@
         <el-button link :icon="ArrowLeft" class="back-link" @click="goBack">
           返回问卷列表
         </el-button>
-        <h1 class="page-title">{{ questionnaire?.title || "完成情况" }}</h1>
-        <div class="page-subtitle">
-          查看学生提交情况、测评等级与重点跟进对象。
-        </div>
+        <h1 class="page-title">{{ questionnaire?.title || '完成情况' }}</h1>
+        <div class="page-subtitle">查看学生提交情况、测评等级与重点跟进对象。</div>
       </div>
       <el-tag v-if="questionnaire?.type" effect="plain">
         {{ questionnaire.type }}
@@ -21,12 +19,9 @@
         <strong>{{ rows.length }}</strong>
         <p>当前问卷提交人数</p>
       </div>
-      <div
-        v-permission="['psychologist', 'admin']"
-        class="summary-card is-primary"
-      >
+      <div v-permission="['psychologist', 'admin']" class="summary-card is-primary">
         <span>平均分</span>
-        <strong>{{ avgScore ?? "-" }}</strong>
+        <strong>{{ avgScore ?? '-' }}</strong>
         <p>仅心理教师与管理员可见</p>
       </div>
       <div class="summary-card is-warning">
@@ -52,28 +47,20 @@
         </div>
       </template>
 
-      <el-empty
-        v-if="!loading && rows.length === 0"
-        description="暂无学生提交"
-      />
+      <el-empty v-if="!loading && rows.length === 0" description="暂无学生提交" />
       <el-table v-else v-loading="loading" :data="rows" stripe>
         <el-table-column type="index" label="#" width="56" />
         <el-table-column label="学生" min-width="160">
           <template #default="{ row }">
-            <div class="student-name">{{ row.name || "-" }}</div>
-            <div class="student-no">{{ row.studentNo || "-" }}</div>
+            <div class="student-name">{{ row.name || '-' }}</div>
+            <div class="student-no">{{ row.studentNo || '-' }}</div>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="deptName"
-          label="学院"
-          min-width="150"
-          show-overflow-tooltip
-        />
+        <el-table-column prop="deptName" label="学院" min-width="150" show-overflow-tooltip />
         <el-table-column label="班级信息" min-width="150">
           <template #default="{ row }">
-            <div>{{ row.grade || "-" }}级</div>
-            <div class="student-no">{{ row.className || "-" }}</div>
+            <div>{{ row.grade || '-' }}级</div>
+            <div class="student-no">{{ row.className || '-' }}</div>
           </template>
         </el-table-column>
         <el-table-column
@@ -85,18 +72,18 @@
           align="center"
         >
           <template #default="{ row }">
-            <strong class="score-value">{{ row.score ?? "-" }}</strong>
+            <strong class="score-value">{{ row.score ?? '-' }}</strong>
           </template>
         </el-table-column>
         <el-table-column label="等级" width="110">
           <template #default="{ row }">
             <el-tag :type="levelTagColor(row.level)" effect="plain">
-              {{ row.level || "-" }}
+              {{ row.level || '-' }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="submitTime" label="提交时间" min-width="180">
-          <template #default="{ row }">{{ row.submitTime || "-" }}</template>
+          <template #default="{ row }">{{ row.submitTime || '-' }}</template>
         </el-table-column>
       </el-table>
     </el-card>
@@ -104,65 +91,61 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft } from "@element-plus/icons-vue";
-import { getCompletionList, getQuestionnaireDetail } from "@/api/mental";
-import { usePermission } from "@/directives/permission";
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft } from '@element-plus/icons-vue'
+import { getCompletionList, getQuestionnaireDetail } from '@/api/mental'
+import { usePermission } from '@/directives/permission'
 
-const { hasRole } = usePermission();
+const { hasRole } = usePermission()
 
-const route = useRoute();
-const router = useRouter();
-const questionnaireId = Number(route.params.id);
+const route = useRoute()
+const router = useRouter()
+const questionnaireId = Number(route.params.id)
 
-const loading = ref(false);
-const rows = ref([]);
-const questionnaire = ref(null);
+const loading = ref(false)
+const rows = ref([])
+const questionnaire = ref(null)
 
 const avgScore = computed(() => {
-  if (rows.value.length === 0) return null;
-  const sum = rows.value.reduce(
-    (acc, row) => acc + (Number(row.score) || 0),
-    0,
-  );
-  return Math.round((sum / rows.value.length) * 10) / 10;
-});
+  if (rows.value.length === 0) return null
+  const sum = rows.value.reduce((acc, row) => acc + (Number(row.score) || 0), 0)
+  return Math.round((sum / rows.value.length) * 10) / 10
+})
 
 const levelSummary = computed(() => ({
-  attention: rows.value.filter((row) => ["轻度", "中度"].includes(row.level))
-    .length,
-  high: rows.value.filter((row) => ["重度", "高危"].includes(row.level)).length,
-}));
+  attention: rows.value.filter((row) => ['轻度', '中度'].includes(row.level)).length,
+  high: rows.value.filter((row) => ['重度', '高危'].includes(row.level)).length
+}))
 
 const levelTagColor = (level) =>
   ({
-    正常: "success",
-    轻度: "primary",
-    中度: "warning",
-    重度: "danger",
-    高危: "danger",
-  })[level] || "info";
+    正常: 'success',
+    轻度: 'primary',
+    中度: 'warning',
+    重度: 'danger',
+    高危: 'danger'
+  })[level] || 'info'
 
 const fetchData = async () => {
-  loading.value = true;
+  loading.value = true
   try {
     const [meta, completion] = await Promise.all([
       getQuestionnaireDetail(questionnaireId),
-      getCompletionList(questionnaireId),
-    ]);
-    questionnaire.value = meta.data || null;
-    rows.value = completion.data || [];
+      getCompletionList(questionnaireId)
+    ])
+    questionnaire.value = meta.data || null
+    rows.value = completion.data || []
   } catch (e) {
-    console.error("加载完成情况失败", e);
+    console.error('加载完成情况失败', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
-const goBack = () => router.push("/mental/questionnaire");
+const goBack = () => router.push('/mental/questionnaire')
 
-onMounted(fetchData);
+onMounted(fetchData)
 </script>
 
 <style scoped lang="scss">

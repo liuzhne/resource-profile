@@ -7,9 +7,7 @@
           统一维护平台账号、角色归属与启用状态，支撑师生画像系统的访问控制。
         </div>
       </div>
-      <el-button type="primary" :icon="Plus" @click="handleAdd"
-        >新增用户</el-button
-      >
+      <el-button type="primary" :icon="Plus" @click="handleAdd">新增用户</el-button>
     </div>
 
     <div class="summary-grid">
@@ -38,11 +36,7 @@
     <div class="toolbar-card search-panel">
       <el-form :model="searchForm" inline class="search-form">
         <el-form-item label="用户名">
-          <el-input
-            v-model="searchForm.username"
-            placeholder="请输入用户名"
-            clearable
-          />
+          <el-input v-model="searchForm.username" placeholder="请输入用户名" clearable />
         </el-form-item>
         <el-form-item label="角色">
           <el-select
@@ -71,9 +65,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search" @click="handleSearch"
-            >查询</el-button
-          >
+          <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
@@ -86,23 +78,16 @@
             <span>账号列表</span>
             <span class="result-count">共 {{ total }} 条</span>
           </div>
-          <el-button text :icon="Refresh" :loading="loading" @click="fetchList"
-            >刷新</el-button
-          >
+          <el-button text :icon="Refresh" :loading="loading" @click="fetchList">刷新</el-button>
         </div>
       </template>
 
-      <el-table
-        v-loading="loading"
-        :data="userList"
-        stripe
-        empty-text="暂无用户数据"
-      >
+      <el-table v-loading="loading" :data="userList" stripe empty-text="暂无用户数据">
         <el-table-column type="index" width="50" />
         <el-table-column prop="username" label="账号" min-width="150">
           <template #default="{ row }">
-            <div class="user-name">{{ row.username || "-" }}</div>
-            <div class="user-meta">{{ row.nickname || "未设置昵称" }}</div>
+            <div class="user-name">{{ row.username || '-' }}</div>
+            <div class="user-meta">{{ row.nickname || '未设置昵称' }}</div>
           </template>
         </el-table-column>
         <el-table-column prop="userType" label="角色" min-width="120">
@@ -113,10 +98,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="phone" label="联系电话" min-width="140">
-          <template #default="{ row }">{{ row.phone || "-" }}</template>
+          <template #default="{ row }">{{ row.phone || '-' }}</template>
         </el-table-column>
         <el-table-column prop="email" label="邮箱" min-width="180">
-          <template #default="{ row }">{{ row.email || "-" }}</template>
+          <template #default="{ row }">{{ row.email || '-' }}</template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="110" align="center">
           <template #default="{ row }">
@@ -132,26 +117,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" min-width="170">
-          <template #default="{ row }">{{
-            formatTime(row.createTime)
-          }}</template>
+          <template #default="{ row }">{{ formatTime(row.createTime) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              :icon="EditPen"
-              @click="handleEdit(row)"
-              >编辑</el-button
-            >
-            <el-button
-              link
-              type="danger"
-              :icon="Delete"
-              @click="handleDelete(row)"
-              >删除</el-button
-            >
+            <el-button link type="primary" :icon="EditPen" @click="handleEdit(row)">编辑</el-button>
+            <el-button link type="danger" :icon="Delete" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -191,10 +162,7 @@
           />
         </el-form-item>
         <el-form-item label="姓名昵称" prop="nickname">
-          <el-input
-            v-model.trim="userForm.nickname"
-            placeholder="请输入姓名或昵称"
-          />
+          <el-input v-model.trim="userForm.nickname" placeholder="请输入姓名或昵称" />
         </el-form-item>
         <el-form-item label="角色" prop="userType">
           <el-select v-model="userForm.userType" style="width: 100%">
@@ -206,10 +174,7 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item
-          :label="isEditMode ? '重置密码' : '初始密码'"
-          prop="password"
-        >
+        <el-form-item :label="isEditMode ? '重置密码' : '初始密码'" prop="password">
           <el-input
             v-model="userForm.password"
             type="password"
@@ -218,16 +183,10 @@
           />
         </el-form-item>
         <el-form-item label="联系电话" prop="phone">
-          <el-input
-            v-model.trim="userForm.phone"
-            placeholder="请输入联系电话"
-          />
+          <el-input v-model.trim="userForm.phone" placeholder="请输入联系电话" />
         </el-form-item>
         <el-form-item label="邮箱" prop="email">
-          <el-input
-            v-model.trim="userForm.email"
-            placeholder="请输入邮箱地址"
-          />
+          <el-input v-model.trim="userForm.email" placeholder="请输入邮箱地址" />
         </el-form-item>
         <el-form-item label="账号状态" prop="status">
           <el-radio-group v-model="userForm.status">
@@ -239,164 +198,147 @@
 
       <template #footer>
         <el-button @click="formDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitUserForm"
-          >保存</el-button
-        >
+        <el-button type="primary" :loading="saving" @click="submitUserForm">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
-import {
-  Delete,
-  EditPen,
-  Plus,
-  Refresh,
-  Search,
-} from "@element-plus/icons-vue";
-import { createUser, deleteUser, getUserList, updateUser } from "@/api/user";
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, EditPen, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { createUser, deleteUser, getUserList, updateUser } from '@/api/user'
 
 const ROLE_OPTIONS = [
-  { label: "管理员", value: 0 },
-  { label: "教师", value: 1 },
-  { label: "学生", value: 2 },
-];
+  { label: '管理员', value: 0 },
+  { label: '教师', value: 1 },
+  { label: '学生', value: 2 }
+]
 
-const loading = ref(false);
-const currentPage = ref(1);
-const pageSize = ref(10);
-const total = ref(0);
-const userList = ref([]);
-const formRef = ref(null);
-const formDialogVisible = ref(false);
-const formMode = ref("add");
-const editingUserId = ref(null);
-const saving = ref(false);
+const loading = ref(false)
+const currentPage = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+const userList = ref([])
+const formRef = ref(null)
+const formDialogVisible = ref(false)
+const formMode = ref('add')
+const editingUserId = ref(null)
+const saving = ref(false)
 
 const searchForm = reactive({
-  username: "",
-  role: "",
-  status: "",
-});
+  username: '',
+  role: '',
+  status: ''
+})
 const userForm = reactive({
-  username: "",
-  nickname: "",
+  username: '',
+  nickname: '',
   userType: 2,
-  password: "",
-  phone: "",
-  email: "",
-  status: 1,
-});
+  password: '',
+  phone: '',
+  email: '',
+  status: 1
+})
 
 const passwordValidator = (_rule, value, callback) => {
   if (!isEditMode.value && !value) {
-    callback(new Error("请输入初始密码"));
-    return;
+    callback(new Error('请输入初始密码'))
+    return
   }
   if (value && value.length < 6) {
-    callback(new Error("密码长度不少于 6 位"));
-    return;
+    callback(new Error('密码长度不少于 6 位'))
+    return
   }
-  callback();
-};
+  callback()
+}
 
 const userRules = {
-  username: [{ required: true, message: "请输入用户名", trigger: "blur" }],
-  nickname: [{ required: true, message: "请输入姓名昵称", trigger: "blur" }],
-  userType: [{ required: true, message: "请选择角色", trigger: "change" }],
-  password: [{ validator: passwordValidator, trigger: "blur" }],
-  email: [{ type: "email", message: "请输入有效邮箱", trigger: "blur" }],
-};
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  nickname: [{ required: true, message: '请输入姓名昵称', trigger: 'blur' }],
+  userType: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  password: [{ validator: passwordValidator, trigger: 'blur' }],
+  email: [{ type: 'email', message: '请输入有效邮箱', trigger: 'blur' }]
+}
 
-const enabledCount = computed(
-  () => userList.value.filter((item) => item.status === 1).length,
-);
-const disabledCount = computed(
-  () => userList.value.filter((item) => item.status === 0).length,
-);
-const teacherCount = computed(
-  () => userList.value.filter((item) => item.userType === 1).length,
-);
-const isEditMode = computed(() => formMode.value === "edit");
-const formDialogTitle = computed(() =>
-  isEditMode.value ? "编辑用户" : "新增用户",
-);
+const enabledCount = computed(() => userList.value.filter((item) => item.status === 1).length)
+const disabledCount = computed(() => userList.value.filter((item) => item.status === 0).length)
+const teacherCount = computed(() => userList.value.filter((item) => item.userType === 1).length)
+const isEditMode = computed(() => formMode.value === 'edit')
+const formDialogTitle = computed(() => (isEditMode.value ? '编辑用户' : '新增用户'))
 
-const emptyToUndefined = (value) =>
-  value === "" || value === null ? undefined : value;
+const emptyToUndefined = (value) => (value === '' || value === null ? undefined : value)
 
 const fetchList = async () => {
-  loading.value = true;
+  loading.value = true
   try {
     const res = await getUserList({
       page: currentPage.value,
       size: pageSize.value,
       username: searchForm.username || undefined,
       role: emptyToUndefined(searchForm.role),
-      status: emptyToUndefined(searchForm.status),
-    });
-    const pageData = res.data || {};
-    userList.value = pageData.records || [];
-    total.value = Number(pageData.total) || 0;
+      status: emptyToUndefined(searchForm.status)
+    })
+    const pageData = res.data || {}
+    userList.value = pageData.records || []
+    total.value = Number(pageData.total) || 0
   } catch (error) {
-    console.error("获取用户列表失败", error);
+    console.error('获取用户列表失败', error)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const handleSearch = () => {
-  currentPage.value = 1;
-  fetchList();
-};
+  currentPage.value = 1
+  fetchList()
+}
 
 const handleReset = () => {
-  searchForm.username = "";
-  searchForm.role = "";
-  searchForm.status = "";
-  currentPage.value = 1;
-  fetchList();
-};
+  searchForm.username = ''
+  searchForm.role = ''
+  searchForm.status = ''
+  currentPage.value = 1
+  fetchList()
+}
 
 const handleAdd = () => {
-  formMode.value = "add";
-  editingUserId.value = null;
-  resetUserForm();
-  formDialogVisible.value = true;
-  nextTick(() => formRef.value?.clearValidate?.());
-};
+  formMode.value = 'add'
+  editingUserId.value = null
+  resetUserForm()
+  formDialogVisible.value = true
+  nextTick(() => formRef.value?.clearValidate?.())
+}
 
 const handleEdit = (row) => {
-  formMode.value = "edit";
-  editingUserId.value = row.id;
+  formMode.value = 'edit'
+  editingUserId.value = row.id
   Object.assign(userForm, {
-    username: row.username || "",
-    nickname: row.nickname || "",
+    username: row.username || '',
+    nickname: row.nickname || '',
     userType: row.userType ?? 2,
-    password: "",
-    phone: row.phone || "",
-    email: row.email || "",
-    status: row.status ?? 1,
-  });
-  formDialogVisible.value = true;
-  nextTick(() => formRef.value?.clearValidate?.());
-};
+    password: '',
+    phone: row.phone || '',
+    email: row.email || '',
+    status: row.status ?? 1
+  })
+  formDialogVisible.value = true
+  nextTick(() => formRef.value?.clearValidate?.())
+}
 
 const resetUserForm = () => {
   Object.assign(userForm, {
-    username: "",
-    nickname: "",
+    username: '',
+    nickname: '',
     userType: 2,
-    password: "",
-    phone: "",
-    email: "",
-    status: 1,
-  });
-  formRef.value?.clearValidate?.();
-};
+    password: '',
+    phone: '',
+    email: '',
+    status: 1
+  })
+  formRef.value?.clearValidate?.()
+}
 
 const buildUserPayload = () => {
   const payload = {
@@ -405,86 +347,80 @@ const buildUserPayload = () => {
     userType: userForm.userType,
     phone: userForm.phone || null,
     email: userForm.email || null,
-    status: userForm.status,
-  };
-  if (userForm.password) {
-    payload.password = userForm.password;
+    status: userForm.status
   }
-  return payload;
-};
+  if (userForm.password) {
+    payload.password = userForm.password
+  }
+  return payload
+}
 
 const submitUserForm = async () => {
-  const valid = await formRef.value?.validate?.().catch(() => false);
-  if (!valid) return;
+  const valid = await formRef.value?.validate?.().catch(() => false)
+  if (!valid) return
 
-  saving.value = true;
+  saving.value = true
   try {
     if (isEditMode.value) {
-      await updateUser(editingUserId.value, buildUserPayload());
-      ElMessage.success("用户信息已更新");
+      await updateUser(editingUserId.value, buildUserPayload())
+      ElMessage.success('用户信息已更新')
     } else {
-      await createUser(buildUserPayload());
-      ElMessage.success("用户已新增");
+      await createUser(buildUserPayload())
+      ElMessage.success('用户已新增')
     }
-    formDialogVisible.value = false;
-    fetchList();
+    formDialogVisible.value = false
+    fetchList()
   } finally {
-    saving.value = false;
+    saving.value = false
   }
-};
+}
 
 const handleStatusChange = async (row) => {
-  const previousStatus = row.status === 1 ? 0 : 1;
+  const previousStatus = row.status === 1 ? 0 : 1
   try {
-    await updateUser(row.id, { status: row.status });
-    ElMessage.success(row.status === 1 ? "账号已启用" : "账号已停用");
+    await updateUser(row.id, { status: row.status })
+    ElMessage.success(row.status === 1 ? '账号已启用' : '账号已停用')
   } catch (error) {
-    row.status = previousStatus;
+    row.status = previousStatus
   }
-};
+}
 
 const handleDelete = async (row) => {
   try {
-    await ElMessageBox.confirm(
-      `确认删除账号「${row.username || "-"}」？`,
-      "删除用户",
-      {
-        confirmButtonText: "删除",
-        cancelButtonText: "取消",
-        type: "warning",
-        customClass: "app-confirm-dialog",
-        showClose: false,
-      },
-    );
-    await deleteUser(row.id);
-    ElMessage.success("用户已删除");
-    fetchList();
+    await ElMessageBox.confirm(`确认删除账号「${row.username || '-'}」？`, '删除用户', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      customClass: 'app-confirm-dialog',
+      showClose: false
+    })
+    await deleteUser(row.id)
+    ElMessage.success('用户已删除')
+    fetchList()
   } catch (error) {
-    if (error !== "cancel" && error !== "close") {
-      console.error("删除用户失败", error);
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('删除用户失败', error)
     }
   }
-};
+}
 
-const roleLabel = (type) =>
-  ({ 0: "管理员", 1: "教师", 2: "学生" })[type] || "未分配";
+const roleLabel = (type) => ({ 0: '管理员', 1: '教师', 2: '学生' })[type] || '未分配'
 
-const roleTagType = (type) =>
-  ({ 0: "danger", 1: "success", 2: "primary" })[type] || "info";
+const roleTagType = (type) => ({ 0: 'danger', 1: 'success', 2: 'primary' })[type] || 'info'
 
 const formatTime = (value) => {
-  if (!value) return "-";
+  if (!value) return '-'
   if (Array.isArray(value)) {
-    const [year, month, day, hour = 0, minute = 0] = value;
-    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
+    const [year, month, day, hour = 0, minute = 0] = value
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(
       2,
-      "0",
-    )} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      '0'
+    )} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
   }
-  return String(value).replace("T", " ").slice(0, 16);
-};
+  return String(value).replace('T', ' ').slice(0, 16)
+}
 
-onMounted(fetchList);
+onMounted(fetchList)
 </script>
 
 <style scoped lang="scss">

@@ -16,7 +16,11 @@ import java.util.Map;
  * 当前调用全校统计接口，尝试从中提取该学生指标。
  * 建议后续在 data-service 中补充：GET /data/student/{studentId}
  */
-@FeignClient(name = "data-service", fallbackFactory = DataServiceClientFallbackFactory.class)
+@FeignClient(
+        name = "data-service",
+        url = "${DATA_SERVICE_URL:}",
+        fallbackFactory = DataServiceClientFallbackFactory.class
+)
 public interface DataServiceClient {
 
     /**

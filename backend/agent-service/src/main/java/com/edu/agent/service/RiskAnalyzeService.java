@@ -7,23 +7,42 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RiskAnalyzeService {
 
+    // 风险识别直接吃原始/敏感画像 → 走本地 @Primary ChatClient（llama.cpp），数据不出本地。
     private final ChatClient chatClient;
 
-    @Value("${educare.prompt.risk-analyze}")
+    /**
+     * G-1.3：从 classpath:prompts/risk-analyze.system.md 加载 system prompt。
+     * 抽出 YAML 内联是为了：
+     *   ① 字节稳定 —— 不被 YAML 缩进/折行/转义影响；
+     *   ② llama.cpp slot cache 命中 —— 同一 prompt 文件第二次以后命中前缀缓存。
+     * 修改 prompt 不需要改代码或重启 Nacos，仅替换文件 + 重启服务。
+     */
+    @Value("classpath:prompts/risk-analyze.system.md")
+    private Resource riskSystemPromptResource;
+
     private String riskSystemPrompt;
 
     @Value("${educare.debug.force-risk-level:}")
     private String forceRiskLevel;
 
     @PostConstruct
-    public void logDebugMode() {
+    public void init() throws IOException {
+        riskSystemPrompt = riskSystemPromptResource.getContentAsString(StandardCharsets.UTF_8);
+        log.info("加载风险识别 system prompt：{} bytes / {} chars",
+                riskSystemPrompt.getBytes(StandardCharsets.UTF_8).length,
+                riskSystemPrompt.length());
+
         if (forceRiskLevel != null && !forceRiskLevel.isBlank()) {
             log.warn("=========================================================");
             log.warn(" ⚠  DEBUG 模式启用：force-risk-level = {}", forceRiskLevel);

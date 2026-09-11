@@ -6,7 +6,7 @@
           返回测评列表
         </el-button>
         <h1 class="page-title">
-          {{ data?.questionnaire?.title || "评估结果" }}
+          {{ data?.questionnaire?.title || '评估结果' }}
         </h1>
         <div class="page-subtitle">查看本次心理测评结果与作答明细。</div>
       </div>
@@ -19,15 +19,15 @@
       <section v-if="data?.assessment" :class="['result-panel', bannerClass]">
         <div class="result-metric">
           <span>总分</span>
-          <strong>{{ data.assessment.score ?? "-" }}</strong>
+          <strong>{{ data.assessment.score ?? '-' }}</strong>
         </div>
         <div class="result-metric">
           <span>评级</span>
-          <strong>{{ data.assessment.level || "-" }}</strong>
+          <strong>{{ data.assessment.level || '-' }}</strong>
         </div>
         <div class="suggestion-card">
           <span>建议</span>
-          <p>{{ data.assessment.suggestion || "暂无建议" }}</p>
+          <p>{{ data.assessment.suggestion || '暂无建议' }}</p>
         </div>
       </section>
 
@@ -41,16 +41,9 @@
           </div>
         </template>
 
-        <el-empty
-          v-if="!loading && answerView.length === 0"
-          description="暂无作答明细"
-        />
+        <el-empty v-if="!loading && answerView.length === 0" description="暂无作答明细" />
         <div v-else class="answer-list">
-          <article
-            v-for="(item, idx) in answerView"
-            :key="idx"
-            class="answer-item"
-          >
+          <article v-for="(item, idx) in answerView" :key="idx" class="answer-item">
             <div class="answer-question">
               <span>{{ idx + 1 }}</span>
               <strong>{{ item.content }}</strong>
@@ -60,7 +53,7 @@
             </div>
             <div class="answer-content">
               <span v-if="item.answerLabels.length">
-                {{ item.answerLabels.join("、") }}
+                {{ item.answerLabels.join('、') }}
               </span>
               <span v-else-if="item.text">{{ item.text }}</span>
               <span v-else class="muted">未作答</span>
@@ -73,111 +66,104 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft, Clock } from "@element-plus/icons-vue";
-import {
-  studentGetMyAssessment,
-  studentGetQuestionnaireForTaking,
-} from "@/api/mental";
-import { useUserStore } from "@/store/modules/user";
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft, Clock } from '@element-plus/icons-vue'
+import { studentGetMyAssessment, studentGetQuestionnaireForTaking } from '@/api/mental'
+import { useUserStore } from '@/store/modules/user'
 
-const route = useRoute();
-const router = useRouter();
-const userStore = useUserStore();
-const assessmentId = Number(route.params.assessmentId);
+const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
+const assessmentId = Number(route.params.assessmentId)
 
-const loading = ref(false);
-const data = ref(null);
-const questions = ref([]);
+const loading = ref(false)
+const data = ref(null)
+const questions = ref([])
 
 const typeLabel = (type) =>
   ({
-    single_choice: "单选",
-    multiple_choice: "多选",
-    text: "简答",
-    scale: "量表",
+    single_choice: '单选',
+    multiple_choice: '多选',
+    text: '简答',
+    scale: '量表'
   })[type] ||
   type ||
-  "-";
+  '-'
 
 const parseOpts = (raw) => {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw)
   } catch {
-    return [];
+    return []
   }
-};
+}
 
 const safeParseAnswers = (raw) => {
-  if (!raw) return [];
+  if (!raw) return []
   try {
-    return typeof raw === "string" ? JSON.parse(raw) : raw;
+    return typeof raw === 'string' ? JSON.parse(raw) : raw
   } catch {
-    return [];
+    return []
   }
-};
+}
 
 const answerView = computed(() => {
-  if (!data.value || !questions.value.length) return [];
-  const answers = safeParseAnswers(data.value.answersJson);
-  const map = {};
+  if (!data.value || !questions.value.length) return []
+  const answers = safeParseAnswers(data.value.answersJson)
+  const map = {}
   answers.forEach((answer) => {
-    map[answer.questionId] = answer;
-  });
+    map[answer.questionId] = answer
+  })
 
   return questions.value.map((question) => {
-    const answer = map[question.id] || {};
-    const opts = parseOpts(question.options);
-    const labels = (answer.optionIndices || [])
-      .map((idx) => opts[idx]?.label)
-      .filter(Boolean);
+    const answer = map[question.id] || {}
+    const opts = parseOpts(question.options)
+    const labels = (answer.optionIndices || []).map((idx) => opts[idx]?.label).filter(Boolean)
     return {
       content: question.content,
       questionType: question.questionType,
       answerLabels: labels,
-      text: answer.text || "",
-    };
-  });
-});
+      text: answer.text || ''
+    }
+  })
+})
 
 const bannerClass = computed(() => {
-  const level = data.value?.assessment?.level;
+  const level = data.value?.assessment?.level
   return (
     {
-      正常: "lvl-good",
-      轻度: "lvl-mild",
-      中度: "lvl-warn",
-      重度: "lvl-danger",
-      高危: "lvl-danger",
-    }[level] || "lvl-neutral"
-  );
-});
+      正常: 'lvl-good',
+      轻度: 'lvl-mild',
+      中度: 'lvl-warn',
+      重度: 'lvl-danger',
+      高危: 'lvl-danger'
+    }[level] || 'lvl-neutral'
+  )
+})
 
 const fetchData = async () => {
-  loading.value = true;
+  loading.value = true
   try {
-    const userId = userStore.userInfo?.id;
-    const res = await studentGetMyAssessment(userId, assessmentId);
-    data.value = res.data || {};
+    const userId = userStore.userInfo?.id
+    const res = await studentGetMyAssessment(userId, assessmentId)
+    data.value = res.data || {}
     if (data.value.questionnaire?.id) {
-      const full = await studentGetQuestionnaireForTaking(
-        data.value.questionnaire.id,
-      );
-      questions.value = full.data?.questions || [];
+      const full = await studentGetQuestionnaireForTaking(data.value.questionnaire.id)
+      questions.value = full.data?.questions || []
     }
   } catch (e) {
-    console.error("加载结果失败", e);
+    console.error('加载结果失败', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
-const goBack = () => router.push("/student-mental/list");
+const goBack = () => router.push('/student-mental/list')
 
-onMounted(fetchData);
+onMounted(fetchData)
 </script>
 
 <style scoped lang="scss">

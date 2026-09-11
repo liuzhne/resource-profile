@@ -10,9 +10,9 @@
         >
           返回问卷列表
         </el-button>
-        <h1 class="page-title">{{ questionnaire?.title || "心理测评" }}</h1>
+        <h1 class="page-title">{{ questionnaire?.title || '心理测评' }}</h1>
         <div class="page-subtitle">
-          {{ questionnaire?.description || "请完成当前心理测评问卷。" }}
+          {{ questionnaire?.description || '请完成当前心理测评问卷。' }}
         </div>
       </div>
       <div class="progress-card">
@@ -25,24 +25,15 @@
       <aside class="assessment-aside">
         <div class="aside-card">
           <div class="aside-label">问卷信息</div>
-          <div class="aside-title">{{ questionnaire?.type || "-" }}</div>
-          <div class="aside-meta">
-            共 {{ questions.length }} 题 · 必答 {{ requiredCount }} 题
-          </div>
-          <el-progress
-            :percentage="progressPercent"
-            :stroke-width="8"
-            :show-text="false"
-          />
+          <div class="aside-title">{{ questionnaire?.type || '-' }}</div>
+          <div class="aside-meta">共 {{ questions.length }} 题 · 必答 {{ requiredCount }} 题</div>
+          <el-progress :percentage="progressPercent" :stroke-width="8" :show-text="false" />
           <div class="progress-text">{{ progressPercent }}% 已完成</div>
         </div>
       </aside>
 
       <main class="question-list">
-        <el-empty
-          v-if="!loading && questions.length === 0"
-          description="暂无可作答题目"
-        />
+        <el-empty v-if="!loading && questions.length === 0" description="暂无可作答题目" />
 
         <section
           v-for="(question, idx) in questions"
@@ -56,12 +47,7 @@
               <strong>{{ question.content }}</strong>
             </div>
             <div class="question-tags">
-              <el-tag
-                v-if="question.required"
-                type="danger"
-                size="small"
-                effect="plain"
-              >
+              <el-tag v-if="question.required" type="danger" size="small" effect="plain">
                 必答
               </el-tag>
               <el-tag size="small" effect="plain">
@@ -109,18 +95,12 @@
               placeholder="请输入"
             />
 
-            <el-input
-              v-else
-              v-model="answers[question.id].text"
-              placeholder="请输入数字或文字"
-            />
+            <el-input v-else v-model="answers[question.id].text" placeholder="请输入数字或文字" />
           </div>
         </section>
 
         <div class="submit-bar">
-          <el-button @click="router.push('/student-mental/list')">
-            取消
-          </el-button>
+          <el-button @click="router.push('/student-mental/list')"> 取消 </el-button>
           <el-button type="primary" :loading="submitting" @click="handleSubmit">
             提交答卷
           </el-button>
@@ -131,136 +111,128 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
-import { ArrowLeft } from "@element-plus/icons-vue";
-import {
-  studentGetQuestionnaireForTaking,
-  studentSubmitAnswers,
-} from "@/api/mental";
-import { useUserStore } from "@/store/modules/user";
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft } from '@element-plus/icons-vue'
+import { studentGetQuestionnaireForTaking, studentSubmitAnswers } from '@/api/mental'
+import { useUserStore } from '@/store/modules/user'
 
-const route = useRoute();
-const router = useRouter();
-const userStore = useUserStore();
-const questionnaireId = Number(route.params.id);
+const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
+const questionnaireId = Number(route.params.id)
 
-const loading = ref(false);
-const submitting = ref(false);
-const questionnaire = ref(null);
-const questions = ref([]);
-const answers = reactive({});
+const loading = ref(false)
+const submitting = ref(false)
+const questionnaire = ref(null)
+const questions = ref([])
+const answers = reactive({})
 
 const typeLabel = (type) =>
   ({
-    single_choice: "单选",
-    multiple_choice: "多选",
-    text: "简答",
-    scale: "量表",
+    single_choice: '单选',
+    multiple_choice: '多选',
+    text: '简答',
+    scale: '量表'
   })[type] ||
   type ||
-  "-";
+  '-'
 
 const parseOpts = (raw) => {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw)
   } catch {
-    return [];
+    return []
   }
-};
+}
 
-const requiredCount = computed(
-  () => questions.value.filter((question) => question.required).length,
-);
+const requiredCount = computed(() => questions.value.filter((question) => question.required).length)
 
 const isAnswered = (question) => {
-  const answer = answers[question.id];
-  if (!answer) return false;
-  if (question.questionType === "single_choice") {
-    return answer.singleIndex !== null && answer.singleIndex !== undefined;
+  const answer = answers[question.id]
+  if (!answer) return false
+  if (question.questionType === 'single_choice') {
+    return answer.singleIndex !== null && answer.singleIndex !== undefined
   }
-  if (question.questionType === "multiple_choice") {
-    return Array.isArray(answer.multiIndices) && answer.multiIndices.length > 0;
+  if (question.questionType === 'multiple_choice') {
+    return Array.isArray(answer.multiIndices) && answer.multiIndices.length > 0
   }
-  return !!answer.text?.trim();
-};
+  return !!answer.text?.trim()
+}
 
 const answeredCount = computed(
-  () => questions.value.filter((question) => isAnswered(question)).length,
-);
+  () => questions.value.filter((question) => isAnswered(question)).length
+)
 
 const progressPercent = computed(() => {
-  if (!questions.value.length) return 0;
-  return Math.round((answeredCount.value / questions.value.length) * 100);
-});
+  if (!questions.value.length) return 0
+  return Math.round((answeredCount.value / questions.value.length) * 100)
+})
 
 const fetchData = async () => {
-  loading.value = true;
+  loading.value = true
   try {
-    const res = await studentGetQuestionnaireForTaking(questionnaireId);
-    const data = res.data || {};
-    questionnaire.value = data.questionnaire || null;
-    questions.value = data.questions || [];
+    const res = await studentGetQuestionnaireForTaking(questionnaireId)
+    const data = res.data || {}
+    questionnaire.value = data.questionnaire || null
+    questions.value = data.questions || []
     questions.value.forEach((question) => {
-      answers[question.id] = { singleIndex: null, multiIndices: [], text: "" };
-    });
+      answers[question.id] = { singleIndex: null, multiIndices: [], text: '' }
+    })
   } catch (e) {
-    console.error("加载题目失败", e);
+    console.error('加载题目失败', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const handleSubmit = async () => {
   for (const question of questions.value) {
-    if (!question.required) continue;
+    if (!question.required) continue
     if (!isAnswered(question)) {
-      ElMessage.warning(`第 ${question.sortOrder || question.id} 题为必答`);
-      return;
+      ElMessage.warning(`第 ${question.sortOrder || question.id} 题为必答`)
+      return
     }
   }
-  const userId = userStore.userInfo?.id;
+  const userId = userStore.userInfo?.id
   if (!userId) {
-    ElMessage.error("未登录");
-    return;
+    ElMessage.error('未登录')
+    return
   }
   const payload = {
     userId,
     questionnaireId,
     answers: questions.value.map((question) => {
-      const answer = answers[question.id];
-      let optionIndices = [];
-      if (
-        question.questionType === "single_choice" &&
-        answer.singleIndex !== null
-      ) {
-        optionIndices = [answer.singleIndex];
-      } else if (question.questionType === "multiple_choice") {
-        optionIndices = answer.multiIndices || [];
+      const answer = answers[question.id]
+      let optionIndices = []
+      if (question.questionType === 'single_choice' && answer.singleIndex !== null) {
+        optionIndices = [answer.singleIndex]
+      } else if (question.questionType === 'multiple_choice') {
+        optionIndices = answer.multiIndices || []
       }
       return {
         questionId: question.id,
         optionIndices,
-        text: answer.text || "",
-      };
-    }),
-  };
-  submitting.value = true;
-  try {
-    const res = await studentSubmitAnswers(payload);
-    ElMessage.success("提交成功");
-    router.push(`/student-mental/result/${res.data.id}`);
-  } catch (e) {
-    console.error("提交失败", e);
-  } finally {
-    submitting.value = false;
+        text: answer.text || ''
+      }
+    })
   }
-};
+  submitting.value = true
+  try {
+    const res = await studentSubmitAnswers(payload)
+    ElMessage.success('提交成功')
+    router.push(`/student-mental/result/${res.data.id}`)
+  } catch (e) {
+    console.error('提交失败', e)
+  } finally {
+    submitting.value = false
+  }
+}
 
-onMounted(fetchData);
+onMounted(fetchData)
 </script>
 
 <style scoped lang="scss">

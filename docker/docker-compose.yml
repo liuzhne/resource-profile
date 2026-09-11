@@ -7,7 +7,7 @@ services:
       context: ../ai-inference-service
       dockerfile: Dockerfile
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
     environment:
       # 三个模型均运行在宿主机 llama.cpp（Metal GPU 加速），通过 host.docker.internal 访问：
       #   8091 = Qwen2.5 生成 LLM    （~/edu-ai/start-llm-server.sh）
@@ -27,6 +27,7 @@ services:
       # D 阶段：与 Java 服务共用同一 Redis（embedding/RAG 缓存）
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     networks:
       - edu-network
     depends_on:
@@ -58,11 +59,12 @@ services:
     container_name: milvus-minio
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      # 密钥经 docker/.env 覆盖（见 .env.example）；dev 默认 minioadmin 仅本地用
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
     ports:
-      - "9001:9001"  # MinIO Console（可选，方便查看对象存储）
-      - "9000:9000"  # S3 API
+      - "127.0.0.1:9001:9001"  # MinIO Console（可选，方便查看对象存储）
+      - "127.0.0.1:9000:9000"  # S3 API
     volumes:
       - ./milvus/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
@@ -84,8 +86,8 @@ services:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
     ports:
-      - "19530:19530"  # gRPC 端口（Python/Java SDK 连接）
-      - "9091:9091"    # RESTful API 端口
+      - "127.0.0.1:19530:19530"  # gRPC 端口（Python/Java SDK 连接）
+      - "127.0.0.1:9091:9091"    # RESTful API 端口
     volumes:
       - ./milvus/milvus:/var/lib/milvus
     healthcheck:
@@ -106,7 +108,7 @@ services:
     environment:
       MILVUS_URL: http://milvus-standalone:9091
     ports:
-      - "8000:3000"  # Attu Web UI
+      - "127.0.0.1:8000:3000"  # Attu Web UI
     depends_on:
       - milvus-standalone
     networks:
@@ -116,13 +118,14 @@ services:
     image: mysql:8.0
     container_name: edu-portrait-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      # 密钥经 docker/.env 覆盖（见 .env.example）；下方 :- 后为 dev 默认，仅本地起栈用，生产务必覆盖
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: edu_portrait
-      MYSQL_USER: edu
-      MYSQL_PASSWORD: edu123456
+      MYSQL_USER: ${MYSQL_USER:-edu}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-edu123456}
       TZ: Asia/Shanghai
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ../sql/init:/docker-entrypoint-initdb.d
@@ -134,8 +137,14 @@ services:
   redis:
     image: redis:7-alpine
     container_name: edu-portrait-redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    command:
+      - sh
+      - -c
+      - if [ -n "$$REDIS_PASSWORD" ]; then exec redis-server --requirepass "$$REDIS_PASSWORD"; else exec redis-server; fi
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -144,24 +153,42 @@ services:
   # Nacos
   nacos:
     image: nacos/nacos-server:v2.3.0
+    # 该 tag 无 arm64 清单；Apple Silicon 上经 QEMU 模拟跑 amd64（见下方 healthcheck 注释）
+    platform: linux/amd64
     container_name: edu-portrait-nacos
     environment:
       MODE: standalone
-      SPRING_DATASOURCE_PLATFORM: mysql
-      MYSQL_SERVICE_HOST: mysql
-      MYSQL_SERVICE_DB_NAME: nacos
-      MYSQL_SERVICE_PORT: 3306
-      MYSQL_SERVICE_USER: root
-      MYSQL_SERVICE_PASSWORD: root
-      NACOS_AUTH_ENABLE: "true"
-      NACOS_AUTH_TOKEN: SecretKey012345678901234567890123456789012345678901234567890123456789
-      NACOS_AUTH_IDENTITY_KEY: serverIdentity
-      NACOS_AUTH_IDENTITY_VALUE: security
+      # 本地 E2E：nacos 用内置 Derby（不接 mysql）。各服务的真实配置(MYSQL/JWT/REDIS/NACOS 账号)
+      # 已由本 compose 各服务 environment 段经 env 下发；Nacos 仅作服务发现 + 可选配置源(optional:nacos)，
+      # 空配置不影响启动。这样既免去 nacos 连 mysql(root) 的密码耦合，也不需要 sql/init 里的 nacos schema。
+      # 如需 mysql 持久化配置(prod 风格)：取消下面注释 + 往 sql/init 补 nacos mysql-schema.sql（建 nacos 库）。
+      # SPRING_DATASOURCE_PLATFORM: mysql
+      # MYSQL_SERVICE_HOST: mysql
+      # MYSQL_SERVICE_DB_NAME: nacos
+      # MYSQL_SERVICE_PORT: 3306
+      # MYSQL_SERVICE_USER: root
+      # MYSQL_SERVICE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      # 本地 E2E：关 nacos 服务端鉴权。配合上面的 Derby（空库无内置 nacos 账号），
+      # 开鉴权会让各服务以 nacos/nacos 注册时报 "user not found"。本栈全 127.0.0.1 绑定，
+      # 注册中心无需账号。prod 用 mysql+持久化时再开回 true（届时 schema 已含 nacos 用户）。
+      NACOS_AUTH_ENABLE: "false"
+      # 密钥经 docker/.env 覆盖（见 .env.example）。NACOS_AUTH_TOKEN 必须 Base64 且 ≥32 字节
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-SecretKey012345678901234567890123456789012345678901234567890123456789}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-security}
     ports:
-      - "8848:8848"
-      - "9848:9848"
+      - "127.0.0.1:8848:8848"
+      - "127.0.0.1:9848:9848"
     depends_on:
       - mysql
+    # nacos 在 arm64 上是 amd64 镜像经 QEMU 模拟，启动慢；加 readiness 探活，
+    # 让依赖它的服务用 condition: service_healthy 真正等就绪，避免注册时 "Client not connected"。
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
     networks:
       - edu-network
 
@@ -174,16 +201,202 @@ services:
     environment:
       NACOS_SERVER: nacos:8848
       NACOS_NAMESPACE:
+      # Nacos 控制台账号（prod 须在 Nacos 内改并经 .env 覆盖）
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
+      # A5：JWT 密钥（≥32 字符，否则 JwtUtil fail-fast）。dev 默认仅供本地起栈，生产务必经 env/Nacos 覆盖。
+      JWT_SECRET: ${JWT_SECRET:-edu-portrait-dev-jwt-secret-change-in-prod-0123456789}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
-      - nacos
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - edu-network
+
+  # ============================================================
+  # EduCare Agent 全栈（agent-service + 2 个 MCP server）
+  # 本地 LLM/embedding/reranker 仍在宿主 llama.cpp，通过 host.docker.internal 访问。
+  # AgentLoop 现为默认主路径（educare.agent.loop.enabled 默认 true）；回落 legacy 置 false。
+  # ============================================================
+
+  # H-1.2：student-data MCP server（Java，8094）
+  mcp-student-data:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.springboot
+      args:
+        MODULE: mcp-student-data
+    container_name: edu-portrait-mcp-student-data
+    environment:
+      NACOS_SERVER: nacos:8848
+      NACOS_NAMESPACE:
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-edu}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-edu123456}
+      # JWT 密钥：与 gateway/agent-service 同源。mcp-student-data 经 common 模块 JwtUtil 校验 token，
+      # 缺失即 fail-fast；原仅靠 Nacos common.yml 下发，nacos 不可用时无法启动，故补 env 兜底。
+      JWT_SECRET: ${JWT_SECRET:-edu-portrait-dev-jwt-secret-change-in-prod-0123456789}
+      # MCP 内部预共享 token（与 agent-service 同值才放行 /mcp）。空=仅网络隔离（A3）
+      EDUCARE_MCP_TOKEN: ${EDUCARE_MCP_TOKEN:-}
+    ports:
+      - "127.0.0.1:8094:8094"   # 仅本机回环：student-data MCP 直吐学生画像，禁外网绕过网关
+    depends_on:
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8094/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - edu-network
+    restart: unless-stopped
+
+  # H-1.3：knowledge-rag MCP server（Python FastMCP，8095，复用 ai-inference 镜像换 command）
+  knowledge-rag-mcp:
+    build:
+      context: ../ai-inference-service
+      dockerfile: Dockerfile
+    container_name: edu-portrait-knowledge-rag-mcp
+    command: ["python", "-m", "app.mcp.knowledge_rag_server"]
+    environment:
+      MILVUS_HOST: milvus-standalone
+      MILVUS_PORT: 19530
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      EMBEDDING_BASE_URL: http://host.docker.internal:8092/v1
+      EMBEDDING_MODEL: bge-large-zh-v1.5
+      RERANKER_BASE_URL: http://host.docker.internal:8093
+      RERANKER_ENABLED: "true"
+      MCP_KNOWLEDGE_RAG_PORT: "8095"
+      # MCP 内部预共享 token（与 agent-service 同值才放行 /mcp）。空=仅网络隔离（A3）
+      EDUCARE_MCP_TOKEN: ${EDUCARE_MCP_TOKEN:-}
+    ports:
+      - "127.0.0.1:8095:8095"   # 仅本机回环（同 8094）
+    depends_on:
+      - milvus-standalone
+      - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8095), 3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - edu-network
+    restart: unless-stopped
+
+  # H-2：agent-service（8087）—— Agent 编排主体，依赖两个 MCP server 就绪
+  agent-service:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.springboot
+      args:
+        MODULE: agent-service
+    container_name: edu-portrait-agent
+    environment:
+      NACOS_SERVER: nacos:8848
+      NACOS_NAMESPACE:
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-edu}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-edu123456}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # A5：JWT 密钥（≥32 字符 fail-fast）。dev 默认仅本地，生产经 env/Nacos 覆盖。
+      JWT_SECRET: ${JWT_SECRET:-edu-portrait-dev-jwt-secret-change-in-prod-0123456789}
+      # 宿主 llama.cpp（生成 LLM）
+      SPRING_AI_OPENAI_BASE_URL: http://host.docker.internal:8091
+      # 容器网络内的 MCP server
+      MCP_STUDENT_DATA_URL: http://mcp-student-data:8094
+      MCP_KNOWLEDGE_RAG_URL: http://knowledge-rag-mcp:8095
+      # AgentLoop 为默认主路径（亮点链）；回落 legacy 置 false
+      EDUCARE_AGENT_LOOP_ENABLED: "true"
+      # MCP 内部预共享 token（纵深防御）。空=仅网络隔离；设值则与 MCP server 互验（A3）
+      EDUCARE_MCP_TOKEN: ${EDUCARE_MCP_TOKEN:-}
+    ports:
+      - "127.0.0.1:8087:8087"   # 仅本机回环：禁外网直连 8087 绕过网关鉴权；本机 smoke/actuator 照常
+    depends_on:
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+      mcp-student-data:
+        condition: service_healthy
+      knowledge-rag-mcp:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8087/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+    networks:
+      - edu-network
+    restart: unless-stopped
+
+  # G-5.1：Langfuse self-hosted（v2，2 容器版）
+  # 用途：LLM 调用全链路 trace（agent-service ChatClient + ai-inference _call_llm_json 全部接入）
+  # 启动后访问 http://localhost:3001 注册账号 → 创建 project → 拿 PUBLIC/SECRET key 配到各 service
+  # 不放进默认 up 范围（resume 场景可不开），按需 `docker-compose up -d langfuse-server`
+  langfuse-postgres:
+    image: postgres:15-alpine
+    container_name: langfuse-postgres
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD:-langfuse123}
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_pg_data:/var/lib/postgresql/data
+    networks:
+      - edu-network
+    profiles:
+      - langfuse
+
+  langfuse-server:
+    image: langfuse/langfuse:2
+    container_name: langfuse-server
+    depends_on:
+      - langfuse-postgres
+    environment:
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse123}@langfuse-postgres:5432/langfuse
+      # 生产请改为强随机：openssl rand -base64 32
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-dev-only-replace-in-prod-aaaaaaaaaaaaaaaaaaaaaaaa}
+      SALT: ${LANGFUSE_SALT:-dev-only-replace-in-prod-bbbbbbbbbbbbbbbbbbbbbbbbb}
+      NEXTAUTH_URL: ${LANGFUSE_PUBLIC_URL:-http://localhost:3001}
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks:
+      - edu-network
+    profiles:
+      - langfuse
 
 volumes:
   mysql_data:
   redis_data:
+  langfuse_pg_data:
 
 networks:
   edu-network:

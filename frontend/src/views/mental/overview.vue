@@ -7,9 +7,7 @@
           汇总学生心理测评、预警名单与趋势变化，辅助辅导员快速识别重点关注对象。
         </div>
       </div>
-      <el-button :icon="Refresh" :loading="loading" @click="fetchData">
-        刷新
-      </el-button>
+      <el-button :icon="Refresh" :loading="loading" @click="fetchData"> 刷新 </el-button>
     </div>
 
     <div class="metric-grid">
@@ -50,19 +48,19 @@
         <el-table :data="warningList" stripe empty-text="暂无心理预警记录">
           <el-table-column prop="name" label="学生" min-width="120">
             <template #default="{ row }">
-              <div class="student-name">{{ row.name || "-" }}</div>
-              <div class="student-meta">{{ row.dept || "-" }}</div>
+              <div class="student-name">{{ row.name || '-' }}</div>
+              <div class="student-meta">{{ row.dept || '-' }}</div>
             </template>
           </el-table-column>
           <el-table-column prop="level" label="预警级别" width="110">
             <template #default="{ row }">
               <el-tag :type="warningLevelType(row.level)" effect="plain">
-                {{ row.level || "-" }}
+                {{ row.level || '-' }}
               </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="time" label="时间" width="130">
-            <template #default="{ row }">{{ row.time || "-" }}</template>
+            <template #default="{ row }">{{ row.time || '-' }}</template>
           </el-table-column>
           <el-table-column label="操作" width="90" fixed="right">
             <template #default>
@@ -88,138 +86,135 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from "vue";
-import { Refresh } from "@element-plus/icons-vue";
-import { getMentalOverview } from "@/api/mental";
-import { init } from "@/utils/charts";
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { Refresh } from '@element-plus/icons-vue'
+import { getMentalOverview } from '@/api/mental'
+import { init } from '@/utils/charts'
 
-const loading = ref(false);
-const trendChartRef = ref();
-let trendChart = null;
+const loading = ref(false)
+const trendChartRef = ref()
+let trendChart = null
 
 const overviewData = reactive({
   goodRate: 0,
   attentionRate: 0,
   interventionRate: 0,
-  todayCompleted: 0,
-});
+  todayCompleted: 0
+})
 
-const warningList = ref([]);
-const trendData = ref([]);
+const warningList = ref([])
+const trendData = ref([])
 
 const initTrendChart = () => {
-  if (!trendChartRef.value) return;
+  if (!trendChartRef.value) return
 
   if (!trendChart) {
-    trendChart = init(trendChartRef.value);
+    trendChart = init(trendChartRef.value)
   }
 
-  const months = [...new Set(trendData.value.map((item) => item.month))];
-  const goodData = [];
-  const attentionData = [];
-  const interventionData = [];
+  const months = [...new Set(trendData.value.map((item) => item.month))]
+  const goodData = []
+  const attentionData = []
+  const interventionData = []
 
   months.forEach((month) => {
-    const monthItems = trendData.value.filter((item) => item.month === month);
-    let good = 0;
-    let attention = 0;
-    let intervention = 0;
+    const monthItems = trendData.value.filter((item) => item.month === month)
+    let good = 0
+    let attention = 0
+    let intervention = 0
     monthItems.forEach((item) => {
-      const count = Number(item.count) || 0;
-      if (item.level === "正常" || item.level === "轻度") good += count;
-      else if (item.level === "中度") attention += count;
-      else if (item.level === "重度" || item.level === "高危")
-        intervention += count;
-    });
-    goodData.push(good);
-    attentionData.push(attention);
-    interventionData.push(intervention);
-  });
+      const count = Number(item.count) || 0
+      if (item.level === '正常' || item.level === '轻度') good += count
+      else if (item.level === '中度') attention += count
+      else if (item.level === '重度' || item.level === '高危') intervention += count
+    })
+    goodData.push(good)
+    attentionData.push(attention)
+    interventionData.push(intervention)
+  })
 
   trendChart.setOption({
-    color: ["#2f9e44", "#d9822b", "#d64545"],
-    tooltip: { trigger: "axis" },
+    color: ['#2f9e44', '#d9822b', '#d64545'],
+    tooltip: { trigger: 'axis' },
     legend: {
       top: 0,
       right: 0,
-      data: ["良好", "关注", "干预"],
+      data: ['良好', '关注', '干预']
     },
     grid: { left: 10, right: 20, top: 48, bottom: 8, containLabel: true },
     xAxis: {
-      type: "category",
+      type: 'category',
       boundaryGap: false,
       data: months,
-      axisLine: { lineStyle: { color: "#d8dee8" } },
-      axisLabel: { color: "#667085" },
+      axisLine: { lineStyle: { color: '#d8dee8' } },
+      axisLabel: { color: '#667085' }
     },
     yAxis: {
-      type: "value",
-      splitLine: { lineStyle: { color: "#edf1f7" } },
-      axisLabel: { color: "#667085" },
+      type: 'value',
+      splitLine: { lineStyle: { color: '#edf1f7' } },
+      axisLabel: { color: '#667085' }
     },
     series: [
       {
-        name: "良好",
-        type: "line",
+        name: '良好',
+        type: 'line',
         smooth: true,
         symbolSize: 7,
-        data: goodData,
+        data: goodData
       },
       {
-        name: "关注",
-        type: "line",
+        name: '关注',
+        type: 'line',
         smooth: true,
         symbolSize: 7,
-        data: attentionData,
+        data: attentionData
       },
       {
-        name: "干预",
-        type: "line",
+        name: '干预',
+        type: 'line',
         smooth: true,
         symbolSize: 7,
-        data: interventionData,
-      },
-    ],
-  });
-};
+        data: interventionData
+      }
+    ]
+  })
+}
 
 const fetchData = async () => {
-  loading.value = true;
+  loading.value = true
   try {
-    const res = await getMentalOverview();
-    const data = res.data || {};
-    overviewData.goodRate = data.goodRate || 0;
-    overviewData.attentionRate = data.attentionRate || 0;
-    overviewData.interventionRate = data.interventionRate || 0;
-    overviewData.todayCompleted = data.todayCompleted || 0;
-    warningList.value = data.warningList || [];
-    trendData.value = data.trendData || [];
-    initTrendChart();
+    const res = await getMentalOverview()
+    const data = res.data || {}
+    overviewData.goodRate = data.goodRate || 0
+    overviewData.attentionRate = data.attentionRate || 0
+    overviewData.interventionRate = data.interventionRate || 0
+    overviewData.todayCompleted = data.todayCompleted || 0
+    warningList.value = data.warningList || []
+    trendData.value = data.trendData || []
+    initTrendChart()
   } catch (e) {
-    console.error("获取心理概览数据失败", e);
+    console.error('获取心理概览数据失败', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const warningLevelType = (level) =>
-  ({ 高危: "danger", 重度: "danger", 中度: "warning", 轻度: "success" })[
-    level
-  ] || "info";
+  ({ 高危: 'danger', 重度: 'danger', 中度: 'warning', 轻度: 'success' })[level] || 'info'
 
 const resizeChart = () => {
-  trendChart?.resize();
-};
+  trendChart?.resize()
+}
 
 onMounted(() => {
-  fetchData();
-  window.addEventListener("resize", resizeChart);
-});
+  fetchData()
+  window.addEventListener('resize', resizeChart)
+})
 
 onUnmounted(() => {
-  window.removeEventListener("resize", resizeChart);
-  trendChart?.dispose();
-});
+  window.removeEventListener('resize', resizeChart)
+  trendChart?.dispose()
+})
 </script>
 
 <style scoped lang="scss">

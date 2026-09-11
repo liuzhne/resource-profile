@@ -1,7 +1,11 @@
 fastapi==0.110.0
-uvicorn[standard]==0.27.0
-pydantic==2.6.0
-python-dotenv==1.0.0
+# 放宽 pin：fastmcp 2.x / langfuse v2 依赖更新的 uvicorn/python-dotenv/httpx，原 ==0.27.0 等死锁导致
+# pip ResolutionImpossible（knowledge-rag/memory MCP 镜像构建失败）。改 >= 让解析器选满足各方的版本。
+uvicorn[standard]>=0.27.0
+# pydantic 必须 >=2.7.2：fastmcp(经 mcp) 硬性要求，原 ==2.6.0 与之冲突，
+# 致 pip 在 fastmcp 整个区间回溯（构建卡数十分钟）。fastapi 0.110/langchain 0.1.12/langfuse 均兼容 2.7+。
+pydantic>=2.7.2
+python-dotenv>=1.0.0
 
 # LangChain 生态
 langchain==0.1.12
@@ -11,8 +15,16 @@ langchain-openai==0.0.8
 pymilvus==2.4.1
 
 # 常用工具
-httpx==0.27.0
+httpx>=0.27.0
 tenacity==8.2.3
 
 # Redis 缓存（embedding / RAG 检索）
 redis==5.0.4
+
+# G-5.2：Langfuse 全链路 trace SDK（v2 系列，对应 self-hosted langfuse:2 server）
+# 三个环境变量缺失时 SDK 自动 no-op，不影响主流程
+langfuse>=2.36,<3.0
+
+# H-1.3：FastMCP — knowledge-rag MCP server 框架，原生支持 Streamable HTTP（spec 2025-03-26）
+# 与 langchain/langchain-openai/fastapi 走独立 server 进程（8095），不强耦合 fastapi 版本
+fastmcp>=2.3,<3.0

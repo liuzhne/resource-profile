@@ -1,0 +1,66 @@
+name: eval-gate
+
+# H-6：PR 触发风险识别 eval 回归门。
+# - validate-dataset：无条件跑，纯 stdlib 体检 50 例数据集完整性（id/input/risk_level），秒级、零依赖。
+# - eval-threshold：仅当仓库变量 EVAL_LLM_ENABLED=true 时跑（需要一个可达的推理端点 + LLM），
+#   对全集跑分并按等级一致率阈值（H-6.2：0.85）门控，可选与 baseline 对比是否回退。
+#   未配置推理端点的 fork / 默认环境只跑 validate-dataset，不会因缺 LLM 而误红。
+
+on:
+  pull_request:
+    paths:
+      - "eval/**"
+      - "ai-inference-service/**"
+      - "backend/agent-service/**"
+      - ".github/workflows/eval-gate.yml"
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: "等级一致率阈值"
+        default: "0.85"
+        required: false
+
+jobs:
+  validate-dataset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: 数据集体检（不调 LLM）
+        run: python eval/run_eval.py --validate-only --input eval/risk_assessment.jsonl
+
+  eval-threshold:
+    runs-on: ubuntu-latest
+    needs: validate-dataset
+    # 仅在配置了可达推理端点时启用（仓库 Settings → Variables 设 EVAL_LLM_ENABLED=true）
+    if: ${{ vars.EVAL_LLM_ENABLED == 'true' }}
+    env:
+      EVAL_LLM_BASE_URL: ${{ secrets.EVAL_LLM_BASE_URL }}
+      THRESHOLD: ${{ github.event.inputs.threshold || '0.85' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: 安装依赖
+        run: pip install httpx
+      - name: 跑全集 eval + 阈值门控
+        run: |
+          BASELINE_ARG=""
+          if [ -f eval/baseline.json ]; then BASELINE_ARG="--baseline eval/baseline.json"; fi
+          python eval/run_eval.py \
+            --base-url "$EVAL_LLM_BASE_URL" \
+            --threshold "$THRESHOLD" \
+            --out eval/run_results.json \
+            --md eval/run_results.md \
+            $BASELINE_ARG
+      - name: 上传 eval 报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: |
+            eval/run_results.json
+            eval/run_results.md

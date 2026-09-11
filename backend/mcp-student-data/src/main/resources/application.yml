@@ -1,0 +1,74 @@
+server:
+  port: ${PORT:8094}
+
+# MCP 内部预共享 token（纵深防御，A3）。空=仅靠 127.0.0.1 网络隔离（默认）；
+# 非空时 McpTokenFilter 要求 /mcp 请求带匹配的 X-MCP-Token 头，否则 401。
+educare:
+  mcp:
+    token: ${EDUCARE_MCP_TOKEN:}
+
+spring:
+  application:
+    name: mcp-student-data
+  cloud:
+    openfeign:
+      okhttp:
+        enabled: true
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 10000
+    nacos:
+      discovery:
+        enabled: ${SPRING_CLOUD_NACOS_DISCOVERY_ENABLED:true}
+        register-enabled: ${SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED:true}
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
+        service: ${spring.application.name}
+      config:
+        enabled: ${SPRING_CLOUD_NACOS_CONFIG_ENABLED:true}
+        import-check:
+          enabled: false
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        identity-key: ${NACOS_AUTH_IDENTITY_KEY:serverIdentity}
+        identity-value: ${NACOS_AUTH_IDENTITY_VALUE:security}
+        file-extension: yml
+
+  # Spring AI 1.1.6 GA：MCP server starter 配置
+  # H-1.1.6 决策：协议从 SSE 切换到 Streamable HTTP（MCP spec 2025-03-26 推荐）
+  ai:
+    mcp:
+      server:
+        name: student-data
+        version: 1.0.0
+        # SYNC：4 个 tool 都是同步 Feign 调用，不用 reactive。
+        type: SYNC
+        # Streamable HTTP：单端点 /mcp 同时承担 client→server POST + server→client SSE/GET
+        protocol: STREAMABLE
+        streamable-http:
+          # 默认即 /mcp；显式声明便于 ops 排查
+          mcp-endpoint: /mcp
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    com.edu.mcp.student: info

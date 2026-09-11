@@ -19,32 +19,13 @@ public interface QuestionService {
  */
 Question save(Question question);
 
-    /**
- * Persists multiple Question entities and associates them with the specified questionnaire.
- *
- * @param questionnaireId the ID of the questionnaire to associate the saved questions with
- * @param questions the list of Question entities to persist
- */
-void saveBatch(Long questionnaireId, List<Question> questions);
+    void update(Question question);
 
-    /**
- * Updates an existing Question using the values contained in the provided entity.
- *
- * @param question the Question entity whose identifier determines which record to update; its fields contain the new values to persist
- */
-void update(Question question);
+    void delete(Long questionId);
 
-    /**
- * Deletes the Question identified by the given questionId.
- *
- * @param questionId the identifier of the Question to remove
- */
-void delete(Long questionId);
+    /** B-1：删除某问卷下全部题目（Excel 重新导入前清空）。 */
+    void deleteByQuestionnaireId(Long questionnaireId);
 
-    /**
- * Deletes all Question records associated with the specified questionnaire.
- *
- * @param questionnaireId the identifier of the questionnaire whose questions will be removed
- */
-void deleteByQuestionnaireId(Long questionnaireId);
+    /** B-1：批量保存题目到指定问卷（回填 questionnaireId / sort_order）。 */
+    void saveBatch(Long questionnaireId, List<Question> questions);
 }

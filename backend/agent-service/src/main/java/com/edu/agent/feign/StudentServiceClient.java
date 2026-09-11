@@ -13,7 +13,11 @@ import java.util.Map;
  * 调用 student-service (Port: 8084)
  * Gateway 路由: /student/** → student-service (StripPrefix=0)
  */
-@FeignClient(name = "student-service", fallbackFactory = StudentServiceClientFallbackFactory.class)
+@FeignClient(
+        name = "student-service",
+        url = "${STUDENT_SERVICE_URL:}",
+        fallbackFactory = StudentServiceClientFallbackFactory.class
+)
 public interface StudentServiceClient {
 
     /**

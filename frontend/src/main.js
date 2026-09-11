@@ -1,8 +1,8 @@
-import { createApp } from "vue";
-import { createPinia } from "pinia";
-import App from "./App.vue";
-import router from "./router";
-import permissionDirective from "./directives/permission";
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
+import router from './router'
+import permissionDirective from './directives/permission'
 import {
   ArrowDown,
   Avatar,
@@ -31,12 +31,12 @@ import {
   User,
   UserFilled,
   Warning,
-  WarningFilled,
-} from "@element-plus/icons-vue";
+  WarningFilled
+} from '@element-plus/icons-vue'
 
-import "./styles/index.scss";
+import './styles/index.scss'
 
-const app = createApp(App);
+const app = createApp(App)
 
 const icons = {
   ArrowDown,
@@ -66,15 +66,15 @@ const icons = {
   User,
   UserFilled,
   Warning,
-  WarningFilled,
-};
+  WarningFilled
+}
 
 Object.entries(icons).forEach(([name, component]) => {
-  app.component(name, component);
-});
+  app.component(name, component)
+})
 
-app.use(createPinia());
-app.use(router);
-app.use(permissionDirective);
+app.use(createPinia())
+app.use(router)
+app.use(permissionDirective)
 
-app.mount("#app");
+app.mount('#app')

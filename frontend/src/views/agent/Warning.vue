@@ -8,14 +8,8 @@
         </div>
       </div>
       <div class="page-actions">
-        <el-button :icon="Refresh" :loading="loading" @click="fetchList">
-          刷新
-        </el-button>
-        <el-button
-          type="primary"
-          :icon="MagicStick"
-          @click="triggerForm.visible = true"
-        >
+        <el-button :icon="Refresh" :loading="loading" @click="fetchList"> 刷新 </el-button>
+        <el-button type="primary" :icon="MagicStick" @click="triggerForm.visible = true">
           触发分析
         </el-button>
       </div>
@@ -68,36 +62,19 @@
             clearable
             style="width: 160px"
           >
-            <el-option
-              v-for="o in RISK_OPTIONS"
-              :key="o.value"
-              :label="o.label"
-              :value="o.value"
-            />
+            <el-option v-for="o in RISK_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search" @click="handleSearch">
-            查询
-          </el-button>
+          <el-button type="primary" :icon="Search" @click="handleSearch"> 查询 </el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
         <el-form-item style="margin-left: auto">
-          <el-tag
-            v-if="sseConnected"
-            type="success"
-            effect="plain"
-            class="status-tag"
-          >
+          <el-tag v-if="sseConnected" type="success" effect="plain" class="status-tag">
             <span class="dot dot-live"></span>
             实时推送已连接
           </el-tag>
-          <el-tag
-            v-else-if="hasInProgressTask"
-            type="warning"
-            effect="plain"
-            class="status-tag"
-          >
+          <el-tag v-else-if="hasInProgressTask" type="warning" effect="plain" class="status-tag">
             <el-icon class="poll-icon"><Loading /></el-icon>
             自动刷新中
           </el-tag>
@@ -127,7 +104,7 @@
         <el-table-column label="任务" min-width="150">
           <template #default="{ row }">
             <div class="task-title">任务 #{{ row.id }}</div>
-            <div class="task-sub">学生 ID：{{ row.studentId || "-" }}</div>
+            <div class="task-sub">学生 ID：{{ row.studentId || '-' }}</div>
           </template>
         </el-table-column>
         <el-table-column label="处理状态" min-width="170">
@@ -141,28 +118,18 @@
         <el-table-column label="风险判断" min-width="220">
           <template #default="{ row }">
             <div class="risk-line">
-              <el-tag
-                v-if="row.riskLevel"
-                :type="riskType(row.riskLevel)"
-                effect="plain"
-              >
+              <el-tag v-if="row.riskLevel" :type="riskType(row.riskLevel)" effect="plain">
                 {{ riskLabel(row.riskLevel) }}
               </el-tag>
               <span v-else class="muted">未评估</span>
-              <span class="risk-type">{{
-                row.riskType || primaryRiskType(row) || "-"
-              }}</span>
+              <span class="risk-type">{{ row.riskType || primaryRiskType(row) || '-' }}</span>
             </div>
           </template>
         </el-table-column>
         <el-table-column label="时间" min-width="210">
           <template #default="{ row }">
-            <div class="time-row">
-              <span>创建</span>{{ formatTime(row.createdAt) || "-" }}
-            </div>
-            <div class="time-row">
-              <span>完成</span>{{ formatTime(row.completedAt) || "-" }}
-            </div>
+            <div class="time-row"><span>创建</span>{{ formatTime(row.createdAt) || '-' }}</div>
+            <div class="time-row"><span>完成</span>{{ formatTime(row.completedAt) || '-' }}</div>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="130" fixed="right">
@@ -216,11 +183,7 @@
       </el-form>
       <template #footer>
         <el-button @click="triggerForm.visible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="triggerForm.submitting"
-          @click="handleTrigger"
-        >
+        <el-button type="primary" :loading="triggerForm.submitting" @click="handleTrigger">
           立即触发
         </el-button>
       </template>
@@ -229,241 +192,223 @@
 </template>
 
 <script setup>
-const userStore = useUserStore();
-import { ref, reactive, computed, onMounted, onUnmounted } from "vue";
-import { useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
-import {
-  Refresh,
-  MagicStick,
-  Loading,
-  Search,
-  View,
-} from "@element-plus/icons-vue";
-import { getAgentTaskList, triggerAgentTask } from "@/api/agent";
-import { fetchEventSource } from "@microsoft/fetch-event-source";
-import { useUserStore } from "@/store/modules/user";
+const userStore = useUserStore()
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Refresh, MagicStick, Loading, Search, View } from '@element-plus/icons-vue'
+import { getAgentTaskList, triggerAgentTask } from '@/api/agent'
+import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { useUserStore } from '@/store/modules/user'
 
-const router = useRouter();
-const loading = ref(true);
-const currentPage = ref(1);
-const pageSize = ref(20);
-const total = ref(0);
-const taskList = ref([]);
+const router = useRouter()
+const loading = ref(true)
+const currentPage = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+const taskList = ref([])
 
-const searchForm = reactive({ status: "", riskLevel: "" });
+const searchForm = reactive({ status: '', riskLevel: '' })
 const triggerForm = reactive({
   visible: false,
-  studentId: "",
-  submitting: false,
-});
+  studentId: '',
+  submitting: false
+})
 
 const STATUS_OPTIONS = [
-  { value: "PENDING", label: "待处理" },
-  { value: "RISK_ANALYZING", label: "风险识别中" },
-  { value: "KNOWLEDGE_RETRIEVING", label: "知识检索中" },
-  { value: "PLAN_GENERATING", label: "方案生成中" },
-  { value: "COMPLIANCE_CHECKING", label: "合规审核中" },
-  { value: "COMPLETED", label: "已完成" },
-  { value: "REJECTED", label: "合规未通过" },
-  { value: "FAILED", label: "系统异常" },
-];
+  { value: 'PENDING', label: '待处理' },
+  { value: 'RISK_ANALYZING', label: '风险识别中' },
+  { value: 'KNOWLEDGE_RETRIEVING', label: '知识检索中' },
+  { value: 'PLAN_GENERATING', label: '方案生成中' },
+  { value: 'COMPLIANCE_CHECKING', label: '合规审核中' },
+  { value: 'COMPLETED', label: '已完成' },
+  { value: 'REJECTED', label: '合规未通过' },
+  { value: 'FAILED', label: '系统异常' }
+]
 const RISK_OPTIONS = [
-  { value: "HIGH", label: "高风险" },
-  { value: "MEDIUM", label: "中风险" },
-  { value: "LOW", label: "低风险" },
-  { value: "NONE", label: "无风险" },
-];
+  { value: 'HIGH', label: '高风险' },
+  { value: 'MEDIUM', label: '中风险' },
+  { value: 'LOW', label: '低风险' },
+  { value: 'NONE', label: '无风险' }
+]
 
 const IN_PROGRESS_STATUSES = new Set([
-  "PENDING",
-  "RISK_ANALYZING",
-  "KNOWLEDGE_RETRIEVING",
-  "PLAN_GENERATING",
-  "COMPLIANCE_CHECKING",
-]);
+  'PENDING',
+  'RISK_ANALYZING',
+  'KNOWLEDGE_RETRIEVING',
+  'PLAN_GENERATING',
+  'COMPLIANCE_CHECKING'
+])
 
 const taskSummary = computed(() => ({
-  high: taskList.value.filter((item) => item.riskLevel === "HIGH").length,
-  processing: taskList.value.filter((item) =>
-    IN_PROGRESS_STATUSES.has(item.status),
-  ).length,
-  completed: taskList.value.filter((item) => item.status === "COMPLETED")
-    .length,
-}));
+  high: taskList.value.filter((item) => item.riskLevel === 'HIGH').length,
+  processing: taskList.value.filter((item) => IN_PROGRESS_STATUSES.has(item.status)).length,
+  completed: taskList.value.filter((item) => item.status === 'COMPLETED').length
+}))
 
 const fetchList = async () => {
-  loading.value = true;
+  loading.value = true
   try {
     const res = await getAgentTaskList({
       page: currentPage.value,
       size: pageSize.value,
       status: searchForm.status || undefined,
-      riskLevel: searchForm.riskLevel || undefined,
-    });
-    taskList.value = res.data?.records || [];
-    total.value = Number(res.data?.total) || 0;
+      riskLevel: searchForm.riskLevel || undefined
+    })
+    taskList.value = res.data?.records || []
+    total.value = Number(res.data?.total) || 0
   } catch (e) {
-    console.error("获取任务列表失败", e);
+    console.error('获取任务列表失败', e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const handleSearch = () => {
-  currentPage.value = 1;
-  fetchList();
-};
+  currentPage.value = 1
+  fetchList()
+}
 
 const handleReset = () => {
-  searchForm.status = "";
-  searchForm.riskLevel = "";
-  currentPage.value = 1;
-  fetchList();
-};
+  searchForm.status = ''
+  searchForm.riskLevel = ''
+  currentPage.value = 1
+  fetchList()
+}
 
 const handleTrigger = async () => {
-  const sid = triggerForm.studentId.trim();
+  const sid = triggerForm.studentId.trim()
   if (!sid) {
-    ElMessage.warning("请输入学生 ID");
-    return;
+    ElMessage.warning('请输入学生 ID')
+    return
   }
-  triggerForm.submitting = true;
+  triggerForm.submitting = true
   try {
-    const res = await triggerAgentTask(sid);
-    ElMessage.success(`已触发任务 #${res.data}`);
-    triggerForm.visible = false;
-    triggerForm.studentId = "";
-    currentPage.value = 1;
-    fetchList();
+    const res = await triggerAgentTask(sid)
+    ElMessage.success(`已触发任务 #${res.data}`)
+    triggerForm.visible = false
+    triggerForm.studentId = ''
+    currentPage.value = 1
+    fetchList()
   } catch (e) {
-    console.error("触发失败", e);
+    console.error('触发失败', e)
   } finally {
-    triggerForm.submitting = false;
+    triggerForm.submitting = false
   }
-};
+}
 
 const hasInProgressTask = computed(() =>
-  taskList.value.some((t) => IN_PROGRESS_STATUSES.has(t.status)),
-);
+  taskList.value.some((t) => IN_PROGRESS_STATUSES.has(t.status))
+)
 
 // ====== F-2：SSE 实时推送 + 轮询兜底 ======
 // 设计：SSE 推送 4 阶段流水线终态（COMPLETED / REJECTED / FAILED）；
 // 中间状态（RISK_ANALYZING 等）仍靠 3s 轮询，仅在 hasInProgressTask 时打 API。
 // SSE 断开时由 fetch-event-source 自动指数退避重连，期间轮询继续兜底。
-let sseAbortCtrl = null;
-const sseConnected = ref(false);
+let sseAbortCtrl = null
+const sseConnected = ref(false)
 
 const connectSse = async () => {
-  if (sseAbortCtrl) sseAbortCtrl.abort();
-  sseAbortCtrl = new AbortController();
+  if (sseAbortCtrl) sseAbortCtrl.abort()
+  sseAbortCtrl = new AbortController()
   try {
-    await fetchEventSource("/api/agent/api/v1/warning/stream", {
+    await fetchEventSource('/api/agent/api/v1/warning/stream', {
       signal: sseAbortCtrl.signal,
-      headers: userStore.token
-        ? { Authorization: `Bearer ${userStore.token}` }
-        : {},
+      headers: userStore.token ? { Authorization: `Bearer ${userStore.token}` } : {},
       openWhenHidden: true, // 切到后台标签页也保持连接
       onopen: async (resp) => {
-        if (
-          resp.ok &&
-          resp.headers.get("content-type")?.includes("text/event-stream")
-        ) {
-          sseConnected.value = true;
+        if (resp.ok && resp.headers.get('content-type')?.includes('text/event-stream')) {
+          sseConnected.value = true
         } else {
           // 非 200 或非 SSE 内容 —— 直接抛错，让 fetch-event-source 走 onerror
-          throw new Error(`SSE 握手失败 status=${resp.status}`);
+          throw new Error(`SSE 握手失败 status=${resp.status}`)
         }
       },
       onmessage: (ev) => {
         // 后端事件名：hello / warning。心跳是注释行（: ping），onmessage 不会收到
-        if (ev.event === "warning") {
+        if (ev.event === 'warning') {
           // 收到任意终态事件 → 刷新列表
-          fetchList();
+          fetchList()
         }
       },
       onerror: (err) => {
-        sseConnected.value = false;
+        sseConnected.value = false
         // 返回 undefined 让 fetch-event-source 走默认指数退避重连；
         // 抛异常则停止重连（这里我们想自动重连，故不抛）
-        console.warn("SSE 连接异常，将自动重连", err?.message || err);
+        console.warn('SSE 连接异常，将自动重连', err?.message || err)
       },
       onclose: () => {
-        sseConnected.value = false;
-      },
-    });
+        sseConnected.value = false
+      }
+    })
   } catch (e) {
-    sseConnected.value = false;
+    sseConnected.value = false
     // 主动 abort 不算错误
-    if (e?.name !== "AbortError") {
-      console.warn("SSE 终止", e);
+    if (e?.name !== 'AbortError') {
+      console.warn('SSE 终止', e)
     }
   }
-};
+}
 
-let pollTimer = null;
+let pollTimer = null
 onMounted(() => {
-  fetchList();
+  fetchList()
   pollTimer = setInterval(() => {
-    if (hasInProgressTask.value) fetchList();
-  }, 3000);
-  connectSse();
-});
+    if (hasInProgressTask.value) fetchList()
+  }, 3000)
+  connectSse()
+})
 onUnmounted(() => {
-  if (sseAbortCtrl) sseAbortCtrl.abort();
-  if (pollTimer) clearInterval(pollTimer);
-});
+  if (sseAbortCtrl) sseAbortCtrl.abort()
+  if (pollTimer) clearInterval(pollTimer)
+})
 
 const statusType = (status) =>
   ({
-    PENDING: "info",
-    RISK_ANALYZING: "warning",
-    KNOWLEDGE_RETRIEVING: "warning",
-    PLAN_GENERATING: "warning",
-    COMPLIANCE_CHECKING: "warning",
-    COMPLETED: "success",
-    REJECTED: "danger",
-    FAILED: "danger",
-  })[status] || "info";
+    PENDING: 'info',
+    RISK_ANALYZING: 'warning',
+    KNOWLEDGE_RETRIEVING: 'warning',
+    PLAN_GENERATING: 'warning',
+    COMPLIANCE_CHECKING: 'warning',
+    COMPLETED: 'success',
+    REJECTED: 'danger',
+    FAILED: 'danger'
+  })[status] || 'info'
 const statusLabel = (status) =>
-  STATUS_OPTIONS.find((item) => item.value === status)?.label || status || "-";
+  STATUS_OPTIONS.find((item) => item.value === status)?.label || status || '-'
 const statusHint = (status) =>
   ({
-    PENDING: "等待进入分析队列",
-    RISK_ANALYZING: "正在识别风险信号",
-    KNOWLEDGE_RETRIEVING: "正在匹配知识库依据",
-    PLAN_GENERATING: "正在生成干预方案",
-    COMPLIANCE_CHECKING: "正在进行合规审核",
-    COMPLETED: "报告已生成",
-    REJECTED: "需人工复核后处理",
-    FAILED: "请排查任务日志",
-  })[status] || "暂无状态说明";
+    PENDING: '等待进入分析队列',
+    RISK_ANALYZING: '正在识别风险信号',
+    KNOWLEDGE_RETRIEVING: '正在匹配知识库依据',
+    PLAN_GENERATING: '正在生成干预方案',
+    COMPLIANCE_CHECKING: '正在进行合规审核',
+    COMPLETED: '报告已生成',
+    REJECTED: '需人工复核后处理',
+    FAILED: '请排查任务日志'
+  })[status] || '暂无状态说明'
 
 const riskType = (risk) =>
-  ({ NONE: "info", LOW: "success", MEDIUM: "warning", HIGH: "danger" })[risk] ||
-  "info";
-const riskLabel = (risk) =>
-  RISK_OPTIONS.find((item) => item.value === risk)?.label || risk || "-";
+  ({ NONE: 'info', LOW: 'success', MEDIUM: 'warning', HIGH: 'danger' })[risk] || 'info'
+const riskLabel = (risk) => RISK_OPTIONS.find((item) => item.value === risk)?.label || risk || '-'
 
-const rowClass = ({ row }) => (row.riskLevel === "HIGH" ? "high-risk-row" : "");
+const rowClass = ({ row }) => (row.riskLevel === 'HIGH' ? 'high-risk-row' : '')
 
 const canViewReport = (row) =>
-  ["COMPLETED", "REJECTED", "FAILED"].includes(row.status) ||
-  row.riskAnalysisResult;
+  ['COMPLETED', 'REJECTED', 'FAILED'].includes(row.status) || row.riskAnalysisResult
 
-const viewReport = (row) => router.push(`/agent/report/${row.id}`);
+const viewReport = (row) => router.push(`/agent/report/${row.id}`)
 
 const primaryRiskType = (row) => {
   try {
-    const result = JSON.parse(row.riskAnalysisResult || "{}");
-    return result.primary_risk_type || "";
+    const result = JSON.parse(row.riskAnalysisResult || '{}')
+    return result.primary_risk_type || ''
   } catch {
-    return "";
+    return ''
   }
-};
+}
 
-const formatTime = (value) =>
-  value ? String(value).replace("T", " ").slice(0, 19) : "";
+const formatTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 19) : '')
 </script>
 
 <style scoped lang="scss">

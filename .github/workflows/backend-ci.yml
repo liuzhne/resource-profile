@@ -1,0 +1,61 @@
+name: backend-ci
+
+# T15/A8：测试门禁。PR 触及后端/Python 即跑全量单测，必须全绿才可合并。
+# 安全关键单测（网关鉴权 JwtAuthGlobalFilter、越权 AccessGuard + 各 controller、字段权限
+# FieldPermissionAdvice、登录链 AuthServiceImpl）在此回归。
+# 覆盖率门：`mvn clean test` 已绑定 jacoco check（父 pom），对已补齐单测的安全关键类设硬阈值
+# （当前 AuthServiceImpl 行覆盖 ≥80%，覆盖率掉到阈值下即 CI 红）。仍采「定向 includes 门」而非
+# 全局百分比门——历史业务模块覆盖稀疏，全局阈值会误红；随核心模块补测往 jacoco includes 追加类逐步收紧。
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "ai-inference-service/**"
+      - "docker/.env.example"
+      - "scripts/preflight-prod.sh"
+      - "scripts/test-preflight-prod.sh"
+      - ".github/workflows/backend-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  java-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: mvn clean test (all modules)
+        working-directory: backend
+        # Spring AI 1.1.6 GA 在 Maven Central，无需 milestone repo
+        # clean test 会触发 jacoco prepare-agent/report/check：安全关键类覆盖率掉阈值下即此步红
+        run: mvn -B -ntp clean test
+      - name: 生产 preflight 回归
+        run: bash scripts/test-preflight-prod.sh
+      - name: 归档 JaCoCo 覆盖率报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage
+          path: backend/*/target/site/jacoco/
+          if-no-files-found: ignore
+
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: ai-inference-service/tests/requirements.txt
+      - name: 安装测试依赖
+        working-directory: ai-inference-service
+        run: pip install -r tests/requirements.txt
+      - name: unittest（无外部服务）
+        working-directory: ai-inference-service
+        # HTTP/RAG/MCP 边界通过 stub/ASGI transport 验证，无需 Redis/Milvus/LLM。
+        run: python -m unittest discover -s tests -p "test_*.py" -v
