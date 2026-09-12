@@ -1,262 +1,194 @@
 <template>
-  <div class="page-container">
-    <el-page-header title="学生详情" @back="goBack" />
+  <div>
+    <div class="detail-head">
+      <span class="back-btn" @click="goBack">
+        <el-icon :size="12"><ArrowLeft /></el-icon>返回
+      </span>
+      <span class="detail-title">学生详情</span>
+    </div>
 
-    <el-row :gutter="20" class="detail-content">
-      <el-col :xs="24" :lg="8">
-        <el-card>
-          <div class="profile-header">
-            <el-avatar :size="100" :src="studentInfo.avatar" />
-            <h3>{{ studentInfo.name }}</h3>
-            <p class="subtitle">{{ studentInfo.dept }} · {{ studentInfo.major }}</p>
-            <el-tag>{{ studentInfo.grade }}</el-tag>
+    <ChartState
+      :loading="loading"
+      :error="loadError"
+      :empty="!loading && !loadError && !info.id"
+      empty-text="未找到该学生"
+      height="320px"
+      @retry="fetchDetail"
+    >
+      <div class="detail-grid">
+        <!-- 左：档案卡 -->
+        <aside class="glass-panel profile-card">
+          <div class="profile-top">
+            <span class="avatar-lg student-avatar">{{ initialOf(info.name) }}</span>
+            <h3 class="profile-name">{{ info.name || '—' }}</h3>
+            <p class="profile-sub">{{ deptMajor }}</p>
+            <span class="profile-tag">{{ info.grade ? `${info.grade}级` : '—' }}</span>
           </div>
 
-          <el-divider />
-
-          <div class="info-list">
-            <div class="info-item">
-              <span class="label">学号：</span>
-              <span class="value">{{ studentInfo.studentId }}</span>
+          <div class="mini-stats">
+            <div class="mini-stat">
+              <div class="mini-value accent">{{ formatGpa(info.gpa) }}</div>
+              <div class="mini-label">GPA</div>
             </div>
-            <div class="info-item">
-              <span class="label">入学时间：</span>
-              <span class="value">{{ studentInfo.enrollmentDate }}</span>
+            <div class="mini-stat">
+              <div class="mini-value">—</div>
+              <div class="mini-label">专业排名</div>
             </div>
-            <div class="info-item">
-              <span class="label">联系电话：</span>
-              <span class="value">{{ studentInfo.phone }}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">电子邮箱：</span>
-              <span class="value">{{ studentInfo.email }}</span>
+            <div class="mini-stat">
+              <div class="mini-value">{{ info.credits ?? '—' }}</div>
+              <div class="mini-label">已修学分</div>
             </div>
           </div>
-        </el-card>
-      </el-col>
 
-      <el-col :xs="24" :lg="16">
-        <el-card>
-          <el-tabs v-model="activeTab">
-            <el-tab-pane label="学业成绩" name="grades">
-              <el-row :gutter="20" class="grade-stats">
-                <el-col :span="8">
-                  <div class="stat-card">
-                    <div class="stat-value highlight">{{ studentInfo.gpa }}</div>
-                    <div class="stat-label">GPA</div>
-                  </div>
-                </el-col>
-                <el-col :span="8">
-                  <div class="stat-card">
-                    <div class="stat-value">{{ studentInfo.rank }}</div>
-                    <div class="stat-label">专业排名</div>
-                  </div>
-                </el-col>
-                <el-col :span="8">
-                  <div class="stat-card">
-                    <div class="stat-value">{{ studentInfo.credits }}</div>
-                    <div class="stat-label">已修学分</div>
-                  </div>
-                </el-col>
-              </el-row>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="k">学号</span><span class="v tnum">{{ info.studentId || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="k">班级</span><span class="v">{{ info.className || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="k">入学时间</span>
+              <span class="v tnum">{{ info.enrollmentDate || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="k">预计毕业</span>
+              <span class="v tnum">{{ info.expectedGraduation || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="k">状态</span>
+              <span class="v">
+                <span class="badge" :style="statusStyle(info.status)">
+                  {{ statusLabel(info.status) }}
+                </span>
+              </span>
+            </div>
+          </div>
+        </aside>
 
-              <el-divider />
+        <!-- 右：分页签内容 -->
+        <section class="glass-panel detail-main">
+          <div class="detail-tabs">
+            <div class="seg-control">
+              <button
+                v-for="t in tabs"
+                :key="t.key"
+                type="button"
+                class="seg-item"
+                :class="{ 'is-active': activeTab === t.key }"
+                @click="activeTab = t.key"
+              >
+                {{ t.label }}
+              </button>
+            </div>
+          </div>
 
-              <h4>最近学期成绩</h4>
-              <el-table :data="gradeRecords" stripe style="margin-top: 16px">
-                <el-table-column prop="semester" label="学期" />
-                <el-table-column prop="course" label="课程" />
-                <el-table-column prop="credit" label="学分" width="80" />
-                <el-table-column prop="score" label="成绩" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="row.score >= 90 ? 'success' : row.score >= 60 ? '' : 'danger'">
-                      {{ row.score }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="gpa" label="绩点" width="80" />
-              </el-table>
-            </el-tab-pane>
+          <div class="detail-tab-body">
+            <!-- 学业成绩 -->
+            <template v-if="activeTab === 'grades'">
+              <div class="section-title">最近学期成绩</div>
+              <p class="no-source">
+                <el-icon :size="14"><WarningFilled /></el-icon>
+                <span>
+                  课程成绩暂无数据来源：`student_info` 表与 `/student/{id}` 接口均不含成绩明细，
+                  需后端新增成绩表与接口后才能填充。此处保留原型版式。
+                </span>
+              </p>
+            </template>
 
-            <el-tab-pane label="综合素质" name="quality">
-              <el-timeline>
-                <el-timeline-item
-                  v-for="(item, index) in qualityRecords"
-                  :key="index"
-                  :timestamp="item.date"
-                  :type="item.type"
-                >
-                  <h4>{{ item.title }}</h4>
-                  <p>{{ item.description }}</p>
-                  <el-tag size="small">{{ item.category }}</el-tag>
-                </el-timeline-item>
-              </el-timeline>
-            </el-tab-pane>
+            <!-- 综合素质 -->
+            <template v-else-if="activeTab === 'quality'">
+              <div class="section-title">综合素质记录</div>
+              <p class="no-source">
+                <el-icon :size="14"><WarningFilled /></el-icon>
+                <span>
+                  竞赛、荣誉、志愿服务等记录暂无数据来源：现有接口未返回该类数据，需后端新增。
+                </span>
+              </p>
+            </template>
 
-            <el-tab-pane label="心理健康" name="mental">
-              <el-descriptions :column="2" border>
-                <el-descriptions-item label="最近测评">{{
-                  studentInfo.lastMentalTest
-                }}</el-descriptions-item>
-                <el-descriptions-item label="测评结果">
-                  <el-tag type="success">{{ studentInfo.mentalStatus }}</el-tag>
-                </el-descriptions-item>
-                <el-descriptions-item label="辅导员关注" :span="2">{{
-                  studentInfo.counselorNotes || '无'
-                }}</el-descriptions-item>
-              </el-descriptions>
-            </el-tab-pane>
-          </el-tabs>
-        </el-card>
-      </el-col>
-    </el-row>
+            <!-- 心理健康 -->
+            <template v-else>
+              <div class="section-title">心理健康</div>
+              <p class="no-source">
+                <el-icon :size="14"><WarningFilled /></el-icon>
+                <span>
+                  心理测评数据在 `/mental/student/**` 下，需按学生本人 `userId` 查询， 教师侧按学生
+                  `id` 查看的接口尚未提供，故此处不展示。
+                </span>
+              </p>
+            </template>
+          </div>
+        </section>
+      </div>
+    </ChartState>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { ArrowLeft, WarningFilled } from '@element-plus/icons-vue'
+import { getStudentDetail } from '@/api/student'
+import { initialOf } from '@/utils/avatar'
+import ChartState from '@/views/dashboard/components/ChartState.vue'
 
 const router = useRouter()
+const route = useRoute()
+
+const tabs = [
+  { key: 'grades', label: '学业成绩' },
+  { key: 'quality', label: '综合素质' },
+  { key: 'mental', label: '心理健康' }
+]
+
 const activeTab = ref('grades')
+const loading = ref(false)
+const loadError = ref(false)
+const info = ref({})
 
-const studentInfo = ref({
-  id: 1,
-  studentId: '2025010001',
-  name: '张三',
-  avatar: '',
-  dept: '计算机学院',
-  major: '软件工程',
-  grade: '2025级',
-  enrollmentDate: '2025-09-01',
-  phone: '13800138010',
-  email: 'zhangsan@edu.edu.cn',
-  gpa: 3.8,
-  rank: '5/128',
-  credits: 45,
-  lastMentalTest: '2026-03-15',
-  mentalStatus: '良好',
-  counselorNotes: ''
-})
+const deptMajor = computed(
+  () => [info.value.deptName, info.value.majorName].filter(Boolean).join(' · ') || '—'
+)
 
-const gradeRecords = ref([
-  {
-    semester: '2025-2026-2',
-    course: '高等数学',
-    credit: 4,
-    score: 92,
-    gpa: 4.0
-  },
-  {
-    semester: '2025-2026-2',
-    course: '程序设计基础',
-    credit: 4,
-    score: 88,
-    gpa: 3.7
-  },
-  {
-    semester: '2025-2026-1',
-    course: '大学英语',
-    credit: 3,
-    score: 85,
-    gpa: 3.3
+// 改版前本页是写死的假数据（永远显示「张三」），此处接回一直存在但未被调用的 getStudentDetail
+const fetchDetail = async () => {
+  loading.value = true
+  loadError.value = false
+  try {
+    const res = await getStudentDetail(route.params.id)
+    info.value = res.data || {}
+  } catch (e) {
+    loadError.value = true
+    console.error('获取学生详情失败', e)
+  } finally {
+    loading.value = false
   }
-])
+}
 
-const qualityRecords = ref([
-  {
-    date: '2026-03-20',
-    title: '校级编程竞赛一等奖',
-    description: '参加校程序设计竞赛，获得一等奖',
-    category: '竞赛获奖',
-    type: 'success'
-  },
-  {
-    date: '2026-02-15',
-    title: '志愿服务时长认定',
-    description: '参与社区志愿服务，累计服务时长20小时',
-    category: '志愿服务',
-    type: 'primary'
-  },
-  {
-    date: '2025-12-10',
-    title: '优秀学生干部',
-    description: '被评为2025年度优秀学生干部',
-    category: '荣誉称号',
-    type: 'warning'
-  }
-])
+const formatGpa = (g) => {
+  const n = Number(g)
+  return Number.isFinite(n) && n > 0 ? n.toFixed(2) : '—'
+}
+
+const statusLabel = (s) => ({ 0: '退学', 1: '在读', 2: '毕业' })[s] ?? '—'
+
+const statusStyle = (s) =>
+  ({
+    0: { background: 'var(--error-tint)', color: 'var(--error-deep)' },
+    1: { background: 'var(--success-tint)', color: 'var(--success-deep)' },
+    2: { background: 'var(--fill-grey)', color: 'var(--fill-grey-fg)' }
+  })[s] ?? { background: 'var(--fill-grey)', color: 'var(--fill-grey-fg)' }
 
 const goBack = () => {
   router.back()
 }
+
+onMounted(fetchDetail)
 </script>
 
 <style scoped lang="scss">
-.detail-content {
-  margin-top: 20px;
-}
-
-.profile-header {
-  text-align: center;
-  padding: 20px 0;
-
-  h3 {
-    margin: 16px 0 8px;
-    font-size: 20px;
-  }
-
-  .subtitle {
-    color: rgba(0, 0, 0, 0.45);
-    margin-bottom: 12px;
-  }
-}
-
-.info-list {
-  .info-item {
-    display: flex;
-    padding: 12px 0;
-    border-bottom: 1px solid #f0f0f0;
-
-    &:last-child {
-      border-bottom: none;
-    }
-
-    .label {
-      width: 80px;
-      color: rgba(0, 0, 0, 0.45);
-    }
-
-    .value {
-      flex: 1;
-      color: rgba(0, 0, 0, 0.85);
-    }
-  }
-}
-
-.grade-stats {
-  margin-bottom: 20px;
-
-  .stat-card {
-    text-align: center;
-    padding: 20px;
-    background: #f6ffed;
-    border-radius: 8px;
-
-    .stat-value {
-      font-size: 28px;
-      font-weight: 600;
-      color: rgba(0, 0, 0, 0.85);
-
-      &.highlight {
-        color: #52c41a;
-      }
-    }
-
-    .stat-label {
-      margin-top: 8px;
-      color: rgba(0, 0, 0, 0.45);
-    }
-  }
+.student-avatar {
+  background: linear-gradient(135deg, #8fbcff, #5a8ff0);
 }
 </style>

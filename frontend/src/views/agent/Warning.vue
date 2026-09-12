@@ -1,61 +1,49 @@
 <template>
-  <div class="page-container">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>AI 预警中心</span>
-          <div>
-            <el-button :icon="Refresh" :loading="loading" @click="fetchList">刷新</el-button>
-            <el-button type="primary" :icon="MagicStick" @click="triggerForm.visible = true"
-              >触发分析</el-button
-            >
-          </div>
+  <div class="glass-panel list-panel">
+    <div class="page-head">
+      <div>
+        <div class="head-title">AI 预警中心</div>
+        <div class="head-sub">
+          共 <b>{{ total }}</b> 个分析任务
         </div>
-      </template>
+      </div>
+      <div class="head-actions">
+        <el-button class="btn-reset" :icon="Refresh" :loading="loading" @click="fetchList">
+          刷新
+        </el-button>
+        <el-button
+          type="primary"
+          class="head-action"
+          :icon="MagicStick"
+          @click="triggerForm.visible = true"
+        >
+          触发分析
+        </el-button>
+      </div>
+    </div>
 
-      <!-- 过滤栏 -->
-      <el-form :model="searchForm" inline>
-        <el-form-item label="状态">
-          <el-select
-            v-model="searchForm.status"
-            placeholder="全部状态"
-            clearable
-            style="width: 200px"
-          >
-            <el-option
-              v-for="o in STATUS_OPTIONS"
-              :key="o.value"
-              :label="o.label"
-              :value="o.value"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="风险等级">
-          <el-select
-            v-model="searchForm.riskLevel"
-            placeholder="全部等级"
-            clearable
-            style="width: 160px"
-          >
-            <el-option v-for="o in RISK_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">查询</el-button>
-          <el-button @click="handleReset">重置</el-button>
-        </el-form-item>
-        <el-form-item style="margin-left: auto">
-          <el-tag v-if="sseConnected" type="success" effect="plain" class="status-tag">
-            <span class="dot dot-live"></span>
-            实时推送已连接
-          </el-tag>
-          <el-tag v-else-if="hasInProgressTask" type="warning" effect="plain" class="status-tag">
-            <el-icon class="poll-icon"><Loading /></el-icon>
-            轮询中（SSE 未连接）
-          </el-tag>
-        </el-form-item>
-      </el-form>
+    <!-- 过滤栏 -->
+    <div class="filter-bar">
+      <el-select v-model="searchForm.status" placeholder="全部状态" clearable>
+        <el-option v-for="o in STATUS_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+      </el-select>
+      <el-select v-model="searchForm.riskLevel" placeholder="全部等级" clearable>
+        <el-option v-for="o in RISK_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+      </el-select>
+      <el-button class="btn-query" @click="handleSearch">查询</el-button>
+      <el-button class="btn-reset" @click="handleReset">重置</el-button>
 
+      <span class="conn-state">
+        <span v-if="sseConnected" class="badge conn-live">
+          <span class="dot dot-live"></span>实时推送已连接
+        </span>
+        <span v-else-if="hasInProgressTask" class="badge conn-poll">
+          <el-icon class="poll-icon"><Loading /></el-icon>轮询中（SSE 未连接）
+        </span>
+      </span>
+    </div>
+
+    <div class="table-wrap">
       <!-- 任务表 -->
       <el-table
         v-loading="loading"
@@ -114,7 +102,7 @@
         @current-change="fetchList"
         @size-change="fetchList"
       />
-    </el-card>
+    </div>
 
     <!-- 触发对话框 -->
     <el-dialog v-model="triggerForm.visible" title="触发学生风险分析" width="420px">
@@ -349,37 +337,81 @@ const formatTime = (s) => {
 </script>
 
 <style scoped lang="scss">
-.card-header {
+.list-panel {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
 }
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+
+  .el-button {
+    height: 34px;
+    padding: 0 15px;
+    font-size: 13px;
+    border-radius: var(--radius-md);
+    margin: 0;
+  }
+}
+
+.head-action {
+  font-weight: 600;
+  border: none;
+  box-shadow: 0 5px 14px -8px rgba(0, 122, 255, 0.7);
+}
+
+.filter-bar {
+  :deep(.el-select) {
+    width: 190px;
+  }
+
+  .conn-state {
+    margin-left: auto;
+  }
+}
+
+.conn-live {
+  background: var(--success-tint);
+  color: var(--success-deep);
+}
+
+.conn-poll {
+  background: var(--warning-tint);
+  color: var(--warning-deep);
+}
+
+.table-wrap {
+  padding: 0 20px 18px;
+}
+
 .pagination {
-  margin-top: 20px;
+  margin-top: 16px;
   justify-content: flex-end;
 }
+
 .muted {
-  color: rgba(0, 0, 0, 0.35);
+  color: var(--text-color-disabled);
 }
+
 .poll-icon {
   margin-right: 4px;
   animation: spin 1.4s linear infinite;
 }
-.status-tag {
-  display: inline-flex;
-  align-items: center;
-}
+
 .dot {
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   margin-right: 6px;
-  background: #67c23a;
+  background: var(--success-color);
 }
+
 .dot-live {
   animation: pulse 1.6s ease-in-out infinite;
 }
+
 @keyframes pulse {
   0%,
   100% {
@@ -389,6 +421,7 @@ const formatTime = (s) => {
     opacity: 0.35;
   }
 }
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -397,7 +430,9 @@ const formatTime = (s) => {
     transform: rotate(360deg);
   }
 }
+
+// 高危行底色改用新色板的危险色浅底
 :deep(.high-risk-row) {
-  background-color: #fff1f0 !important;
+  background-color: var(--error-tint) !important;
 }
 </style>

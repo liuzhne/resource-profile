@@ -75,3 +75,18 @@ const resolvePath = (routePath) => {
   return routePath
 }
 </script>
+
+<style scoped lang="scss">
+// 子菜单：左侧竖线 + 缩进，对齐原型的层级表达
+:deep(.el-menu--inline) {
+  padding: 2px 0 4px 12px;
+  margin-left: 8px;
+  border-left: 1px solid var(--border-color);
+}
+
+// 展开箭头旋转动画
+:deep(.el-sub-menu__icon-arrow) {
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+</style>

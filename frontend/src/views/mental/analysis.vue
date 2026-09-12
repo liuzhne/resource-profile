@@ -82,9 +82,9 @@ const initDeptChart = (data: any[]) => {
         type: 'pie',
         radius: ['40%', '70%'],
         data: [
-          { value: totalGood, name: '良好', itemStyle: { color: '#52c41a' } },
-          { value: totalAttention, name: '关注', itemStyle: { color: '#faad14' } },
-          { value: totalIntervention, name: '干预', itemStyle: { color: '#f5222d' } }
+          { value: totalGood, name: '良好', itemStyle: { color: '#34c759' } },
+          { value: totalAttention, name: '关注', itemStyle: { color: '#ff9500' } },
+          { value: totalIntervention, name: '干预', itemStyle: { color: '#ff3b30' } }
         ]
       }
     ]
@@ -97,7 +97,7 @@ const initGradeChart = (data: any[]) => {
 
   const grades = data.map((item: any) => item.grade)
   const rates = data.map((item: any) => Number(item.rate))
-  const barColors = rates.map((r) => (r >= 80 ? '#52c41a' : r >= 60 ? '#faad14' : '#f5222d'))
+  const barColors = rates.map((r) => (r >= 80 ? '#34c759' : r >= 60 ? '#ff9500' : '#ff3b30'))
 
   gradeChart.setOption({
     tooltip: { trigger: 'axis' },
@@ -118,7 +118,7 @@ const initGenderChart = (data: any[]) => {
 
   const series: any[] = []
   const genderLabels: Record<number, string> = { 0: '女生', 1: '男生' }
-  const genderColors: Record<number, string> = { 0: '#eb2f96', 1: '#1890ff' }
+  const genderColors: Record<number, string> = { 0: '#f08ca8', 1: '#007aff' }
 
   data.forEach((item: any) => {
     const gender = Number(item.gender)

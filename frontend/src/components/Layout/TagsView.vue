@@ -8,7 +8,7 @@
         :class="['tags-view-item', { active: isActive(tag) }]"
       >
         {{ tag.title }}
-        <el-icon v-if="!isAffix(tag)" @click.prevent.stop="closeSelectedTag(tag)">
+        <el-icon v-if="!isAffix(tag)" :size="11" @click.prevent.stop="closeSelectedTag(tag)">
           <Close />
         </el-icon>
       </router-link>
@@ -76,61 +76,60 @@ watch(
 </script>
 
 <style scoped lang="scss">
+// 对齐原型：药丸标签条，无边框无分隔线，直接浮在内容区之上
 .tags-view-container {
-  height: 40px;
-  background: #fff;
-  border-bottom: 1px solid #d8dce5;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.12);
-  padding: 0 16px;
+  flex-shrink: 0;
+  padding: 10px 20px 0;
+  position: relative;
+  z-index: 9;
 
   .tags-view-wrapper {
     display: flex;
-    height: 100%;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
 
     .tags-view-item {
       display: inline-flex;
       align-items: center;
+      gap: 7px;
       height: 28px;
-      line-height: 28px;
-      margin-top: 6px;
-      margin-right: 8px;
       padding: 0 12px;
-      background: #fff;
-      border: 1px solid #d8dce5;
-      color: #495060;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.42);
+      color: var(--text-color-secondary);
       font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
       cursor: pointer;
-      transition: all 0.3s;
       text-decoration: none;
+      transition: all 0.16s ease;
 
       &:hover {
-        background: #f0f0f0;
+        background: rgba(255, 255, 255, 0.7);
+        color: var(--text-color);
       }
 
+      // 当前页：白底 + 轻微投影抬起（原型 THUMB）
       &.active {
-        background-color: var(--primary-color);
-        color: #fff;
-        border-color: var(--primary-color);
-
-        &::before {
-          content: '';
-          background: #fff;
-          display: inline-block;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          margin-right: 6px;
-        }
+        background: #fff;
+        color: var(--text-color);
+        box-shadow: var(--shadow-thumb);
       }
 
       .el-icon {
-        margin-left: 6px;
+        opacity: 0.55;
         border-radius: 50%;
-        width: 14px;
-        height: 14px;
+        transition: opacity 0.16s;
 
         &:hover {
-          background: rgba(0, 0, 0, 0.1);
+          opacity: 1;
+          background: var(--fill-hover);
         }
       }
     }

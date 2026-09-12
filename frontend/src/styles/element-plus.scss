@@ -1,60 +1,147 @@
 // Element Plus 主题定制
 
-// 覆盖 Element Plus 变量
+// 覆盖 Element Plus 变量（对齐毛玻璃原型色板）
 @forward 'element-plus/theme-chalk/src/common/var.scss' with (
   $colors: (
     'primary': (
-      'base': #1890ff,
+      'base': #007aff,
     ),
     'success': (
-      'base': #52c41a,
+      'base': #34c759,
     ),
     'warning': (
-      'base': #faad14,
+      'base': #ff9500,
     ),
     'danger': (
-      'base': #f5222d,
+      'base': #ff3b30,
     ),
     'info': (
-      'base': #1890ff,
+      'base': #007aff,
     ),
   ),
   $border-radius: (
-    'base': 4px,
-    'small': 2px,
+    'base': 8px,
+    'small': 6px,
     'round': 20px,
     'circle': 100%,
   )
 );
 
-// 侧边栏菜单样式
+// 侧边栏菜单：原型为浅色玻璃，菜单项 40px / 圆角 10px / 选中态主色浅底
 .el-menu {
   border-right: none !important;
-  background: #001529 !important;
+  background: transparent !important;
 
   .el-menu-item,
   .el-sub-menu__title {
-    color: rgba(255, 255, 255, 0.65) !important;
+    height: 40px;
+    line-height: 40px;
+    margin: 2px 0;
+    border-radius: var(--radius-md);
+    color: var(--fill-grey-fg);
+    font-size: 14px;
 
     &:hover {
-      color: #fff !important;
-      background: transparent !important;
+      color: var(--text-color);
+      background: var(--fill-hover) !important;
     }
 
     &.is-active {
-      color: #fff !important;
-      background: var(--primary-color) !important;
+      color: var(--primary-color);
+      background: var(--primary-tint) !important;
+      font-weight: 500;
+    }
+  }
+
+  // 子菜单展开后的缩进容器由 SidebarItem 负责画左侧竖线
+  .el-menu--inline {
+    .el-menu-item {
+      height: 34px;
+      line-height: 34px;
+      font-size: 13px;
+      min-width: auto;
     }
   }
 }
 
-// 表格样式
+// 弹出式子菜单（侧边栏折叠时）
+.el-menu--popup {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+// 表格：去掉默认描边，贴合玻璃面板
 .el-table {
-  .el-table__header-wrapper {
-    th {
-      background: #fafafa;
-      color: rgba(0, 0, 0, 0.85);
+  background: transparent;
+  --el-table-border-color: var(--border-color);
+  --el-table-header-bg-color: transparent;
+  --el-table-row-hover-bg-color: var(--fill-hover);
+  --el-table-tr-bg-color: transparent;
+
+  th.el-table__cell {
+    background: transparent;
+    color: var(--text-color-secondary);
+    font-weight: 500;
+    font-size: 12px;
+  }
+}
+
+// 卡片：默认去阴影，由 .glass-panel / .glass-card 接管
+.el-card {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-1) !important;
+}
+
+// 输入框圆角对齐
+.el-input__wrapper,
+.el-textarea__inner {
+  border-radius: var(--radius-sm);
+}
+
+// 下拉菜单玻璃化
+.el-dropdown-menu,
+.el-popper.is-light {
+  border-radius: var(--radius-lg);
+}
+
+// 分页器：对齐原型的 30px 方块药丸
+.el-pagination {
+  --el-pagination-button-color: var(--text-color-secondary);
+  --el-pagination-hover-color: var(--primary-color);
+  font-weight: 500;
+
+  .el-pager li,
+  .btn-prev,
+  .btn-next {
+    min-width: 30px;
+    height: 30px;
+    line-height: 30px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    transition: all 0.14s ease;
+
+    &:hover {
+      background: var(--fill-hover);
+    }
+
+    &.is-active {
+      background: var(--primary-color);
+      color: #fff;
       font-weight: 600;
     }
+  }
+
+  .btn-prev,
+  .btn-next {
+    background: rgba(255, 255, 255, 0.55);
   }
 }

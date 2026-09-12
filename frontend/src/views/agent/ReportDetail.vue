@@ -612,7 +612,7 @@ const formatTime = (s) => (s ? s.replace('T', ' ').slice(0, 19) : '')
 .urgency {
   background: #fffbe6;
   padding: 8px 12px;
-  border-left: 3px solid #faad14;
+  border-left: 3px solid var(--warning-color);
 }
 .sub-h {
   font-weight: 600;

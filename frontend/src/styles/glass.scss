@@ -1,0 +1,543 @@
+// 毛玻璃复用样式
+// backdrop-filter 不可用时（旧浏览器 / 关闭硬件加速）统一降级为不透明白底，
+// 否则半透明底叠在光晕背景上会导致文字对比度不足。
+
+@mixin glass($bg: var(--glass-bg)) {
+  background: $bg;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background: rgba(255, 255, 255, 0.96);
+  }
+}
+
+// 面板：图表区、表格区等大块容器
+.glass-panel {
+  @include glass;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-1);
+}
+
+// 卡片：统计卡等可 hover 抬起的小块
+.glass-card {
+  @include glass;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-2);
+  }
+}
+
+// 面板内的分区标题行
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+
+  .panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-color);
+    letter-spacing: -0.01em;
+  }
+}
+
+// 分段控件（周期切换、详情页 tab）
+.seg-control {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--fill-grey);
+  border-radius: 9px;
+
+  .seg-item {
+    height: 26px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-color-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.18s ease;
+
+    &:hover:not(.is-active) {
+      color: var(--text-color);
+    }
+
+    &.is-active {
+      background: #fff;
+      color: var(--text-color);
+      box-shadow: var(--shadow-thumb);
+    }
+  }
+}
+
+// 药丸标签（TagsView、状态徽标）
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+
+// 图标胶囊（统计卡右上角、列表行首）
+.icon-chip {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+// 数字：等宽对齐。原型用 Barlow，此处用系统字体 + tabular-nums 达到同等对齐效果
+.tnum {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+// 顶栏/侧栏的图标按钮
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-color-secondary);
+  transition: background 0.16s;
+
+  &:hover {
+    background: var(--fill-hover);
+  }
+}
+
+/* ===== 列表页共用件（教师/学生/用户/预警列表 + 面板的最近登录） ===== */
+
+// 页头：标题 + 计数副标 + 右侧主操作
+.page-head {
+  padding: 18px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  .head-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-color);
+    letter-spacing: -0.01em;
+  }
+
+  .head-sub {
+    font-size: 12px;
+    color: var(--text-color-secondary);
+    margin-top: 3px;
+
+    b {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+}
+
+// 筛选条：把 Element Plus 控件压到 34px / 圆角 10px 的紧凑玻璃态
+.filter-bar {
+  padding: 0 20px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+
+  .el-input,
+  .el-select {
+    width: auto;
+  }
+
+  .el-input__wrapper,
+  .el-select__wrapper {
+    height: 34px;
+    min-height: 34px;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 0 1px rgba(60, 60, 67, 0.12) inset;
+    font-size: 13px;
+
+    &.is-focus {
+      box-shadow: 0 0 0 1px var(--primary-color) inset;
+    }
+  }
+
+  .el-button {
+    height: 34px;
+    padding: 0 16px;
+    font-size: 13px;
+    border-radius: var(--radius-md);
+    margin: 0;
+  }
+
+  // 查询：主色浅底而非实底，避免与页头主按钮抢视线
+  .btn-query {
+    background: var(--primary-tint);
+    color: var(--primary-color);
+    border: none;
+    font-weight: 600;
+
+    &:hover {
+      background: rgba(0, 122, 255, 0.2);
+      color: var(--primary-color-active);
+    }
+  }
+
+  .btn-reset {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid var(--border-color-strong);
+    color: var(--fill-grey-fg);
+    font-weight: 500;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.86);
+      color: var(--text-color);
+    }
+  }
+}
+
+// 轻量表格：原型用的是原生 table 而非 el-table
+.table-scroll {
+  overflow-x: auto;
+  padding: 0 20px;
+}
+
+.plain-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th {
+    text-align: left;
+    padding: 0 10px 9px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(60, 60, 67, 0.72);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+
+    &.col-right {
+      text-align: right;
+    }
+  }
+
+  td {
+    padding: 12px 10px;
+    border-bottom: 1px solid rgba(60, 60, 67, 0.08);
+    color: var(--text-color-secondary);
+
+    &.strong {
+      color: var(--text-color);
+      font-weight: 500;
+    }
+
+    &.col-right {
+      text-align: right;
+      white-space: nowrap;
+    }
+  }
+
+  tbody tr {
+    transition: background 0.14s;
+
+    &:hover {
+      background: rgba(60, 60, 67, 0.035);
+    }
+  }
+
+  // 行内操作链接
+  .row-action {
+    color: var(--primary-color);
+    font-weight: 500;
+    cursor: pointer;
+
+    & + .row-action {
+      margin-left: 14px;
+    }
+
+    &.muted {
+      color: rgba(60, 60, 67, 0.6);
+    }
+
+    &:hover {
+      opacity: 0.75;
+    }
+  }
+}
+
+// 姓名单元格里的文字头像
+.name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+
+  .avatar-sm {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+}
+
+// 状态/职称徽标
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  background: var(--fill-grey);
+  color: var(--fill-grey-fg);
+  white-space: nowrap;
+}
+
+// 表尾分页
+.table-foot {
+  padding: 14px 20px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  .foot-count {
+    font-size: 12px;
+    color: var(--text-color-secondary);
+
+    b {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+}
+
+/* ===== 详情页共用件（教师详情 / 学生详情） ===== */
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+
+  .detail-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-color);
+    letter-spacing: -0.01em;
+  }
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 0 9px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--border-color-strong);
+  color: var(--fill-grey-fg);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--text-color);
+  }
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 14px;
+  align-items: start;
+
+  @media (max-width: 1000px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.profile-card {
+  min-width: 0;
+  padding: 22px 18px;
+
+  .profile-top {
+    text-align: center;
+  }
+
+  // 大号文字头像
+  .avatar-lg {
+    width: 84px;
+    height: 84px;
+    border-radius: 26px;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: 600;
+  }
+
+  .profile-name {
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-top: 14px;
+    letter-spacing: -0.01em;
+  }
+
+  .profile-sub {
+    font-size: 13px;
+    color: rgba(60, 60, 67, 0.55);
+    margin: 6px 0 10px;
+  }
+
+  .profile-tag {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 7px;
+    background: var(--primary-tint);
+    color: var(--primary-color);
+  }
+}
+
+// 档案卡里的三格小统计
+.mini-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 22px 0;
+
+  .mini-stat {
+    text-align: center;
+    padding: 12px 4px;
+    border-radius: 11px;
+    background: rgba(120, 120, 128, 0.08);
+
+    .mini-value {
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 1;
+      color: var(--text-color);
+      font-variant-numeric: tabular-nums;
+
+      &.accent {
+        color: var(--primary-color);
+      }
+    }
+
+    .mini-label {
+      font-size: 11px;
+      color: var(--text-color-secondary);
+      margin-top: 5px;
+    }
+  }
+}
+
+// 键值信息行
+.info-rows {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(60, 60, 67, 0.08);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    .k {
+      color: var(--text-color-secondary);
+      flex-shrink: 0;
+    }
+
+    .v {
+      color: var(--text-color);
+      overflow-wrap: anywhere;
+      text-align: right;
+    }
+  }
+}
+
+// 详情右栏的 tab 容器
+.detail-main {
+  min-width: 0;
+
+  .detail-tabs {
+    padding: 16px 18px 0;
+  }
+
+  .detail-tab-body {
+    padding: 16px 18px 18px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 12px;
+  }
+}
+
+// 「该数据暂无后端支撑」的说明条
+.no-source {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--warning-tint);
+  color: var(--warning-deep);
+  font-size: 12px;
+  line-height: 1.6;
+}

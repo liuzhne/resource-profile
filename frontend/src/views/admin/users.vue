@@ -1,87 +1,101 @@
 <template>
-  <div class="page-container">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>用户管理</span>
-          <el-button type="primary">新增用户</el-button>
+  <div class="glass-panel list-panel">
+    <div class="page-head">
+      <div>
+        <div class="head-title">用户管理</div>
+        <div class="head-sub">
+          共 <b>{{ userList.length }}</b> 个账号
         </div>
-      </template>
+      </div>
+      <el-button type="primary" class="head-action" :icon="Plus" @click="notReady">
+        新增用户
+      </el-button>
+    </div>
 
-      <!-- 搜索 -->
-      <el-form :model="searchForm" inline>
-        <el-form-item label="用户名">
-          <el-input v-model="searchForm.username" placeholder="请输入用户名" clearable />
-        </el-form-item>
-        <el-form-item label="角色">
-          <el-select v-model="searchForm.role" placeholder="请选择角色" clearable>
-            <el-option label="管理员" value="admin" />
-            <el-option label="教师" value="teacher" />
-            <el-option label="学生" value="student" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
-            <el-option label="启用" value="1" />
-            <el-option label="禁用" value="0" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary">查询</el-button>
-          <el-button>重置</el-button>
-        </el-form-item>
-      </el-form>
-
-      <!-- 表格 -->
-      <el-table v-loading="loading" :data="userList" stripe>
-        <el-table-column type="index" width="50" />
-        <el-table-column prop="username" label="用户名" />
-        <el-table-column prop="nickname" label="昵称" />
-        <el-table-column prop="role" label="角色">
-          <template #default="{ row }">
-            <el-tag
-              :type="row.role === 'admin' ? 'danger' : row.role === 'teacher' ? 'success' : ''"
-            >
-              {{ row.roleText }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="dept" label="部门/学院" />
-        <el-table-column prop="phone" label="电话" />
-        <el-table-column prop="status" label="状态" width="80">
-          <template #default="{ row }">
-            <el-switch v-model="row.status" :active-value="1" :inactive-value="0" />
-          </template>
-        </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" width="160" />
-        <el-table-column label="操作" width="150" fixed="right">
-          <template #default>
-            <el-button link type="primary">编辑</el-button>
-            <el-button link type="danger">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 分页 -->
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        class="pagination"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="total"
-        layout="total, sizes, prev, pager, next, jumper"
+    <div class="filter-bar">
+      <el-input
+        v-model="searchForm.username"
+        placeholder="请输入用户名"
+        clearable
+        :prefix-icon="Search"
       />
-    </el-card>
+      <el-select v-model="searchForm.role" placeholder="请选择角色" clearable>
+        <el-option label="管理员" value="admin" />
+        <el-option label="教师" value="teacher" />
+        <el-option label="学生" value="student" />
+      </el-select>
+      <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
+        <el-option label="启用" value="1" />
+        <el-option label="禁用" value="0" />
+      </el-select>
+      <el-button class="btn-query" @click="notReady">查询</el-button>
+      <el-button class="btn-reset" @click="handleReset">重置</el-button>
+    </div>
+
+    <p class="no-source mock-note">
+      <el-icon :size="14"><WarningFilled /></el-icon>
+      <span>
+        本页为静态演示数据：`src/api/` 下没有用户管理模块，后端也未提供 `/user` 的增删改查接口。
+        查询、新增、编辑、删除、启停均未接线，接口就绪后再接入。
+      </span>
+    </p>
+
+    <div class="table-scroll">
+      <table class="plain-table users-table">
+        <thead>
+          <tr>
+            <th>用户名</th>
+            <th>昵称</th>
+            <th>角色</th>
+            <th>部门/学院</th>
+            <th>电话</th>
+            <th>状态</th>
+            <th>创建时间</th>
+            <th class="col-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, i) in userList" :key="row.id">
+            <td class="strong">{{ row.username }}</td>
+            <td>
+              <span class="name-cell">
+                <span class="avatar-sm" :style="{ background: avatarBg(i) }">
+                  {{ initialOf(row.nickname) }}
+                </span>
+                <span>{{ row.nickname }}</span>
+              </span>
+            </td>
+            <td>
+              <span class="badge" :style="roleStyle(row.role)">{{ row.roleText }}</span>
+            </td>
+            <td>{{ row.dept }}</td>
+            <td class="tnum">{{ row.phone }}</td>
+            <td>
+              <el-switch v-model="row.status" :active-value="1" :inactive-value="0" disabled />
+            </td>
+            <td class="tnum">{{ row.createTime }}</td>
+            <td class="col-right">
+              <span class="row-action" @click="notReady">编辑</span>
+              <span class="row-action danger" @click="notReady">删除</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-foot">
+      <span class="foot-count">
+        共 <b>{{ userList.length }}</b> 条（演示数据）
+      </span>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-
-const loading = ref(false)
-const currentPage = ref(1)
-const pageSize = ref(10)
-const total = ref(100)
+import { ElMessage } from 'element-plus'
+import { Plus, Search, WarningFilled } from '@element-plus/icons-vue'
+import { avatarBg, initialOf } from '@/utils/avatar'
 
 const searchForm = reactive({
   username: '',
@@ -124,17 +138,61 @@ const userList = ref([
     createTime: '2025-09-01 00:00:00'
   }
 ])
+
+const roleStyle = (role) =>
+  ({
+    admin: { background: 'var(--error-tint)', color: 'var(--error-deep)' },
+    teacher: { background: 'var(--success-tint)', color: 'var(--success-deep)' },
+    student: { background: 'var(--primary-tint)', color: 'var(--primary-color)' }
+  })[role] || { background: 'var(--fill-grey)', color: 'var(--fill-grey-fg)' }
+
+const handleReset = () => {
+  searchForm.username = ''
+  searchForm.role = ''
+  searchForm.status = ''
+}
+
+// 用户管理接口尚未提供，所有操作先占位
+const notReady = () => {
+  ElMessage.info('用户管理接口尚未提供，该操作暂未开放')
+}
 </script>
 
 <style scoped lang="scss">
-.card-header {
+.list-panel {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
 }
 
-.pagination {
-  margin-top: 20px;
-  justify-content: flex-end;
+.head-action {
+  height: 34px;
+  padding: 0 15px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: none;
+  box-shadow: 0 5px 14px -8px rgba(0, 122, 255, 0.7);
+}
+
+.filter-bar {
+  :deep(.el-input) {
+    width: 190px;
+  }
+
+  :deep(.el-select) {
+    width: 150px;
+  }
+}
+
+.mock-note {
+  margin: 0 20px 14px;
+}
+
+.users-table {
+  min-width: 900px;
+}
+
+.row-action.danger {
+  color: var(--error-deep);
 }
 </style>
