@@ -219,7 +219,11 @@ const handleLogin = async () => {
         await userStore.loginAction(loginForm)
         ElMessage.success('登录成功')
       } catch (error) {
-        ElMessage.error('登录失败，请检查用户名和密码')
+        // 网络/冷启动类失败已由 request.js 统一提示，此处只兜「凭据不对」，
+        // 否则服务唤醒超时会被误报成密码错误，且重复弹两条提示
+        if (error.response) {
+          ElMessage.error('登录失败，请检查用户名和密码')
+        }
       } finally {
         loading.value = false
       }
