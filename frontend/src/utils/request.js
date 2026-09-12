@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/modules/user'
-import { shouldRetry, retryDelay, isColdStartFailure } from './retry'
+import { shouldRetry, retryDelay, isColdStartFailure, MAX_RETRY } from './retry'
 
 // Render 免费层的 web service 闲置约 15 分钟后休眠，冷启动实测 30~120s。
 // 原先 10s 的超时必然等不到唤醒完成，表现为「接口永远超时」；
@@ -21,13 +21,21 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 // 唤醒提示：全局只保留一条，避免多个并发请求把屏幕刷满
 let wakingNotice = null
 
-const showWakingNotice = () => {
-  if (wakingNotice) return
+// 冷启动最长要等约 2 分钟，必须让用户看到进度，否则会以为页面卡死
+const showWakingNotice = (attempt) => {
+  const text = `服务正在唤醒，请稍候…（第 ${attempt}/${MAX_RETRY} 次重试）`
+  if (wakingNotice) {
+    // 已有提示则就地更新文案，不再叠加新的一条
+    const el = document.querySelector('.waking-notice .el-message__content')
+    if (el) el.textContent = text
+    return
+  }
   wakingNotice = ElMessage({
-    message: '服务正在唤醒，请稍候…',
+    message: text,
     type: 'info',
     duration: 0,
     showClose: true,
+    customClass: 'waking-notice',
     onClose: () => {
       wakingNotice = null
     }
@@ -82,7 +90,7 @@ request.interceptors.response.use(
 
     if (shouldRetry(error, config)) {
       config.__retryCount = (config.__retryCount || 0) + 1
-      showWakingNotice()
+      showWakingNotice(config.__retryCount)
       await sleep(retryDelay(config.__retryCount))
       return request(config)
     }
