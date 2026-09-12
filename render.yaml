@@ -30,13 +30,19 @@ envVarGroups:
       # MCP 内部通信安全 Token（纵深防御）
       - key: EDUCARE_MCP_TOKEN
         generateValue: true
-      # Aiven Free MySQL 强制 TLS；每个微服务最多占 3 条连接，避免耗尽免费实例连接数。
+      # Aiven Free MySQL 强制 TLS。
+      # 连接配额实测（2026-09-12）：max_connections=76，历史峰值 Max_used_connections=4，
+      # Connection_errors_max_connections=0（从未触顶）。实际连库的仅 7 个服务
+      # （gateway 与 mcp-student-data 不连库），故 7 × 3 = 21 条峰值占用仅为配额的 28%。
       - key: MYSQL_SSL_MODE
         value: REQUIRED
       - key: DB_MAXIMUM_POOL_SIZE
         value: "3"
+      # 原为 0：连接池不保留空闲连接，每个冷请求都要重建 TCP + TLS + MySQL 认证，
+      # 跨区域（服务在 oregon）叠加强制 TLS 约多花 200~500ms。
+      # 改为 2 后常驻 7 × 2 = 14 条，占配额 18%，余量充足。
       - key: DB_MINIMUM_IDLE
-        value: "0"
+        value: "2"
       - key: DB_MAX_LIFETIME_MS
         value: "600000"
 
