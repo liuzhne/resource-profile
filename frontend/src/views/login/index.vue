@@ -167,10 +167,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Message, School, Grid } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
+import { prewarmGateway } from '@/utils/prewarm'
 import BrandLogo from '@/components/BrandLogo.vue'
 
 const userStore = useUserStore()
@@ -208,6 +209,12 @@ const switchTab = (key: string) => {
 const notReady = () => {
   ElMessage.info('该功能暂未开放')
 }
+
+// 登录成功后跳转的页面都要经网关，而网关可能正在休眠。
+// 趁用户填表单这十几秒先把网关唤醒，两段等待重叠起来。
+onMounted(() => {
+  prewarmGateway()
+})
 
 const handleLogin = async () => {
   if (!loginFormRef.value) return
