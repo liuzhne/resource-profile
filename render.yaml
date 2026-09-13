@@ -95,8 +95,14 @@ services:
         value: "8080"
       - key: SERVER_PORT
         value: "8080"
+      # 冷启动优化（2026-09-13）：免费实例 0.1 CPU 下 Spring Boot 启动实测 107s，
+      # 而 Render 边缘层挂住请求约 114s 就返回 429 —— 唤醒比等待上限还慢，是登录报 429 的根因。
+      #   TieredStopAtLevel=1  只用 C1 编译器，省掉 C2 编译开销（代价：稳态吞吐下降，
+      #                        本服务以 I/O 为主且长期空闲，可接受）
+      #   UseSerialGC          小堆低流量下启动比 G1 更快、CPU 开销更低
+      #   egd=urandom          避免低熵容器中 SecureRandom 播种阻塞
       - key: JAVA_TOOL_OPTIONS
-        value: "-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+        value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: AUTH_SERVICE_URL
         value: https://edu-portrait-auth.onrender.com
       - key: USER_SERVICE_URL
@@ -134,7 +140,7 @@ services:
       - key: SERVER_PORT
         value: "8081"
       - key: JAVA_TOOL_OPTIONS
-        value: "-XX:MaxRAMPercentage=75.0"
+        value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_DATA_REDIS_URL
         fromService:
           type: keyvalue
@@ -155,7 +161,7 @@ services:
       - key: SERVER_PORT
         value: "8082"
       - key: JAVA_TOOL_OPTIONS
-        value: "-XX:MaxRAMPercentage=75.0"
+        value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
     autoDeploy: true
 
   - type: web
@@ -171,7 +177,7 @@ services:
       - key: SERVER_PORT
         value: "8083"
       - key: JAVA_TOOL_OPTIONS
-        value: "-XX:MaxRAMPercentage=75.0"
+        value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
     autoDeploy: true
 
   - type: web
@@ -187,7 +193,7 @@ services:
       - key: SERVER_PORT
         value: "8084"
       - key: JAVA_TOOL_OPTIONS
-        value: "-XX:MaxRAMPercentage=75.0"
+        value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
     autoDeploy: true
 
   - type: web
@@ -203,7 +209,7 @@ services:
       - key: SERVER_PORT
         value: "8085"
       - key: JAVA_TOOL_OPTIONS
-        value: "-XX:MaxRAMPercentage=75.0"
+        value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
     autoDeploy: true
 
   - type: web
@@ -219,7 +225,7 @@ services:
       - key: SERVER_PORT
         value: "8086"
       - key: JAVA_TOOL_OPTIONS
-        value: "-XX:MaxRAMPercentage=75.0"
+        value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
     autoDeploy: true
 
   # ============================================================================
@@ -238,7 +244,7 @@ services:
       - key: SERVER_PORT
         value: "8087"
       - key: JAVA_TOOL_OPTIONS
-        value: "-XX:MaxRAMPercentage=75.0"
+        value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: MCP_STUDENT_DATA_URL
         value: https://edu-portrait-mcp-student.onrender.com
       - key: MCP_KNOWLEDGE_RAG_URL
@@ -291,7 +297,7 @@ services:
       - key: SERVER_PORT
         value: "8094"
       - key: JAVA_TOOL_OPTIONS
-        value: "-XX:MaxRAMPercentage=75.0"
+        value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: STUDENT_SERVICE_URL
         value: https://edu-portrait-student.onrender.com
       - key: MENTAL_SERVICE_URL
