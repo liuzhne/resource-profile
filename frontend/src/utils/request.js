@@ -23,7 +23,8 @@ let wakingNotice = null
 
 // 冷启动最长要等约 2 分钟，必须让用户看到进度，否则会以为页面卡死
 const showWakingNotice = (attempt) => {
-  const text = `服务正在唤醒，请稍候…（第 ${attempt}/${MAX_RETRY} 次重试）`
+  // 免费实例冷启动实测约 157s，明确告知耗时量级，避免用户以为卡死而反复点击
+  const text = `服务正在唤醒中，首次访问约需 2-3 分钟，请勿关闭页面…（第 ${attempt}/${MAX_RETRY} 次重试）`
   if (wakingNotice) {
     // 已有提示则就地更新文案，不再叠加新的一条
     const el = document.querySelector('.waking-notice .el-message__content')
