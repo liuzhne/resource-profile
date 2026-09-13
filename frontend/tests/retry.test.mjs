@@ -61,9 +61,10 @@ ok('503 属冷启动', isColdStartFailure(r(503)) === true)
 ok('400 非冷启动', isColdStartFailure(r(400)) === false)
 
 // —— 退避 ——
+// 退避不得缩短（允许末段进入平台期，避免间隔被无限拉长）
 ok(
-  '退避递增',
-  RETRY_DELAYS.every((d, i) => i === 0 || d > RETRY_DELAYS[i - 1])
+  '退避不递减',
+  RETRY_DELAYS.every((d, i) => i === 0 || d >= RETRY_DELAYS[i - 1])
 )
 ok(
   'retryDelay 对齐表',
@@ -72,11 +73,14 @@ ok(
 ok('超出用末值', retryDelay(99) === RETRY_DELAYS[RETRY_DELAYS.length - 1])
 ok('次数与时间表一致', MAX_RETRY === RETRY_DELAYS.length)
 
-// —— 窗口必须覆盖冷启动（回归护栏）——
-// Render 休眠期是秒回 429 而非挂起，axios timeout 无效，只有重试窗口起作用。
-// 冷启动实测 30~120s，窗口若短于 120s 会退化成「点了就失败」。
+// —— 窗口必须覆盖完整冷启动（回归护栏）——
+// 实测 2026-09-13：Render 把首个请求挂住约 114s 后返回 429，唤醒在后台继续；
+// auth-service 端到端冷启动约 157s。窗口若短于 157s，重试撑不到服务就绪，
+// 表现为「无论点多少次都失败」（#8 的 7s 与 #10 的 131s 都栽在这里）。
+const COLD_START_MS = 157000
 const windowMs = RETRY_DELAYS.reduce((a, b) => a + b, 0)
-ok(`重试窗口 ${windowMs / 1000}s 覆盖 120s 冷启动`, windowMs >= 120000)
+ok(`重试窗口 ${windowMs / 1000}s 覆盖 ${COLD_START_MS / 1000}s 冷启动`, windowMs >= COLD_START_MS)
+ok('重试次数与时间表长度一致', MAX_RETRY === RETRY_DELAYS.length)
 
 console.log(`\n通过 ${pass} / ${pass + fail}`)
 process.exit(fail ? 1 : 0)
