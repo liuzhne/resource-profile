@@ -64,6 +64,14 @@ services:
       paths:
         - frontend/**
     routes:
+      # ① 登录链路绕过网关，直连 auth-service。
+      # 网关的 JwtAuthGlobalFilter 本就把 /auth/ 整个前缀列为 PUBLIC_PREFIXES（不校验 token，
+      # 校验由 auth-service 自身的 Spring Security 完成），故绕过不损失任何鉴权。
+      # 收益：登录只需唤醒 1 个服务而非串行唤醒 网关 + auth 两个，砍掉一次冷启动。
+      # 注意：更具体的规则必须排在 /api/* 之前，Render 按顺序匹配。
+      - type: rewrite
+        source: /api/auth/*
+        destination: https://edu-portrait-auth.onrender.com/auth/*
       - type: rewrite
         source: /api/*
         destination: https://edu-portrait-gateway.onrender.com/*
@@ -103,6 +111,13 @@ services:
       #   egd=urandom          避免低熵容器中 SecureRandom 播种阻塞
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
+      # ② 延迟 Bean 初始化：让 Tomcat 更早开端口、健康检查更早通过，
+      #    从而在 Render 的约 114s 等待上限内完成唤醒。
+      #    代价：首个请求需按需初始化 Bean（略慢），配置错误推迟到运行时暴露。
+      #    agent-service 因含 @Scheduled（DailyScanScheduler / SseEmitterRegistry）故排除 ——
+      #    延迟初始化会导致定时任务不被创建。
+      - key: SPRING_MAIN_LAZY_INITIALIZATION
+        value: "true"
       - key: AUTH_SERVICE_URL
         value: https://edu-portrait-auth.onrender.com
       - key: USER_SERVICE_URL
@@ -141,6 +156,8 @@ services:
         value: "8081"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
+      - key: SPRING_MAIN_LAZY_INITIALIZATION
+        value: "true"
       - key: SPRING_DATA_REDIS_URL
         fromService:
           type: keyvalue
@@ -162,6 +179,8 @@ services:
         value: "8082"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
+      - key: SPRING_MAIN_LAZY_INITIALIZATION
+        value: "true"
     autoDeploy: true
 
   - type: web
@@ -178,6 +197,8 @@ services:
         value: "8083"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
+      - key: SPRING_MAIN_LAZY_INITIALIZATION
+        value: "true"
     autoDeploy: true
 
   - type: web
@@ -194,6 +215,8 @@ services:
         value: "8084"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
+      - key: SPRING_MAIN_LAZY_INITIALIZATION
+        value: "true"
     autoDeploy: true
 
   - type: web
@@ -210,6 +233,8 @@ services:
         value: "8085"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
+      - key: SPRING_MAIN_LAZY_INITIALIZATION
+        value: "true"
     autoDeploy: true
 
   - type: web
@@ -226,6 +251,8 @@ services:
         value: "8086"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
+      - key: SPRING_MAIN_LAZY_INITIALIZATION
+        value: "true"
     autoDeploy: true
 
   # ============================================================================
@@ -298,6 +325,8 @@ services:
         value: "8094"
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
+      - key: SPRING_MAIN_LAZY_INITIALIZATION
+        value: "true"
       - key: STUDENT_SERVICE_URL
         value: https://edu-portrait-student.onrender.com
       - key: MENTAL_SERVICE_URL
