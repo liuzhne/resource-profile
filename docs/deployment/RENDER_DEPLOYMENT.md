@@ -91,6 +91,36 @@ graph TD
 5. 应用前确认将创建免费的 `edu-portrait-kv`，并停止使用旧的 Web Service MySQL/Redis。Blueprint
    创建服务后，最终可用性仍须按第 9 节逐项验证。
 
+### 3.1 持续部署：合入 main 即部署生产
+
+`main` 就是生产分支（`RENDER-CD-20260915`）。`render.yaml` 为每个服务声明 `branch: main` 与
+`autoDeployTrigger: checksPass`，发布链路为：
+
+1. PR 合入 `main`（main 受 ruleset 保护，只能经 PR 合入）。
+2. GitHub Actions 在这个 main 提交上按改动路径运行 `backend-ci` / `frontend-ci`。
+3. 提交上的全部 check 结论为 success / neutral / skipped 后 Render 才部署，且只重建 `buildFilter`
+   命中的服务：
+
+| 改动路径 | 在 main 上运行的 CI | Render 重新部署 |
+| :--- | :--- | :--- |
+| `frontend/**` | frontend-ci | `edu-portrait-frontend` |
+| `backend/<模块>/**`、`docker/Dockerfile.<服务>` | backend-ci | 对应的单个服务 |
+| `backend/common/**`、`backend/pom.xml` | backend-ci | 9 个 Java 服务（均依赖 `common`） |
+| `ai-inference-service/**` | backend-ci | `edu-portrait-ai-inference` |
+| `render.yaml` | backend-ci | Blueprint 自动同步所改动的服务 |
+| 仅 `docs/`、`sql/`、根目录 `*.md` 等 | 无 | 不部署 |
+
+- **一次性前提**：Blueprint → Settings 中链接分支为 `main`、Auto Sync 为 Yes；同步后各服务 Settings
+  应显示 Branch `main`、Auto-Deploy「After CI Checks Pass」。
+- **零 check 不部署**：Render 在提交上检测不到任何 CI check 时不会部署。新增服务、调整 `buildFilter`
+  或给模块新增内部依赖时，必须同步 `.github/workflows/backend-ci.yml` / `frontend-ci.yml` 的 push 路径。
+- **CI 红即不上线**：包括 `npm audit` 遇到新公布的 high/critical 漏洞；修复依赖后重新合入即可。
+- **跳过部署**：提交信息含 `[skip render]`（`render` 也可写作 `deploy` 或 `cd`）。
+- **紧急发布与回滚**：服务页 **Manual Deploy** 可部署指定提交（绕过 CI 门，事后补验证）；**Rollback**
+  回到上一次成功部署。验证与排错步骤见 [`RUNBOOK.md`](../../RUNBOOK.md) 的 `RENDER-CD-20260915`。
+- **构建额度**：Hobby 工作区每月 500 分钟构建额度，耗尽后 Render 停止构建直至下月；改 `common` 或父
+  POM 会重建 9 个 Java 服务，尽量合并为一次提交。
+
 ---
 
 ## 4. 数据库初始化 (MySQL 8.0)

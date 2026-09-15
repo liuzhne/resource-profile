@@ -12,7 +12,23 @@ on:
     paths:
       - "backend/**"
       - "ai-inference-service/**"
+      - "docker/Dockerfile.*"
       - "docker/.env.example"
+      - "render.yaml"
+      - "scripts/preflight-prod.sh"
+      - "scripts/test-preflight-prod.sh"
+      - ".github/workflows/backend-ci.yml"
+  # RENDER-CD-20260915：合入 main 即部署生产。Render 以 checksPass 等这次 main 提交的 CI 全绿才部署，
+  # 提交上零 check 则不部署 —— 故路径须覆盖 render.yaml 中全部后端服务的 buildFilter（含各 Dockerfile）；
+  # render.yaml 自身也列入，保证 Blueprint 配置变更同样有 check 可等。与 pull_request 保持同一份列表。
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "ai-inference-service/**"
+      - "docker/Dockerfile.*"
+      - "docker/.env.example"
+      - "render.yaml"
       - "scripts/preflight-prod.sh"
       - "scripts/test-preflight-prod.sh"
       - ".github/workflows/backend-ci.yml"

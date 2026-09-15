@@ -5,6 +5,13 @@ on:
     paths:
       - "frontend/**"
       - ".github/workflows/frontend-ci.yml"
+  # RENDER-CD-20260915：合入 main 即部署生产。Render 以 checksPass 等这次 main 提交的 CI 全绿才部署前端，
+  # 路径须覆盖 render.yaml 中前端的 buildFilter（frontend/**）。
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
   workflow_dispatch:
 
 jobs:
