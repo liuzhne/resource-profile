@@ -2,6 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/modules/user'
 import { shouldRetry, retryDelay, isColdStartFailure, MAX_RETRY } from './retry'
+import { wakeServicesNow } from './warmup'
 
 // Render 免费层的 web service 闲置约 15 分钟后休眠，冷启动实测 30~120s。
 // 原先 10s 的超时必然等不到唤醒完成，表现为「接口永远超时」；
@@ -88,6 +89,10 @@ request.interceptors.response.use(
   },
   async (error) => {
     const config = error.config
+
+    // 经网关转发的请求叫不醒休眠中的下游服务（Render 直接回 429），重试再多也等不到它醒；
+    // 故撞上冷启动类失败时先绕过网关直连唤醒，重试窗口内即可等到服务就绪（详见 utils/warmup.js）
+    if (isColdStartFailure(error)) wakeServicesNow()
 
     if (shouldRetry(error, config)) {
       config.__retryCount = (config.__retryCount || 0) + 1

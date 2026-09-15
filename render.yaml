@@ -73,6 +73,13 @@ services:
       # 未配置 LLM 供应商前隐藏 AI 预警与 LLM 追踪入口。
       - key: VITE_AI_ENABLED
         value: "true"
+      # 打开网站即并行唤醒的后端服务（逗号分隔的公网健康检查地址；网关已内置，经 /api 同源唤醒）。
+      # 免费层各服务独立休眠，逐个撞上冷启动是串行叠加；并行唤醒把等待压成一段（见 src/utils/prewarm.js）。
+      # 只列前端实际调用的服务：user-service 前端未使用；agent 链路（agent / MCP / ai-inference）
+      # 待 agent-service 不响应问题修复后再纳入。每次唤醒会让所列服务至少运行 15 分钟，计入免费实例时长。
+      # auth 的 /actuator/health 受其 Spring Security 保护会返回 403，但请求本身已足以唤醒实例。
+      - key: VITE_PREWARM_URLS
+        value: "https://edu-portrait-auth.onrender.com/actuator/health,https://edu-portrait-teacher.onrender.com/actuator/health,https://edu-portrait-student.onrender.com/actuator/health,https://edu-portrait-mental.onrender.com/actuator/health,https://edu-portrait-data.onrender.com/actuator/health"
     buildFilter:
       paths:
         - frontend/**
