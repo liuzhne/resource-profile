@@ -605,6 +605,68 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 - 验证状态：2026-09-04 已在线复现任务 7 的单线程 PARSE_ERROR，并核对 Groq 官方 JSON Object Mode
   能力；配置和测试已更新，部署后线上复验待完成。
 
+### RENDER-CD-20260915：合入 main 即部署生产（CI 通过后按服务增量部署）
+
+- 复现（修复前）：`gh api repos/liuzhne/resource-profile/commits/bcb01c4/check-runs` 返回空——CI 只在
+  `pull_request` 上运行，被部署的 main 提交从未验证；Render 使用 `autoDeploy: true`（每个提交立即部署），
+  main 的 ruleset 又不要求 PR 检查通过，CI 红的 PR 合入后照样上线。10 个 Docker 服务没有 `buildFilter`，
+  只改文档的提交也会全部重建，消耗 Hobby 每月 500 分钟构建额度。
+- 前提（一次性）：Render Blueprint `exs-da9vgj942hec7392v2vg` → Settings 中链接分支为 `main`、Auto Sync
+  为 Yes。发布规则与路径对照见 [`docs/deployment/RENDER_DEPLOYMENT.md`](docs/deployment/RENDER_DEPLOYMENT.md) §3.1。
+- 修复后验证：
+
+  ```bash
+  # 1) 用 Render 官方 JSON Schema 校验（按 YAML 1.2 布尔语义加载，off 不会被当成 false）
+  python3 - <<'PY'
+  import json, re, urllib.request, yaml, jsonschema
+  class L(yaml.SafeLoader): pass
+  L.yaml_implicit_resolvers = {k: [r for r in v if r[0] != 'tag:yaml.org,2002:bool']
+                               for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()}
+  L.add_implicit_resolver('tag:yaml.org,2002:bool', re.compile(r'^(?:true|false)$', re.I), list('tTfF'))
+  schema = json.load(urllib.request.urlopen('https://render.com/schema/render.yaml.json'))
+  jsonschema.validate(yaml.load(open('render.yaml'), L), schema)
+  print('render.yaml OK')
+  PY
+
+  # 2) 官方校验（需先 render login）
+  render blueprints validate render.yaml
+
+  # 3) 合入后：main 头提交上应有 CI check 且全部成功
+  gh api repos/liuzhne/resource-profile/commits/$(git rev-parse origin/main)/check-runs \
+    --jq '.check_runs[] | "\(.name) \(.status)/\(.conclusion)"'
+  ```
+
+  Blueprint 同步后在 Render 核对：
+  1. 每个服务 Settings 显示 Branch `main`、Auto-Deploy「After CI Checks Pass」，Build Filters 与 `render.yaml` 一致。
+  2. 合入只改 `frontend/**` 的 PR：main 提交跑 frontend-ci，通过后只有 `edu-portrait-frontend` 出现新 deploy，
+     其 commit 与 main 头提交一致，后端服务无新 deploy。
+  3. 合入只改 `docs/` 的 PR：main 提交无 check，Render 无新 deploy。
+- 通过判据：新 deploy 均晚于对应 CI check 完成；CI 失败的 main 提交不产生 deploy；无关服务不再随每次
+  提交重建。
+- 排错：合入后没有部署时依次检查——① main 提交是否有 check（零 check 不部署：改动是否落在 CI push 路径外）；
+  ② 是否有 check 失败（`npm audit` 遇新公布的 high/critical 漏洞最常见）；③ 提交信息是否含
+  `[skip render]`/`[skip deploy]`/`[skip cd]`；④ Workspace 构建额度是否耗尽；⑤ Blueprint 是否仍链接 `main`
+  且 Auto Sync 开启；⑥ CI 全绿仍一直不部署时，查看提交上的 check suite——GitHub 会为有 checks 写权限的
+  App 自动建空 suite（本仓库为 `coderabbitai`，app_id 347564，queued、0 runs）。Render 文档未说明是否忽略
+  空 suite；若确认被它卡住，关闭该 App 的自动建 suite（它从未在 suite 中产生 run，不影响 PR 评审），或临时
+  改回 `autoDeployTrigger: commit`：
+
+  ```bash
+  gh api repos/liuzhne/resource-profile/commits/$(git rev-parse origin/main)/check-suites \
+    --jq '.check_suites[] | "\(.app.slug) \(.status)/\(.conclusion) runs=\(.latest_check_runs_count)"'
+  gh api -X PATCH repos/liuzhne/resource-profile/check-suites/preferences \
+    --input - <<< '{"auto_trigger_checks":[{"app_id":347564,"setting":false}]}'
+  ```
+
+  服务代码没随改动更新时，核对其 `buildFilter` 是否覆盖全部 Maven 依赖模块。
+- 回滚：服务页 **Rollback** 回到上一次成功部署（无数据库影响），或 revert 后走同一流程；紧急修复可用
+  **Manual Deploy** 部署指定提交（绕过 CI 门，事后补验证）。配置回退：`autoDeployTrigger` 改回 `commit`、
+  删除各服务 `buildFilter`、移除两个 workflow 的 push 触发。
+- 验证状态：2026-09-15 本地：Render 官方 JSON Schema 校验通过；两份 workflow 通过 SchemaStore GitHub
+  Workflow Schema；路径覆盖自检（每个 buildFilter 均有 CI push 路径覆盖、Java 服务 buildFilter 覆盖 Maven
+  依赖、14 类典型改动的重建/CI 预期）全部通过。`render blueprints validate` 因 CLI 未登录未执行；Blueprint
+  同步与 main 上首次 CI 门控部署待合入后验证。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -636,3 +698,4 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-04 / AIVEN-DNS-20260904 | 增加 Aiven DNS 故障复现、凭据核验、验证与回滚步骤 | 原免费服务已恢复 Running；DNS、聚合 health、登录与数据库回读通过 |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 增加 GPT-OSS JSON Object Mode、配额预算与复验步骤 | 线上 PARSE_ERROR 已复现；配置级测试和部署复验待完成 |
+| 2026-09-15 / RENDER-CD-20260915 | 增加 main 即生产的发布流程、CI 门控部署验证、排错与回滚步骤 | 官方 Schema 与路径覆盖自检通过；Blueprint 同步与首次门控部署待合入后验证 |

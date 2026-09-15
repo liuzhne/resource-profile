@@ -334,6 +334,37 @@
 - 证据：线上任务 7 单线程执行、无 429，却连续两轮 parse error；Groq 官方 API 文档与 GPT-OSS 模型页
   明确列出 JSON Object Mode。配置级测试覆盖 response format 与 reasoning effort；线上复验待部署后执行。
 
+## ADR-026：main 即生产，Render 在 CI 通过后按服务增量部署
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-15 / RENDER-CD-20260915
+- 背景：Render 服务未声明 `branch`（隐式跟随仓库默认分支 `main`），并使用已废弃的 `autoDeploy: true`
+  （每个提交立即部署）。CI 只在 `pull_request` 上运行，main 的 ruleset 只要求走 PR、不要求检查通过，
+  因此 CI 红的 PR 合入后照样上线，被部署的 main 提交本身从未验证。10 个 Docker 服务均无 `buildFilter`，
+  任何提交（含仅改文档）都会全部重建；Hobby 工作区每月 500 分钟构建额度耗尽后 Render 停止构建，届时
+  合入 main 也不再部署。
+- 选择：`render.yaml` 为每个服务显式声明 `branch: main` 与 `autoDeployTrigger: checksPass`；10 个 Docker
+  服务按 Maven 反应堆依赖声明 `buildFilter`（自身模块 + `backend/common/**` + 父 `backend/pom.xml` +
+  自身 Dockerfile；ai-inference 为 `ai-inference-service/**`）；`backend-ci`/`frontend-ci` 增加 main 的
+  push 触发，路径覆盖全部 buildFilter 与 `render.yaml`。
+- 原因：以「被部署的那个提交」的 CI 结果门控上线，而非 PR 头提交；全部落在仓库配置内，可审阅、可回滚，
+  不引入新密钥。buildFilter 让构建额度只花在确实变化的服务上。
+- 放弃方案：① 保持 `commit` 触发、在 ruleset 加必需状态检查——路径过滤未触发的 workflow 会让 PR 永远
+  等待必需检查，且仍不验证合并后的提交；② 关闭自动部署、由 GitHub Actions 调用 11 个 Deploy Hook——需
+  维护 11 个秘密 URL 并自行实现按路径部署，重复 Render 已有能力；③ 不设 buildFilter——每次提交 10 次
+  Maven 全量 Docker 构建，额度数周内即可耗尽。
+- 后果：上线延迟增加一次 CI 时长（后端全量单测数分钟）。Render 在提交上检测不到 check 时不部署，
+  buildFilter 与 CI push 路径必须同步维护；`npm audit` 遇新公布的 high/critical 漏洞会阻断该提交涉及的
+  全部部署，需修依赖或经 Dashboard Manual Deploy。改 `common` 或父 POM 仍会重建 9 个 Java 服务。
+  Blueprint 首次同步本变更时各服务可能各重建一次。GitHub 在每个提交上为 `coderabbitai` 自动建空 check
+  suite（queued、0 runs）；Render 文档未说明是否计入，推断不计入（Dokploy #5284 实测 Render 自身的 App
+  也会产生同类空 suite），首次合入须确认，若被阻塞按 RUNBOOK 关闭该 App 的自动建 suite。
+- 证据：[`render.yaml`](./render.yaml)、[`backend-ci.yml`](./.github/workflows/backend-ci.yml)、
+  [`frontend-ci.yml`](./.github/workflows/frontend-ci.yml)。线上前端 `index.html` 的 `last-modified` 为
+  2026-09-13 08:49 UTC（#11 合入 main 后约 38 分钟），bundle 含 #11 的重试文案、不含未合入的 #13，佐证
+  当前按 main 提交即部署；main 头提交 `bcb01c4` 的 check-runs 为空。本地 Schema 校验与路径覆盖自检见
+  RUNBOOK 同名条目；Blueprint 同步与首次门控部署待验证。
+
 ## 新决策模板
 
 ```markdown
@@ -365,3 +396,4 @@
 | 2026-09-04 / AIVEN-DNS-20260904 | 新增 ADR-023，以 Aiven 当前连接信息修复失效 DNS | 不猜测端点、不绕过健康检查，数据库凭据继续仅存 Render secret |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 新增 ADR-024，对 Groq TPM 429 使用有界退避 | 保留完整 AgentLoop 质量；401/403 继续 fail-fast |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 新增 ADR-025，Render GPT-OSS 改用 JSON Object Mode 与低推理预算 | 保留 ReAct 主路径；本地 OpenAI 兼容端点维持 TEXT 默认值 |
+| 2026-09-15 / RENDER-CD-20260915 | 新增 ADR-026，main 即生产、CI 通过后按服务增量部署 | 部署以被部署提交的 CI 为准；buildFilter 与 CI push 路径须同步维护 |

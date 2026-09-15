@@ -249,6 +249,11 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 - `GROQ-JSON-MODE-20260904` 为 Render 上的 GPT-OSS ReAct 调用启用 Groq JSON Object Mode，并将
   reasoning effort 固定为 `low`、单次最大输出限制为 1200 tokens。该配置只约束 LLM 输出协议和免费配额
   消耗，不改变 AgentLoop、MCP、数据库或安全边界；本地 OpenAI 兼容端点仍默认 TEXT 且不发送 Groq 专用值。
+- `RENDER-CD-20260915` 固定 Render 的发布边界：所有服务显式跟随 `main`，且仅在被部署提交的 GitHub
+  Actions CI 全部通过后部署（`autoDeployTrigger: checksPass`）；每个 Docker 服务的 `buildFilter` 按 Maven
+  反应堆依赖划定（自身模块 + `common` + 父 POM + 自身 Dockerfile，gateway 同样依赖 `common`），前端仍为
+  `frontend/**`。CI 的 main push 路径必须覆盖全部 buildFilter，否则提交无 check、Render 不部署。服务拓扑、
+  数据流与安全边界不变。
 
 ## 6. 变更原则
 
@@ -273,3 +278,4 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 | 2026-09-04 / AIVEN-DNS-20260904 | 记录 Render 当前 Aiven MySQL 主机名不可解析及端点校验要求 | 无架构影响；数据库仍位于 Aiven，仅外部连接配置待修复 |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 为 Groq 免费层 TPM 429 增加有界重试退避 | 无架构影响；仅增强 agent-service 外部 LLM 调用韧性 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | Render GPT-OSS 启用 JSON Object Mode 并收紧推理/输出预算 | 无架构影响；仅强化 ReAct 输出契约并降低免费 TPM 压力 |
+| 2026-09-15 / RENDER-CD-20260915 | Render 固定跟随 main，CI 通过后按服务 buildFilter 增量部署 | 无运行时架构影响；发布链路受 CI 门控，构建范围与 Maven 模块依赖绑定 |

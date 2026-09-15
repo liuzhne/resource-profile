@@ -3,6 +3,17 @@
 # Docs: https://render.com/docs/free
 # ==============================================================================
 
+# ------------------------------------------------------------------------------
+# 发布流程（RENDER-CD-20260915）：合入 main 即部署生产
+# ------------------------------------------------------------------------------
+# PR 合入 main → GitHub Actions 在该 main 提交上跑 CI → 全部通过后 Render 才部署
+# （每个服务 branch: main + autoDeployTrigger: checksPass）。main 的 ruleset 不要求 PR 检查通过，
+# 这是拦住 CI 红的代码上线的唯一关口。
+# 每个 Docker 服务的 buildFilter 按 Maven 反应堆依赖划定（自身模块 + common + 父 POM + Dockerfile），
+# 只重建真正变化的服务：Hobby 工作区每月仅 500 分钟构建额度，耗尽后 Render 停止构建直至下月。
+# 约束：提交上检测不到任何 CI check 时 Render 不部署。新增服务、调整 buildFilter 或新增模块依赖时，
+# 必须同步 .github/workflows/{backend,frontend}-ci.yml 的 push 路径。
+
 version: "1"
 
 # ------------------------------------------------------------------------------
@@ -56,6 +67,8 @@ services:
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
+    branch: main
+    autoDeployTrigger: checksPass
     envVars:
       # 未配置 LLM 供应商前隐藏 AI 预警与 LLM 追踪入口。
       - key: VITE_AI_ENABLED
@@ -85,7 +98,6 @@ services:
       - path: /assets/*
         name: Cache-Control
         value: "public, max-age=31536000, immutable"
-    autoDeploy: true
 
   # ============================================================================
   # 2. 网关服务 (Web Service - 100% 免费层)
@@ -95,6 +107,14 @@ services:
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.gateway
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/gateway/**
+        - backend/common/**
+        - backend/pom.xml
+        - docker/Dockerfile.gateway
     plan: free
     healthCheckPath: /actuator/health
     envVars:
@@ -137,7 +157,6 @@ services:
           type: keyvalue
           name: edu-portrait-kv
           property: connectionString
-    autoDeploy: true
 
   # ============================================================================
   # 3. 核心业务微服务群 (Web Services - 100% 免费层)
@@ -147,6 +166,14 @@ services:
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.auth
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/auth-service/**
+        - backend/common/**
+        - backend/pom.xml
+        - docker/Dockerfile.auth
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
@@ -163,13 +190,20 @@ services:
           type: keyvalue
           name: edu-portrait-kv
           property: connectionString
-    autoDeploy: true
 
   - type: web
     name: edu-portrait-user
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.user
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/user-service/**
+        - backend/common/**
+        - backend/pom.xml
+        - docker/Dockerfile.user
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
@@ -181,13 +215,20 @@ services:
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
         value: "true"
-    autoDeploy: true
 
   - type: web
     name: edu-portrait-teacher
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.teacher
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/teacher-service/**
+        - backend/common/**
+        - backend/pom.xml
+        - docker/Dockerfile.teacher
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
@@ -199,13 +240,20 @@ services:
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
         value: "true"
-    autoDeploy: true
 
   - type: web
     name: edu-portrait-student
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.student
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/student-service/**
+        - backend/common/**
+        - backend/pom.xml
+        - docker/Dockerfile.student
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
@@ -217,13 +265,20 @@ services:
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
         value: "true"
-    autoDeploy: true
 
   - type: web
     name: edu-portrait-mental
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.mental
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/mental-service/**
+        - backend/common/**
+        - backend/pom.xml
+        - docker/Dockerfile.mental
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
@@ -235,13 +290,20 @@ services:
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
         value: "true"
-    autoDeploy: true
 
   - type: web
     name: edu-portrait-data
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.data
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/data-service/**
+        - backend/common/**
+        - backend/pom.xml
+        - docker/Dockerfile.data
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
@@ -253,7 +315,6 @@ services:
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
         value: "true"
-    autoDeploy: true
 
   # ============================================================================
   # 4. EduCare Agent 智能编排与 MCP 节点 (100% 免费层)
@@ -263,6 +324,14 @@ services:
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.agent
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/agent-service/**
+        - backend/common/**
+        - backend/pom.xml
+        - docker/Dockerfile.agent
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
@@ -309,13 +378,20 @@ services:
           type: keyvalue
           name: edu-portrait-kv
           property: connectionString
-    autoDeploy: true
 
   - type: web
     name: edu-portrait-mcp-student
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./docker/Dockerfile.mcp-student-data
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/mcp-student-data/**
+        - backend/common/**
+        - backend/pom.xml
+        - docker/Dockerfile.mcp-student-data
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
@@ -332,13 +408,17 @@ services:
       - key: MENTAL_SERVICE_URL
         value: https://edu-portrait-mental.onrender.com
     healthCheckPath: /actuator/health
-    autoDeploy: true
 
   - type: web
     name: edu-portrait-ai-inference
     runtime: docker
     dockerContext: ./ai-inference-service
     dockerfilePath: ./ai-inference-service/Dockerfile
+    branch: main
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - ai-inference-service/**
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
@@ -353,7 +433,6 @@ services:
       - key: RERANKER_ENABLED
         value: "false"
     healthCheckPath: /health
-    autoDeploy: true
 
   # ============================================================================
   # 5. 基础设施：Render 托管 Key Value（MySQL 使用外部 Aiven Free MySQL）
