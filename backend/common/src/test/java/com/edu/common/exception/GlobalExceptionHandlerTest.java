@@ -3,6 +3,8 @@ package com.edu.common.exception;
 import com.edu.common.result.Result;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,6 +20,17 @@ class GlobalExceptionHandlerTest {
 
         assertThat(result.getCode()).isEqualTo(404);
         assertThat(result.getMessage()).isEqualTo("资源不存在");
+    }
+
+    @Test
+    void unmappedPathSetsHttpStatus404() throws NoSuchMethodException {
+        // 响应体 code 之外还须真正的 HTTP 404；缺了 @ResponseStatus，Spring MVC 默认回 HTTP 200
+        ResponseStatus status = GlobalExceptionHandler.class
+                .getMethod("handleNoResourceFound", NoResourceFoundException.class)
+                .getAnnotation(ResponseStatus.class);
+
+        assertThat(status).isNotNull();
+        assertThat(status.value()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
