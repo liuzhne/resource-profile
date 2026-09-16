@@ -316,7 +316,12 @@ const loadDistributionData = async () => {
   try {
     const res = await getDistributionData()
     if (res.data?.data) {
-      distributionData.value = res.data.data
+      // 后端 Long 统一序列化为字符串（common 的 JacksonConfig，防 JS 精度丢失）；
+      // 不转回数字，下面求总数会变成字符串拼接（线上曾显示「0111」）
+      distributionData.value = res.data.data.map((d: { name: string; value: number | string }) => ({
+        ...d,
+        value: Number(d.value) || 0
+      }))
     }
   } catch (error) {
     console.error('加载分布数据失败', error)

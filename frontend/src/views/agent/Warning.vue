@@ -138,6 +138,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, MagicStick, Loading } from '@element-plus/icons-vue'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { createBackoff } from '@/utils/backoff'
 import { getAgentTaskList, triggerAgentTask } from '@/api/agent'
 import { useUserStore } from '@/store/modules/user'
 
@@ -237,10 +238,14 @@ const hasInProgressTask = computed(() =>
 // ====== F-2：SSE 实时推送 + 轮询兜底 ======
 // 设计：SSE 推送 4 阶段流水线终态（COMPLETED / REJECTED / FAILED）；
 // 中间状态（RISK_ANALYZING 等）仍靠 3s 轮询，仅在 hasInProgressTask 时打 API。
-// SSE 断开时由 fetch-event-source 自动指数退避重连，期间轮询继续兜底。
+// SSE 断开时指数退避重连（见 sseBackoff），期间轮询继续兜底。
 let pollTimer = null
 let sseAbortCtrl = null
 const sseConnected = ref(false)
+
+// fetch-event-source 默认固定 1s 重连、并不退避。agent-service 休眠或唤醒失败时，
+// 实测（2026-09-14）一个标签页 30 分钟向网关重连 930 次，网关因此无法休眠、白耗免费实例时长。
+const sseBackoff = createBackoff({ min: 2000, max: 60000 })
 
 const connectSse = async () => {
   if (sseAbortCtrl) sseAbortCtrl.abort()
@@ -253,6 +258,7 @@ const connectSse = async () => {
       onopen: async (resp) => {
         if (resp.ok && resp.headers.get('content-type')?.includes('text/event-stream')) {
           sseConnected.value = true
+          sseBackoff.reset()
         } else {
           // 非 200 或非 SSE 内容 —— 直接抛错，让 fetch-event-source 走 onerror
           throw new Error(`SSE 握手失败 status=${resp.status}`)
@@ -267,9 +273,10 @@ const connectSse = async () => {
       },
       onerror: (err) => {
         sseConnected.value = false
-        // 返回 undefined 让 fetch-event-source 走默认指数退避重连；
-        // 抛异常则停止重连（这里我们想自动重连，故不抛）
-        console.warn('SSE 连接异常，将自动重连', err?.message || err)
+        // 返回数值即下次重连前的等待毫秒数；抛异常则停止重连（这里要自动重连，故不抛）
+        const wait = sseBackoff.next()
+        console.warn(`SSE 连接异常，${wait / 1000}s 后重连`, err?.message || err)
+        return wait
       },
       onclose: () => {
         sseConnected.value = false
