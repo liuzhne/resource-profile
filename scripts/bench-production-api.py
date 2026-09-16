@@ -36,6 +36,8 @@ def main():
     parser.add_argument('--rounds', type=int, default=5)
     parser.add_argument('--timeout', type=float, default=60)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--extended', action='store_true', help='Also measure further non-mutating business reads')
+    parser.add_argument('--sse', action='store_true', help='Also measure SSE headers/first hello frame, then close')
     args = parser.parse_args()
     password = os.environ['BENCH_PASSWORD']
     rows = []
@@ -74,9 +76,39 @@ def main():
 
         if probe('/auth/login', 1, 'POST', {'username': os.environ.get('BENCH_USERNAME', args.role), 'password': password}, login=True):
             paths = ADMIN_PATHS if args.role == 'admin' else ROLE_PATHS[args.role]
+            if args.extended and args.role == 'admin':
+                paths = paths + ['/user/1', '/student/ids', '/student/1/attendance',
+                                 '/mental/questionnaires/1', '/mental/questionnaires/1/questions']
             for path in paths:
                 for run in range(1, args.rounds + 1):
                     probe(path, run)
+            if args.sse and args.role == 'admin':
+                path = '/agent/api/v1/warning/stream'
+                for run in range(1, args.rounds + 1):
+                    start = time.perf_counter()
+                    row = {'path': path, 'method': 'GET', 'run': run,
+                           'utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                           'measurement': 'SSE first frame, connection closed after hello'}
+                    try:
+                        with session.get(args.base.rstrip('/') + path, stream=True, timeout=args.timeout) as response:
+                            row['http'] = response.status_code
+                            row['headers_ms'] = round((time.perf_counter() - start) * 1000, 2)
+                            row['server_timing'] = response.headers.get('Server-Timing')
+                            if response.status_code == 200 and response.headers.get('Content-Type', '').startswith('text/event-stream'):
+                                frame = bytearray()
+                                for chunk in response.iter_content(chunk_size=1):
+                                    frame.extend(chunk)
+                                    if frame.endswith(b'\n\n') or frame.endswith(b'\r\n\r\n') or len(frame) >= 4096:
+                                        break
+                                row['ok'] = b'event:hello' in frame or b'event: hello' in frame
+                            else:
+                                row['ok'] = False
+                    except requests.RequestException as error:
+                        row.update(ok=False, error_type=type(error).__name__)
+                    row['ms'] = round((time.perf_counter() - start) * 1000, 2)
+                    row['under_500ms'] = row['ok'] and row['ms'] <= 500
+                    rows.append(row)
+                    print(json.dumps(row, ensure_ascii=False), flush=True)
         Path(args.output).write_text(json.dumps({'role': args.role, 'base': args.base,
             'measurement': 'wall-clock full response, persistent requests.Session, sequential',
             'rows': rows}, ensure_ascii=False, indent=2) + '\n')

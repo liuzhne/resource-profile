@@ -1,0 +1,162 @@
+[
+  {
+    "path": "/auth/userInfo",
+    "samples": 4,
+    "success": 4,
+    "under_500": 3,
+    "median_ms": 411.8,
+    "max_ms": 590.54
+  },
+  {
+    "path": "/user/list?page=1&size=10",
+    "samples": 4,
+    "success": 4,
+    "under_500": 2,
+    "median_ms": 470.72,
+    "max_ms": 545.21
+  },
+  {
+    "path": "/data/dashboard/statistics",
+    "samples": 4,
+    "success": 4,
+    "under_500": 1,
+    "median_ms": 521.48,
+    "max_ms": 567.3
+  },
+  {
+    "path": "/data/dashboard/trend?period=week",
+    "samples": 4,
+    "success": 4,
+    "under_500": 3,
+    "median_ms": 486.29,
+    "max_ms": 517.86
+  },
+  {
+    "path": "/data/dashboard/trend?period=month",
+    "samples": 4,
+    "success": 4,
+    "under_500": 2,
+    "median_ms": 559.6,
+    "max_ms": 976.08
+  },
+  {
+    "path": "/data/dashboard/trend?period=year",
+    "samples": 4,
+    "success": 4,
+    "under_500": 2,
+    "median_ms": 514.44,
+    "max_ms": 691.62
+  },
+  {
+    "path": "/data/dashboard/distribution",
+    "samples": 4,
+    "success": 4,
+    "under_500": 4,
+    "median_ms": 457.04,
+    "max_ms": 468.8
+  },
+  {
+    "path": "/data/dashboard/recentLogins",
+    "samples": 4,
+    "success": 4,
+    "under_500": 4,
+    "median_ms": 449.41,
+    "max_ms": 485.27
+  },
+  {
+    "path": "/teacher/list?pageNum=1&pageSize=10",
+    "samples": 4,
+    "success": 4,
+    "under_500": 1,
+    "median_ms": 569.46,
+    "max_ms": 625.47
+  },
+  {
+    "path": "/teacher/1",
+    "samples": 4,
+    "success": 4,
+    "under_500": 4,
+    "median_ms": 422.9,
+    "max_ms": 464.73
+  },
+  {
+    "path": "/student/list?pageNum=1&pageSize=10",
+    "samples": 4,
+    "success": 4,
+    "under_500": 0,
+    "median_ms": 771.94,
+    "max_ms": 811.47
+  },
+  {
+    "path": "/student/1",
+    "samples": 4,
+    "success": 4,
+    "under_500": 4,
+    "median_ms": 443.07,
+    "max_ms": 492.02
+  },
+  {
+    "path": "/student/1/academic",
+    "samples": 4,
+    "success": 4,
+    "under_500": 0,
+    "median_ms": 563.73,
+    "max_ms": 619.87
+  },
+  {
+    "path": "/student/1/attendance/summary",
+    "samples": 4,
+    "success": 4,
+    "under_500": 3,
+    "median_ms": 494.26,
+    "max_ms": 502.29
+  },
+  {
+    "path": "/mental/overview",
+    "samples": 4,
+    "success": 4,
+    "under_500": 2,
+    "median_ms": 502.12,
+    "max_ms": 516.36
+  },
+  {
+    "path": "/mental/analysis",
+    "samples": 4,
+    "success": 4,
+    "under_500": 0,
+    "median_ms": 560.12,
+    "max_ms": 629.15
+  },
+  {
+    "path": "/mental/questionnaires?pageNum=1&pageSize=10",
+    "samples": 4,
+    "success": 4,
+    "under_500": 3,
+    "median_ms": 493.38,
+    "max_ms": 529.41
+  },
+  {
+    "path": "/mental/questionnaires/1/full",
+    "samples": 4,
+    "success": 4,
+    "under_500": 4,
+    "median_ms": 459.69,
+    "max_ms": 464.23
+  },
+  {
+    "path": "/mental/questionnaires/1/completion",
+    "samples": 4,
+    "success": 4,
+    "under_500": 4,
+    "median_ms": 426.61,
+    "max_ms": 465.89
+  },
+  {
+    "path": "/agent/api/v1/task/list?pageNum=1&pageSize=10",
+    "samples": 4,
+    "success": 0,
+    "under_500": 0,
+    "median_ms": 15557.53,
+    "max_ms": 15625.31
+  }
+]

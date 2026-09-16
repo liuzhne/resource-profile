@@ -293,3 +293,5 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 Agent 的 AI 触发和 PDF 提交改为显式使用有界 executor，消除同对象调用绕过 @Async 代理；队列满时标记任务失败并返回业务503，不在 HTTP 线程执行工作。Render 启用 [DeferredMcpConfiguration](./backend/agent-service/src/main/java/com/edu/agent/config/DeferredMcpConfiguration.java) 后，关闭 Spring AI 启动握手，由后台连接/重连双 MCP；仅完整工具集就绪才允许模型使用工具，未就绪不会假装成功。默认本地启动方式保持原 Spring AI MCP 装配。data 首页统计四次数据库往返合并为一条等价 SELECT，趋势过滤不再对 create_time 包裹 DATE；没有自动修改生产数据库结构。gateway DEBUG 改 INFO，避免输出鉴权头。
 
 验收与生产部署证据见 [性能报告](./docs/production-tests/2026-09-16/PERFORMANCE.md)。R-5/R-6 不因本次性能修复自动完成。
+
+PERF-500MS-20260916 补充（2026-09-16）：mental-service Excel 导入将逐题 INSERT 改为每100题参数化 INSERT，保留原问卷替换事务、计分JSON/排序/默认必答/时间戳语义；不改变领域边界或前端同步完成契约。SQL见 [QuestionMapper](./backend/mental-service/src/main/java/com/edu/mental/mapper/QuestionMapper.java)，调用见 [QuestionServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)。
