@@ -418,3 +418,7 @@
 - 验证：完整 Maven 回归/安全覆盖率、新增异步提交及MCP失败恢复、数据库预热失败测试通过；Python28项、前端构建/体积门及既有61条逻辑断言通过，ESLint零错误/一个既有格式警告。Render Blueprint验证通过。生产部署与500ms结果以 PERFORMANCE.md 的实测记录为准。
 
 PERF-500MS-20260916 补充（2026-09-16）：问卷Excel逐题 INSERT 为N次数据库往返，选择每100题参数化批量写入，在同一事务内同步题目数，并手动保留自定义SQL不执行的auto-fill。放弃本次将导入改为异步ID，因为前端目前依赖同步完成后读取题目，直接切换会破坏契约；分批约束单条SQL的参数/报文大小。实际MyBatis/H2验证JSON、中文/引号、可空值、默认删除值和整体回滚通过；205题回归确认100/100/5三次写入。无生产问卷写入验收，不声称任意文件上传/解析500ms。
+
+PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent在toolCallbackResolver创建时因MCP未就绪失败。选择配置条件内动态resolver而不是返回空工具或吞掉503，避免静态空工具快照且保留失败显式语义。新增真实ToolCallingAutoConfiguration启动及刷新工具解析回归通过；默认本地resolver不变。 实现见 [DeferredMcpConfiguration](./backend/agent-service/src/main/java/com/edu/agent/config/DeferredMcpConfiguration.java)。
+
+2026-09-16 / PERF-500MS-20260916：生产 Server-Timing 出现重复 app 指标，原因是领域服务扫描 common 的 @RestControllerAdvice，同时自动配置再次创建 advice。以 ConditionalOnMissingBean 保证唯一注册，并限制 servlet 条件；启动上下文覆盖扫描/不扫描两种注册路径。此项无架构边界变化，影响 common RequestTimingConfiguration。网关首轮现已 live（09:20:08Z），内存可见样本约233MB，不能据此把此前无报错重启归因为OOM。最终指标必须以全部服务稳定发布后复测为准；回滚恢复原提交和原始 render-performance-plan 配置。

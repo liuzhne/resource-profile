@@ -28,3 +28,7 @@
 Excel逐题数据库写入改为每100题参数化批量INSERT，同一事务保持替换/题目数/计分JSON/排序/必答/时间戳语义。205题单测证实三批100/100/5；实际MyBatis SQL在本地H2验证中文/引号/JSON/null绑定及整体回滚。未更改生产问卷记录，完整文件上传/解析500ms仍待带夹具验收。
 
 PR#15/main44a1074的完整CI已通过，首轮代码发布正在进行。生产服务仍跟随main；main与已验证PR源码tree相同。本次配置变化与原值分别保存render-performance-applied.json和render-performance-plan.json，回滚优先使用原始plan（配置网络超时后幂等重试的applied可能已无原值）。
+
+首轮44a1074：7个领域/MCP服务已live，Agent update_failed。脱敏日志证实09:13:57Z toolCallbackResolver装配读取尚未就绪工具，导致BeanCreationException；已补条件内动态resolver，真实Spring AI自动配置启动/动态刷新测试通过，等待CI和再部署。工具缺失仍显式503。
+
+2026-09-16 / PERF-500MS-20260916：生产 Server-Timing 出现重复 app 指标，原因是领域服务扫描 common 的 @RestControllerAdvice，同时自动配置再次创建 advice。以 ConditionalOnMissingBean 保证唯一注册，并限制 servlet 条件；启动上下文覆盖扫描/不扫描两种注册路径。此项无架构边界变化，影响 common RequestTimingConfiguration。网关首轮现已 live（09:20:08Z），内存可见样本约233MB，不能据此把此前无报错重启归因为OOM。最终指标必须以全部服务稳定发布后复测为准；回滚恢复原提交和原始 render-performance-plan 配置。

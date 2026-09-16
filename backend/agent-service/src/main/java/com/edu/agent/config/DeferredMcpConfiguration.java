@@ -13,10 +13,27 @@ import java.time.Duration;
 import org.springframework.boot.convert.DurationStyle;
 import java.util.List;
 import java.util.Map;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.resolution.DelegatingToolCallbackResolver;
+import org.springframework.ai.tool.resolution.SpringBeanToolCallbackResolver;
+import org.springframework.ai.tool.resolution.StaticToolCallbackResolver;
+import org.springframework.ai.tool.resolution.ToolCallbackResolver;
+import org.springframework.context.support.GenericApplicationContext;
 
 @Configuration
 @ConditionalOnProperty(name = "educare.mcp.deferred-enabled", havingValue = "true")
 public class DeferredMcpConfiguration {
+    /** Spring AI's default resolver snapshots providers at startup. Resolve MCP only on invocation. */
+    @Bean
+    public ToolCallbackResolver deferredToolCallbackResolver(GenericApplicationContext context,
+                                                            List<ToolCallback> callbacks,
+                                                            DeferredMcpToolProvider provider) {
+        ToolCallbackResolver dynamic = name -> java.util.Arrays.stream(provider.getToolCallbacks())
+                .filter(tool -> name.equals(tool.getToolDefinition().name())).findFirst().orElse(null);
+        return new DelegatingToolCallbackResolver(List.of(new StaticToolCallbackResolver(callbacks), dynamic,
+                SpringBeanToolCallbackResolver.builder().applicationContext(context).build()));
+    }
+
     @Bean
     public DeferredMcpToolProvider deferredMcpToolProvider(
             @Value("${spring.ai.mcp.client.enabled:true}") boolean bootClientEnabled,

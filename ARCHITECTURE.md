@@ -295,3 +295,7 @@ Agent 的 AI 触发和 PDF 提交改为显式使用有界 executor，消除同�
 验收与生产部署证据见 [性能报告](./docs/production-tests/2026-09-16/PERFORMANCE.md)。R-5/R-6 不因本次性能修复自动完成。
 
 PERF-500MS-20260916 补充（2026-09-16）：mental-service Excel 导入将逐题 INSERT 改为每100题参数化 INSERT，保留原问卷替换事务、计分JSON/排序/默认必答/时间戳语义；不改变领域边界或前端同步完成契约。SQL见 [QuestionMapper](./backend/mental-service/src/main/java/com/edu/mental/mapper/QuestionMapper.java)，调用见 [QuestionServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)。
+
+PERF-500MS-20260916 启动回归修正（2026-09-16）：Spring AI默认ToolCallbackResolver在创建bean时读取Provider工具快照，首轮deferred发布仍会失败。Render配置内注册延迟动态ToolCallbackResolver，保留显式callback/bean工具解析，仅调用时读取完整MCP集合；普通查询启动与依赖解耦。 实现见 [DeferredMcpConfiguration](./backend/agent-service/src/main/java/com/edu/agent/config/DeferredMcpConfiguration.java)。
+
+2026-09-16 / PERF-500MS-20260916：生产 Server-Timing 出现重复 app 指标，原因是领域服务扫描 common 的 @RestControllerAdvice，同时自动配置再次创建 advice。以 ConditionalOnMissingBean 保证唯一注册，并限制 servlet 条件；启动上下文覆盖扫描/不扫描两种注册路径。此项无架构边界变化，影响 common RequestTimingConfiguration。网关首轮现已 live（09:20:08Z），内存可见样本约233MB，不能据此把此前无报错重启归因为OOM。最终指标必须以全部服务稳定发布后复测为准；回滚恢复原提交和原始 render-performance-plan 配置。
