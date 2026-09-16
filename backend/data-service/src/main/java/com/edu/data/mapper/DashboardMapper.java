@@ -9,6 +9,7 @@ import java.util.Map;
 
 @Mapper
 public interface DashboardMapper {
+    Map<String, Object> selectStatistics();
 
     Long countActiveTeachers();
 

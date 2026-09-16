@@ -1,0 +1,306 @@
+[
+  {
+    "utc": "2026-09-16T08:25:44.014282482Z",
+    "message": "Picked up JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75.0"
+  },
+  {
+    "utc": "2026-09-16T08:26:13.702437292Z",
+    "message": "2026-09-16T08:26:13.697Z  INFO 1 --- [agent-service] [           main] com.edu.agent.AgentServiceApplication    : Starting AgentServiceApplication v1.0.0-SNAPSHOT using Java 17.0.20 with PID 1 (/app/app.jar started by root in /app)"
+  },
+  {
+    "utc": "2026-09-16T08:27:33.900820158Z",
+    "message": "2026-09-16T08:27:33.899Z  INFO 1 --- [agent-service] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 78801 ms"
+  },
+  {
+    "utc": "2026-09-16T08:27:43.996172957Z",
+    "message": "2026-09-16T08:27:43.994Z  INFO 1 --- [agent-service] [           main] com.edu.agent.config.LangfuseClient      : Langfuse 未配置（host/public/secret 任一为空），trace 上报关闭"
+  },
+  {
+    "utc": "2026-09-16T08:28:55.595763162Z",
+    "message": "2026-09-16T08:28:55.595Z  WARN 1 --- [agent-service] [           main] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'mcpSyncClients' defined in class path resource [org/springframework/ai/mcp/client/common/autoconfigure/McpClientAutoConfiguration.class]: Failed to instantiate [java.util.List]: Factory method 'mcpSyncClients' threw exception with message: Client failed to initialize by explicit API call"
+  },
+  {
+    "utc": "2026-09-16T08:28:55.797224088Z",
+    "message": "io.modelcontextprotocol.spec.McpTransportException: Invalid SSE response. Status code: 429 Line: Too Many Requests"
+  },
+  {
+    "utc": "2026-09-16T08:28:56.997024317Z",
+    "message": "2026-09-16T08:28:56.994Z ERROR 1 --- [agent-service] [           main] o.s.boot.SpringApplication               : Application run failed"
+  },
+  {
+    "utc": "2026-09-16T08:29:22.431436162Z",
+    "message": "2026-09-16T08:29:22.429Z  INFO 1 --- [agent-service] [           main] com.edu.agent.AgentServiceApplication    : Starting AgentServiceApplication v1.0.0-SNAPSHOT using Java 17.0.20 with PID 1 (/app/app.jar started by root in /app)"
+  },
+  {
+    "utc": "2026-09-16T08:31:21.321213973Z",
+    "message": "2026-09-16T08:31:21.319Z  INFO 1 --- [user-service] [           main] com.edu.user.UserApplication             : Starting UserApplication v1.0.0-SNAPSHOT using Java 17.0.20 with PID 1 (/app/app.jar started by root in /app)"
+  },
+  {
+    "utc": "2026-09-16T08:31:45.019885848Z",
+    "message": "2026-09-16T08:31:45.019Z  INFO 1 --- [user-service] [           main] com.edu.user.UserApplication             : Started UserApplication in 28.696 seconds (process running for 33.396)"
+  },
+  {
+    "utc": "2026-09-16T08:31:50.623027445Z",
+    "message": "2026-09-16T08:31:50.622Z  INFO 1 --- [user-service] [nio-8082-exec-3] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2900 ms"
+  },
+  {
+    "utc": "2026-09-16T08:31:50.826945571Z",
+    "message": "2026-09-16T08:31:50.821Z ERROR 1 --- [user-service] [nio-8082-exec-3] c.e.c.exception.GlobalExceptionHandler   : 系统错误: No static resource actuator/health."
+  },
+  {
+    "utc": "2026-09-16T08:32:40.124547696Z",
+    "message": "2026-09-16T08:32:40.123Z  WARN 1 --- [user-service] [nio-8082-exec-7] com.zaxxer.hikari.HikariConfig           : HikariPool-1 - idleTimeout is close to or more than maxLifetime, disabling it."
+  },
+  {
+    "utc": "2026-09-16T08:32:40.124575117Z",
+    "message": "2026-09-16T08:32:40.124Z  INFO 1 --- [user-service] [nio-8082-exec-7] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting..."
+  },
+  {
+    "utc": "2026-09-16T08:32:43.101229617Z",
+    "message": "2026-09-16T08:32:43.100Z  INFO 1 --- [user-service] [nio-8082-exec-7] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@6944b735"
+  },
+  {
+    "utc": "2026-09-16T08:32:43.103323143Z",
+    "message": "2026-09-16T08:32:43.103Z  INFO 1 --- [user-service] [nio-8082-exec-7] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed."
+  },
+  {
+    "utc": "2026-09-16T08:24:41.093377688Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/data/dashboard/statistics",
+    "upstream_seconds": 0.140518345,
+    "gateway_seconds": 0.143463934
+  },
+  {
+    "utc": "2026-09-16T08:24:41.591573576Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/data/dashboard/distribution",
+    "upstream_seconds": 0.054167932,
+    "gateway_seconds": 0.057400218
+  },
+  {
+    "utc": "2026-09-16T08:24:42.133968159Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/teacher/list?pageNum=1&pageSize=10",
+    "upstream_seconds": 0.200122192,
+    "gateway_seconds": 0.203083331
+  },
+  {
+    "utc": "2026-09-16T08:24:42.416602502Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/data/dashboard/distribution",
+    "upstream_seconds": 0.107907801,
+    "gateway_seconds": 0.111380614
+  },
+  {
+    "utc": "2026-09-16T08:24:42.71025404Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/data/dashboard/recentLogins",
+    "upstream_seconds": 0.052524447,
+    "gateway_seconds": 0.055893507
+  },
+  {
+    "utc": "2026-09-16T08:24:42.999625864Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/teacher/list?pageNum=1&pageSize=10",
+    "upstream_seconds": 0.129930462,
+    "gateway_seconds": 0.133060025
+  },
+  {
+    "utc": "2026-09-16T08:24:43.24247085Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/teacher/1",
+    "upstream_seconds": 0.074975899,
+    "gateway_seconds": 0.077897497
+  },
+  {
+    "utc": "2026-09-16T08:24:43.561421336Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/data/dashboard/recentLogins",
+    "upstream_seconds": 0.076706795,
+    "gateway_seconds": 0.080049355
+  },
+  {
+    "utc": "2026-09-16T08:24:44.068622406Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/teacher/1",
+    "upstream_seconds": 0.077379193,
+    "gateway_seconds": 0.087107784
+  },
+  {
+    "utc": "2026-09-16T08:24:44.1422976Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/list?pageNum=1&pageSize=10",
+    "upstream_seconds": 0.32659591,
+    "gateway_seconds": 0.32992464
+  },
+  {
+    "utc": "2026-09-16T08:24:44.377712608Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/1",
+    "upstream_seconds": 0.065498255,
+    "gateway_seconds": 0.068990239
+  },
+  {
+    "utc": "2026-09-16T08:24:44.983232142Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/overview",
+    "upstream_seconds": 0.235203212,
+    "gateway_seconds": 0.238542152
+  },
+  {
+    "utc": "2026-09-16T08:24:45.064095608Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/list?pageNum=1&pageSize=10",
+    "upstream_seconds": 0.139657942,
+    "gateway_seconds": 0.212442812
+  },
+  {
+    "utc": "2026-09-16T08:24:45.244974965Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/1",
+    "upstream_seconds": 0.190168566,
+    "gateway_seconds": 0.193169325
+  },
+  {
+    "utc": "2026-09-16T08:24:45.9363864Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/overview",
+    "upstream_seconds": 0.152025363,
+    "gateway_seconds": 0.155031794
+  },
+  {
+    "utc": "2026-09-16T08:24:46.043872891Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/analysis",
+    "upstream_seconds": 0.193793303,
+    "gateway_seconds": 0.19668074
+  },
+  {
+    "utc": "2026-09-16T08:24:46.194343612Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/questionnaires?pageNum=1&pageSize=10",
+    "upstream_seconds": 0.180584469,
+    "gateway_seconds": 0.183491357
+  },
+  {
+    "utc": "2026-09-16T08:24:47.231179223Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/analysis",
+    "upstream_seconds": 0.152421674,
+    "gateway_seconds": 0.155351922
+  },
+  {
+    "utc": "2026-09-16T08:24:47.493983465Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/questionnaires?pageNum=1&pageSize=10",
+    "upstream_seconds": 0.307626852,
+    "gateway_seconds": 0.310835358
+  },
+  {
+    "utc": "2026-09-16T08:24:47.498584488Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/questionnaires/1/full",
+    "upstream_seconds": 0.571527874,
+    "gateway_seconds": 0.574720359
+  },
+  {
+    "utc": "2026-09-16T08:24:48.158625373Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/questionnaires/1/completion",
+    "upstream_seconds": 0.133364803,
+    "gateway_seconds": 0.136390915
+  },
+  {
+    "utc": "2026-09-16T08:24:48.315749563Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/agent/api/v1/task/list?pageNum=1&pageSize=10",
+    "upstream_seconds": 0.048966952,
+    "gateway_seconds": 0.053774731
+  },
+  {
+    "utc": "2026-09-16T08:24:48.318589349Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/questionnaires/1/full",
+    "upstream_seconds": 0.084564725,
+    "gateway_seconds": 0.088665766
+  },
+  {
+    "utc": "2026-09-16T08:24:49.046890813Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/agent/api/v1/task/list?pageNum=1&pageSize=10",
+    "upstream_seconds": 0.062260229,
+    "gateway_seconds": 0.065069884
+  },
+  {
+    "utc": "2026-09-16T08:24:49.189833703Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/questionnaires/1/completion",
+    "upstream_seconds": 0.076371607,
+    "gateway_seconds": 0.079190182
+  },
+  {
+    "utc": "2026-09-16T08:30:17.378334196Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/user/list?page=1&size=10",
+    "upstream_seconds": 0.197535113,
+    "gateway_seconds": 0.206057941
+  },
+  {
+    "utc": "2026-09-16T08:30:17.831441986Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/1/academic",
+    "upstream_seconds": 0.608915085,
+    "gateway_seconds": 0.652937044
+  },
+  {
+    "utc": "2026-09-16T08:30:17.855350367Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/1/attendance/summary",
+    "upstream_seconds": 0.63153258,
+    "gateway_seconds": 0.675491559
+  },
+  {
+    "utc": "2026-09-16T08:30:18.077447467Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/user/list?page=1&size=10",
+    "upstream_seconds": 0.029803439,
+    "gateway_seconds": 0.033050606
+  },
+  {
+    "utc": "2026-09-16T08:30:18.841502869Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/1/academic",
+    "upstream_seconds": 0.271883295,
+    "gateway_seconds": 0.276878918
+  },
+  {
+    "utc": "2026-09-16T08:30:18.841515129Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/1/attendance/summary",
+    "upstream_seconds": 0.254134749,
+    "gateway_seconds": 0.257145019
+  },
+  {
+    "utc": "2026-09-16T08:30:19.67274584Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/teacher/list?page=1&size=10",
+    "upstream_seconds": 0.101335405,
+    "gateway_seconds": 0.10487992
+  },
+  {
+    "utc": "2026-09-16T08:30:19.682763629Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/list?page=1&size=10",
+    "upstream_seconds": 0.140146575,
+    "gateway_seconds": 0.143228958
+  },
+  {
+    "utc": "2026-09-16T08:30:20.541896898Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/student/list?page=1&size=10",
+    "upstream_seconds": 0.141677976,
+    "gateway_seconds": 0.144658576
+  },
+  {
+    "utc": "2026-09-16T08:30:20.551359072Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/teacher/list?page=1&size=10",
+    "upstream_seconds": 0.157833759,
+    "gateway_seconds": 0.162622187
+  },
+  {
+    "utc": "2026-09-16T08:32:43.928701218Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/user/list?page=1&size=10",
+    "upstream_seconds": 5.577645802,
+    "gateway_seconds": 5.580110808
+  },
+  {
+    "utc": "2026-09-16T08:32:44.728146237Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/user/list?page=1&size=10",
+    "upstream_seconds": 0.099754043,
+    "gateway_seconds": 0.102759423
+  },
+  {
+    "utc": "2026-09-16T08:33:01.560808403Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/overview",
+    "upstream_seconds": 0.15563721,
+    "gateway_seconds": 0.158811135
+  },
+  {
+    "utc": "2026-09-16T08:33:04.595014119Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/student/questionnaires?userId=3",
+    "upstream_seconds": 0.204808808,
+    "gateway_seconds": 0.213356566
+  },
+  {
+    "utc": "2026-09-16T08:33:05.49677418Z",
+    "upstream_url": "https://edu-portrait-gateway.onrender.com/mental/student/assessments?userId=3",
+    "upstream_seconds": 0.144948754,
+    "gateway_seconds": 0.148110449
+  }
+]

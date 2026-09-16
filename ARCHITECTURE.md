@@ -1,6 +1,6 @@
 # Resource-Profile 架构说明
 
-> 最近更新：2026-09-01
+> 最近更新：2026-09-16
 > 状态：按当前仓库实现初始化；真实模型与生产全栈仍待 `docs/educare/EXECUTION_PLAN.md` 的 R-5/R-6 验收。
 
 本文说明项目级模块边界、核心调用链与数据流。EduCare 的历史计划与原子任务状态以 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) 为准；本文只描述当前仍在代码中的能力。
@@ -279,3 +279,17 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 为 Groq 免费层 TPM 429 增加有界重试退避 | 无架构影响；仅增强 agent-service 外部 LLM 调用韧性 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | Render GPT-OSS 启用 JSON Object Mode 并收紧推理/输出预算 | 无架构影响；仅强化 ReAct 输出契约并降低免费 TPM 压力 |
 | 2026-09-15 / RENDER-CD-20260915 | Render 固定跟随 main，CI 通过后按服务 buildFilter 增量部署 | 无运行时架构影响；发布链路受 CI 门控，构建范围与 Maven 模块依赖绑定 |
+
+## 生产诊断维护记录：PROD-AUDIT-20260916（2026-09-16）
+
+本次无架构影响，未修改生产配置或代码；受影响模块为 frontend、gateway、user-service、agent-service 与双 MCP 依赖。[生产验收报告](./docs/production-tests/2026-09-16/REPORT.md)记录实际调用边界：Static Site `/api` → HTTPS gateway → 业务服务，Agent 在启动时同步初始化 MCP；本次 MCP 429 导致 `mcpSyncClients` 创建失败、整个 Agent 退出。普通业务读取和教师/学生只读心理接口通过，user 冷唤醒后列表恢复，首笔 Hikari 初始化约 2.98 秒。
+
+现状限制：生产 Langfuse 前端 URL 和后端上报配置均缺失；user `/actuator/health` 返回 HTTP 200/业务500（路由不存在），不能证明健康；生产配置清单与本地 `render.yaml` 的 checksPass/buildFilter 声明存在漂移。前端用户管理、学生学业等未接线不能等同于后端不存在能力。建议修复边界、代价和待验证事项以本报告、DECISIONS 与 RUNBOOK 为准。网关 DEBUG 日志会包含 Authorization，证据产物已剔除敏感头。
+
+## 性能修复维护记录：PERF-500MS-20260916（2026-09-16）
+
+业务调用仍为 Static Site → gateway → 各领域服务，JWT/Redis 会话、角色/字段权限和 MCP token 边界不变。受影响模块为 common、auth、gateway、data、agent 及 Render Java 运行配置。common 提供真实 Actuator 探针、可选数据库启动预热和不缓冲响应的 Server-Timing；Servlet/Bean 初始化前移到健康检查之前，连接池保留两条空闲连接并进行 keepalive。Render 免费实例仍可休眠，不能承诺任意地区、首次冷启动或任意大小下载均在 500ms 完成。
+
+Agent 的 AI 触发和 PDF 提交改为显式使用有界 executor，消除同对象调用绕过 @Async 代理；队列满时标记任务失败并返回业务503，不在 HTTP 线程执行工作。Render 启用 [DeferredMcpConfiguration](./backend/agent-service/src/main/java/com/edu/agent/config/DeferredMcpConfiguration.java) 后，关闭 Spring AI 启动握手，由后台连接/重连双 MCP；仅完整工具集就绪才允许模型使用工具，未就绪不会假装成功。默认本地启动方式保持原 Spring AI MCP 装配。data 首页统计四次数据库往返合并为一条等价 SELECT，趋势过滤不再对 create_time 包裹 DATE；没有自动修改生产数据库结构。gateway DEBUG 改 INFO，避免输出鉴权头。
+
+验收与生产部署证据见 [性能报告](./docs/production-tests/2026-09-16/PERFORMANCE.md)。R-5/R-6 不因本次性能修复自动完成。

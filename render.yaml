@@ -22,6 +22,16 @@ version: "1"
 envVarGroups:
   - name: edu-portrait-common-env
     envVars:
+      - key: EDUCARE_PERFORMANCE_DATABASE_WARMUP
+        value: "true"
+      - key: SPRING_MVC_SERVLET_LOAD_ON_STARTUP
+        value: "1"
+      - key: MYBATIS_PLUS_CONFIGURATION_LOG_IMPL
+        value: org.apache.ibatis.logging.nologging.NoLoggingImpl
+      - key: SERVER_COMPRESSION_ENABLED
+        value: "true"
+      - key: MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED
+        value: "true"
       - key: MANAGEMENT_HEALTH_REDIS_ENABLED
         value: "false"
       - key: SPRING_PROFILES_ACTIVE
@@ -138,13 +148,9 @@ services:
       #   egd=urandom          避免低熵容器中 SecureRandom 播种阻塞
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
-      # ② 延迟 Bean 初始化：让 Tomcat 更早开端口、健康检查更早通过，
-      #    从而在 Render 的约 114s 等待上限内完成唤醒。
-      #    代价：首个请求需按需初始化 Bean（略慢），配置错误推迟到运行时暴露。
-      #    agent-service 因含 @Scheduled（DailyScanScheduler / SseEmitterRegistry）故排除 ——
-      #    延迟初始化会导致定时任务不被创建。
+      # PERF-500MS-20260916：初始化前移，健康检查通过后首个业务请求不再初始化 Bean。
       - key: SPRING_MAIN_LAZY_INITIALIZATION
-        value: "true"
+        value: "false"
       - key: AUTH_SERVICE_URL
         value: https://edu-portrait-auth.onrender.com
       - key: USER_SERVICE_URL
@@ -182,6 +188,7 @@ services:
         - backend/pom.xml
         - docker/Dockerfile.auth
     plan: free
+    healthCheckPath: /actuator/health/readiness
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -191,7 +198,7 @@ services:
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
-        value: "true"
+        value: "false"
       - key: SPRING_DATA_REDIS_URL
         fromService:
           type: keyvalue
@@ -212,6 +219,7 @@ services:
         - backend/pom.xml
         - docker/Dockerfile.user
     plan: free
+    healthCheckPath: /actuator/health/readiness
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -221,7 +229,7 @@ services:
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
-        value: "true"
+        value: "false"
 
   - type: web
     name: edu-portrait-teacher
@@ -237,6 +245,7 @@ services:
         - backend/pom.xml
         - docker/Dockerfile.teacher
     plan: free
+    healthCheckPath: /actuator/health/readiness
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -246,7 +255,7 @@ services:
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
-        value: "true"
+        value: "false"
 
   - type: web
     name: edu-portrait-student
@@ -262,6 +271,7 @@ services:
         - backend/pom.xml
         - docker/Dockerfile.student
     plan: free
+    healthCheckPath: /actuator/health/readiness
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -271,7 +281,7 @@ services:
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
-        value: "true"
+        value: "false"
 
   - type: web
     name: edu-portrait-mental
@@ -287,6 +297,7 @@ services:
         - backend/pom.xml
         - docker/Dockerfile.mental
     plan: free
+    healthCheckPath: /actuator/health/readiness
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -296,7 +307,7 @@ services:
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
-        value: "true"
+        value: "false"
 
   - type: web
     name: edu-portrait-data
@@ -312,6 +323,7 @@ services:
         - backend/pom.xml
         - docker/Dockerfile.data
     plan: free
+    healthCheckPath: /actuator/health/readiness
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -321,7 +333,7 @@ services:
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
-        value: "true"
+        value: "false"
 
   # ============================================================================
   # 4. EduCare Agent 智能编排与 MCP 节点 (100% 免费层)
@@ -340,6 +352,7 @@ services:
         - backend/pom.xml
         - docker/Dockerfile.agent
     plan: free
+    healthCheckPath: /actuator/health/readiness
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
@@ -367,6 +380,8 @@ services:
       - key: EDUCARE_AGENT_LOOP_ENABLED
         value: "true"
       - key: SPRING_AI_MCP_CLIENT_ENABLED
+        value: "false"
+      - key: EDUCARE_MCP_DEFERRED_ENABLED
         value: "true"
       - key: SPRING_AI_OPENAI_BASE_URL
         value: https://api.groq.com/openai
@@ -409,7 +424,7 @@ services:
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom"
       - key: SPRING_MAIN_LAZY_INITIALIZATION
-        value: "true"
+        value: "false"
       - key: STUDENT_SERVICE_URL
         value: https://edu-portrait-student.onrender.com
       - key: MENTAL_SERVICE_URL

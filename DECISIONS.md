@@ -1,6 +1,6 @@
 # Resource-Profile 架构与工程决策
 
-> 最近更新：2026-09-01
+> 最近更新：2026-09-16
 > 记录范围：当前仍有效的项目级决策。历史阶段细节见 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) §6。
 
 每条记录包含背景、选择、放弃方案和后果。被替换的决策不得直接删除，应改为“已取代”并链接新决策。
@@ -397,3 +397,22 @@
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 新增 ADR-024，对 Groq TPM 429 使用有界退避 | 保留完整 AgentLoop 质量；401/403 继续 fail-fast |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 新增 ADR-025，Render GPT-OSS 改用 JSON Object Mode 与低推理预算 | 保留 ReAct 主路径；本地 OpenAI 兼容端点维持 TEXT 默认值 |
 | 2026-09-15 / RENDER-CD-20260915 | 新增 ADR-026，main 即生产、CI 通过后按服务增量部署 | 部署以被部署提交的 CI 为准；buildFilter 与 CI push 路径须同步维护 |
+
+## ADR-027：生产诊断与待实施修复（PROD-AUDIT-20260916，2026-09-16）
+
+背景：[生产验收报告](./docs/production-tests/2026-09-16/REPORT.md)实测 Agent 列表429/SSE握手超时，日志复现 MCP 初始化429 → `mcpSyncClients`失败 → Agent退出；user首次429，唤醒后列表6.647秒→0.764秒，池初始化约2.98秒。user健康路由不存在但HTTP200；多个前端原型未接入已有后台，Langfuse缺配置。
+
+选择（尚未落地）：先取得具体 MCP connection/platform 状态，恢复依赖并隔离依赖未就绪与业务服务启动；保留鉴权与MCP契约。补真实健康语义并评估 readiness 中的必要初始化；接入真实用户/学业API，修订误导提示；恢复trace并降低/脱敏网关请求头日志；单独核对发布配置漂移。代码证据为 [MCP启动配置](./backend/agent-service/src/main/resources/application.yml)、[UserController](./backend/user-service/src/main/java/com/edu/user/controller/UserController.java)、[学生学业控制器](./backend/student-service/src/main/java/com/edu/student/controller/StudentAcademicController.java) 和报告中的前端链接。
+
+放弃作为当前解释/修复：仅增加前端重试或MCP超时不能处理立即返回的429；绕过鉴权、删MCP或伪造健康会破坏既有交付边界；无SQL耗时/模型调用证据，不归因于慢SQL、连接配额或Groq限流。
+
+代价与约束：依赖恢复可能涉及套餐或部署时间；初始化前移延后readiness；启动隔离需要明确依赖错误语义；Agent定时任务不可机械套lazy初始化。所有方案待实施、修复后待验证，本轮不改变R-5/R-6状态，不宣称生产可上线。
+
+## PERF-500MS-20260916：消除请求线程重任务与首次初始化（2026-09-16）
+
+- 背景：生产诊断发现冷请求 Hikari 初始化约2.98s、Agent MCP握手429导致启动失败；代码审查确认 AI/PDF 同对象 @Async 调用实际同步执行，CallerRunsPolicy 会将满队列重任务交给请求线程。持久连接热态 auth/userInfo 已约400ms，原逐次 curl 测量包含新建连接成本。
+- 选择：显式后台提交并拒绝过载；MCP依赖启动解耦、后台按30s重连，完整工具集才可使用；生产 eager Bean/Servlet 初始化及 DB SELECT 1 预热、连接池保留2条空闲连接/keepalive；shared Actuator 让健康探针实际存在；统计合并数据库往返、可索引时间谓词；Server-Timing 区分应用与网关；关闭生产SQL stdout/gateway DEBUG并开启响应压缩。实现见 ARCHITECTURE 的同名记录及性能报告。
+- 原因：优先消除已证实的阻塞并保留响应/权限契约，不能用超时、快速错误或缓存他人敏感记录冒充性能达标。
+- 放弃：削弱密码哈希/JWT/Redis/角色检查；将免费实例地址改成不能接收私网请求的内部主机名；给所有请求设置500ms强制中断；未经预算确认升级付费；把内部 LLM/RAG 结果改成异步ID而破坏 Feign/MCP 契约；未经慢查询证据在生产自动DDL加索引。
+- 代价：eager 初始化增加冷启动阶段工作；空闲数据库连接占配额（7个领域服务每个最少2条、最多3条）；MCP后台重连仅在Agent进程存活时进行，未就绪任务仍明确失败；有界队列满载返回业务503。模型/PDF提交时间与后台完成时间分开度量，SSE衡量握手/首帧，不衡量长连接总时长。500ms是需要指定地区、热态和负载的验收目标，不是已证实的任意请求硬保证。
+- 验证：完整 Maven 回归/安全覆盖率、新增异步提交及MCP失败恢复、数据库预热失败测试通过；Python28项、前端构建/体积门及既有61条逻辑断言通过，ESLint零错误/一个既有格式警告。Render Blueprint验证通过。生产部署与500ms结果以 PERFORMANCE.md 的实测记录为准。

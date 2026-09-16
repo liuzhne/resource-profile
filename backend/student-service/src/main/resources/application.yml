@@ -40,6 +40,8 @@ spring:
       maximum-pool-size: ${DB_MAXIMUM_POOL_SIZE:3}
       minimum-idle: ${DB_MINIMUM_IDLE:0}
       max-lifetime: ${DB_MAX_LIFETIME_MS:600000}
+      keepalive-time: ${DB_KEEPALIVE_TIME_MS:240000}
+      idle-timeout: ${DB_IDLE_TIMEOUT_MS:300000}
 
 mybatis-plus:
   configuration:

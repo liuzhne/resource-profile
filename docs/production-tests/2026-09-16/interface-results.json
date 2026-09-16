@@ -1,0 +1,965 @@
+[
+  {
+    "path": "/auth/userInfo",
+    "run": 1,
+    "utc": "2026-09-16T08:24:38Z",
+    "metrics": [
+      "200",
+      "1.102337",
+      "1.102424"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "id",
+      "username",
+      "nickname",
+      "avatar",
+      "email",
+      "phone",
+      "userType",
+      "deptName",
+      "roles",
+      "permissions"
+    ]
+  },
+  {
+    "path": "/auth/userInfo",
+    "run": 2,
+    "utc": "2026-09-16T08:24:39Z",
+    "metrics": [
+      "200",
+      "0.726548",
+      "0.728205"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "id",
+      "username",
+      "nickname",
+      "avatar",
+      "email",
+      "phone",
+      "userType",
+      "deptName",
+      "roles",
+      "permissions"
+    ]
+  },
+  {
+    "path": "/data/dashboard/statistics",
+    "run": 1,
+    "utc": "2026-09-16T08:24:38Z",
+    "metrics": [
+      "200",
+      "1.377055",
+      "1.377373"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "studentCount",
+      "questionnaireCount",
+      "warningCount",
+      "teacherCount"
+    ]
+  },
+  {
+    "path": "/data/dashboard/statistics",
+    "run": 2,
+    "utc": "2026-09-16T08:24:40Z",
+    "metrics": [
+      "200",
+      "0.877444",
+      "0.877544"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "studentCount",
+      "questionnaireCount",
+      "warningCount",
+      "teacherCount"
+    ]
+  },
+  {
+    "path": "/data/dashboard/trend?period=week",
+    "run": 1,
+    "utc": "2026-09-16T08:24:38Z",
+    "metrics": [
+      "200",
+      "1.225978",
+      "1.226015"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "studentData",
+      "days",
+      "teacherData"
+    ]
+  },
+  {
+    "path": "/data/dashboard/trend?period=week",
+    "run": 2,
+    "utc": "2026-09-16T08:24:39Z",
+    "metrics": [
+      "200",
+      "0.746539",
+      "0.746655"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "studentData",
+      "days",
+      "teacherData"
+    ]
+  },
+  {
+    "path": "/data/dashboard/distribution",
+    "run": 1,
+    "utc": "2026-09-16T08:24:40Z",
+    "metrics": [
+      "200",
+      "0.877953",
+      "0.878044"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "data"
+    ]
+  },
+  {
+    "path": "/data/dashboard/distribution",
+    "run": 2,
+    "utc": "2026-09-16T08:24:41Z",
+    "metrics": [
+      "200",
+      "0.801827",
+      "0.801905"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "data"
+    ]
+  },
+  {
+    "path": "/data/dashboard/recentLogins",
+    "run": 1,
+    "utc": "2026-09-16T08:24:40Z",
+    "metrics": [
+      "200",
+      "1.855425",
+      "1.855796"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": "list:4"
+  },
+  {
+    "path": "/data/dashboard/recentLogins",
+    "run": 2,
+    "utc": "2026-09-16T08:24:42Z",
+    "metrics": [
+      "200",
+      "0.826460",
+      "0.874266"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": "list:4"
+  },
+  {
+    "path": "/teacher/list?pageNum=1&pageSize=10",
+    "run": 1,
+    "utc": "2026-09-16T08:24:40Z",
+    "metrics": [
+      "200",
+      "1.004795",
+      "1.004883"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/teacher/list?pageNum=1&pageSize=10",
+    "run": 2,
+    "utc": "2026-09-16T08:24:41Z",
+    "metrics": [
+      "200",
+      "0.826325",
+      "0.826421"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/teacher/1",
+    "run": 1,
+    "utc": "2026-09-16T08:24:42Z",
+    "metrics": [
+      "200",
+      "0.815020",
+      "0.815097"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "id",
+      "userId",
+      "employeeId",
+      "name",
+      "gender",
+      "birthDate",
+      "deptId",
+      "deptName",
+      "title",
+      "education",
+      "school",
+      "major",
+      "researchArea",
+      "joinDate",
+      "status",
+      "deleted",
+      "createTime",
+      "updateTime"
+    ]
+  },
+  {
+    "path": "/teacher/1",
+    "run": 2,
+    "utc": "2026-09-16T08:24:43Z",
+    "metrics": [
+      "200",
+      "0.822343",
+      "0.822443"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "id",
+      "userId",
+      "employeeId",
+      "name",
+      "gender",
+      "birthDate",
+      "deptId",
+      "deptName",
+      "title",
+      "education",
+      "school",
+      "major",
+      "researchArea",
+      "joinDate",
+      "status",
+      "deleted",
+      "createTime",
+      "updateTime"
+    ]
+  },
+  {
+    "path": "/student/list?pageNum=1&pageSize=10",
+    "run": 1,
+    "utc": "2026-09-16T08:24:42Z",
+    "metrics": [
+      "200",
+      "1.158408",
+      "1.158502"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/student/list?pageNum=1&pageSize=10",
+    "run": 2,
+    "utc": "2026-09-16T08:24:44Z",
+    "metrics": [
+      "200",
+      "0.901267",
+      "0.901346"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/student/1",
+    "run": 1,
+    "utc": "2026-09-16T08:24:43Z",
+    "metrics": [
+      "200",
+      "0.749839",
+      "0.749914"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "id",
+      "userId",
+      "studentId",
+      "name",
+      "gender",
+      "birthDate",
+      "deptId",
+      "deptName",
+      "majorId",
+      "majorName",
+      "grade",
+      "className",
+      "enrollmentDate",
+      "expectedGraduation",
+      "gpa",
+      "credits",
+      "status",
+      "deleted",
+      "createTime",
+      "updateTime"
+    ]
+  },
+  {
+    "path": "/student/1",
+    "run": 2,
+    "utc": "2026-09-16T08:24:44Z",
+    "metrics": [
+      "200",
+      "0.879693",
+      "0.879751"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "id",
+      "userId",
+      "studentId",
+      "name",
+      "gender",
+      "birthDate",
+      "deptId",
+      "deptName",
+      "majorId",
+      "majorName",
+      "grade",
+      "className",
+      "enrollmentDate",
+      "expectedGraduation",
+      "gpa",
+      "credits",
+      "status",
+      "deleted",
+      "createTime",
+      "updateTime"
+    ]
+  },
+  {
+    "path": "/mental/overview",
+    "run": 1,
+    "utc": "2026-09-16T08:24:43Z",
+    "metrics": [
+      "200",
+      "0.896094",
+      "0.896406"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "recentStats",
+      "attentionRate",
+      "goodRate",
+      "trendData",
+      "warningList",
+      "interventionRate",
+      "todayCompleted"
+    ]
+  },
+  {
+    "path": "/mental/overview",
+    "run": 2,
+    "utc": "2026-09-16T08:24:44Z",
+    "metrics": [
+      "200",
+      "0.950332",
+      "1.005603"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "recentStats",
+      "attentionRate",
+      "goodRate",
+      "trendData",
+      "warningList",
+      "interventionRate",
+      "todayCompleted"
+    ]
+  },
+  {
+    "path": "/mental/analysis",
+    "run": 1,
+    "utc": "2026-09-16T08:24:44Z",
+    "metrics": [
+      "200",
+      "0.990482",
+      "0.990550"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "focusGroups",
+      "genderAnalysis",
+      "gradeComparison",
+      "deptDistribution"
+    ]
+  },
+  {
+    "path": "/mental/analysis",
+    "run": 2,
+    "utc": "2026-09-16T08:24:45Z",
+    "metrics": [
+      "200",
+      "1.141586",
+      "1.141729"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "focusGroups",
+      "genderAnalysis",
+      "gradeComparison",
+      "deptDistribution"
+    ]
+  },
+  {
+    "path": "/mental/questionnaires?pageNum=1&pageSize=10",
+    "run": 1,
+    "utc": "2026-09-16T08:24:45Z",
+    "metrics": [
+      "200",
+      "0.909399",
+      "0.909543"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/mental/questionnaires?pageNum=1&pageSize=10",
+    "run": 2,
+    "utc": "2026-09-16T08:24:46Z",
+    "metrics": [
+      "200",
+      "1.306900",
+      "1.307091"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/mental/questionnaires/1/full",
+    "run": 1,
+    "utc": "2026-09-16T08:24:45Z",
+    "metrics": [
+      "200",
+      "1.467062",
+      "1.467178"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "questionnaire",
+      "questions",
+      "levelRules"
+    ]
+  },
+  {
+    "path": "/mental/questionnaires/1/full",
+    "run": 2,
+    "utc": "2026-09-16T08:24:47Z",
+    "metrics": [
+      "200",
+      "0.770250",
+      "0.770500"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "questionnaire",
+      "questions",
+      "levelRules"
+    ]
+  },
+  {
+    "path": "/mental/questionnaires/1/completion",
+    "run": 1,
+    "utc": "2026-09-16T08:24:47Z",
+    "metrics": [
+      "200",
+      "0.897535",
+      "0.897655"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": "list:0"
+  },
+  {
+    "path": "/mental/questionnaires/1/completion",
+    "run": 2,
+    "utc": "2026-09-16T08:24:48Z",
+    "metrics": [
+      "200",
+      "1.004942",
+      "1.004988"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": "list:0"
+  },
+  {
+    "path": "/agent/api/v1/task/list?pageNum=1&pageSize=10",
+    "run": 1,
+    "utc": "2026-09-16T08:24:47Z",
+    "metrics": [
+      "429",
+      "0.770473",
+      "0.770675"
+    ],
+    "curl_error": "",
+    "body_excerpt": "Too Many Requests\n"
+  },
+  {
+    "path": "/agent/api/v1/task/list?pageNum=1&pageSize=10",
+    "run": 2,
+    "utc": "2026-09-16T08:24:48Z",
+    "metrics": [
+      "429",
+      "0.698366",
+      "0.698432"
+    ],
+    "curl_error": "",
+    "body_excerpt": "Too Many Requests\n"
+  },
+  {
+    "path": "/user/list?page=1&size=10",
+    "run": 1,
+    "utc": "2026-09-16T08:30:16Z",
+    "metrics": [
+      "429",
+      "0.956513",
+      "0.956576"
+    ],
+    "curl_error": "",
+    "body_excerpt": "Too Many Requests\n"
+  },
+  {
+    "path": "/user/list?page=1&size=10",
+    "run": 2,
+    "utc": "2026-09-16T08:30:17Z",
+    "metrics": [
+      "429",
+      "0.690163",
+      "0.690293"
+    ],
+    "curl_error": "",
+    "body_excerpt": "Too Many Requests\n"
+  },
+  {
+    "path": "/student/1/academic",
+    "run": 1,
+    "utc": "2026-09-16T08:30:16Z",
+    "metrics": [
+      "200",
+      "1.420965",
+      "1.421119"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": "list:6"
+  },
+  {
+    "path": "/student/1/academic",
+    "run": 2,
+    "utc": "2026-09-16T08:30:17Z",
+    "metrics": [
+      "200",
+      "0.989479",
+      "0.989557"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": "list:6"
+  },
+  {
+    "path": "/student/1/attendance/summary",
+    "run": 1,
+    "utc": "2026-09-16T08:30:16Z",
+    "metrics": [
+      "200",
+      "1.432471",
+      "1.432553"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "total",
+      "late",
+      "leave",
+      "attendanceRate",
+      "absent",
+      "present"
+    ]
+  },
+  {
+    "path": "/student/1/attendance/summary",
+    "run": 2,
+    "utc": "2026-09-16T08:30:17Z",
+    "metrics": [
+      "200",
+      "0.985569",
+      "0.985658"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "total",
+      "late",
+      "leave",
+      "attendanceRate",
+      "absent",
+      "present"
+    ]
+  },
+  {
+    "path": "/agent/api/v1/warning/stream",
+    "run": 1,
+    "utc": "2026-09-16T08:30:17Z",
+    "metrics": [
+      "000",
+      "0.000000",
+      "60.006053"
+    ],
+    "curl_error": "curl: (28) Operation timed out after 60006 milliseconds with 0 bytes received\n",
+    "body_excerpt": ""
+  },
+  {
+    "path": "/agent/api/v1/warning/stream",
+    "run": 2,
+    "utc": "2026-09-16T08:31:17Z",
+    "metrics": [
+      "000",
+      "0.000000",
+      "60.005751"
+    ],
+    "curl_error": "curl: (28) Operation timed out after 60006 milliseconds with 0 bytes received\n",
+    "body_excerpt": ""
+  },
+  {
+    "path": "/teacher/list?page=1&size=10",
+    "run": 1,
+    "utc": "2026-09-16T08:30:18Z",
+    "metrics": [
+      "200",
+      "0.806834",
+      "0.806944"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/teacher/list?page=1&size=10",
+    "run": 2,
+    "utc": "2026-09-16T08:30:19Z",
+    "metrics": [
+      "200",
+      "0.842518",
+      "0.842607"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/student/list?page=1&size=10",
+    "run": 1,
+    "utc": "2026-09-16T08:30:18Z",
+    "metrics": [
+      "200",
+      "0.806847",
+      "0.806956"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/student/list?page=1&size=10",
+    "run": 2,
+    "utc": "2026-09-16T08:30:19Z",
+    "metrics": [
+      "200",
+      "0.839646",
+      "0.839756"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/user/list?page=1&size=10",
+    "run": 1,
+    "utc": "2026-09-16T08:32:37Z",
+    "metrics": [
+      "200",
+      "6.646872",
+      "6.646943"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/user/list?page=1&size=10",
+    "run": 2,
+    "utc": "2026-09-16T08:32:43Z",
+    "metrics": [
+      "200",
+      "0.763609",
+      "0.763697"
+    ],
+    "curl_error": "",
+    "code": 200,
+    "message": "success",
+    "shape": [
+      "records",
+      "total",
+      "size",
+      "current",
+      "pages"
+    ]
+  },
+  {
+    "path": "/agent/api/v1/task/list?page=1&size=20",
+    "run": 1,
+    "utc": "2026-09-16T08:32:37Z",
+    "metrics": [
+      "000",
+      "0.000000",
+      "60.005436"
+    ],
+    "curl_error": "curl: (28) Operation timed out after 60005 milliseconds with 0 bytes received\n",
+    "body_excerpt": ""
+  },
+  {
+    "path": "/agent/api/v1/task/list?page=1&size=20",
+    "run": 2,
+    "utc": "2026-09-16T08:33:37Z",
+    "metrics": [
+      "000",
+      "0.000000",
+      "60.004488"
+    ],
+    "curl_error": "curl: (28) Operation timed out after 60004 milliseconds with 0 bytes received\n",
+    "body_excerpt": ""
+  },
+  {
+    "role": "teacher",
+    "path": "/auth/login",
+    "utc": "2026-09-16T08:32:57Z",
+    "metrics": [
+      "200",
+      "1.913087",
+      "1.913198"
+    ],
+    "code": 200,
+    "message": "success",
+    "curl_error": ""
+  },
+  {
+    "role": "teacher",
+    "path": "/auth/userInfo",
+    "utc": "2026-09-16T08:32:59Z",
+    "metrics": [
+      "200",
+      "0.756853",
+      "0.757001"
+    ],
+    "code": 200,
+    "message": "success",
+    "curl_error": ""
+  },
+  {
+    "role": "teacher",
+    "path": "/mental/overview",
+    "utc": "2026-09-16T08:33:00Z",
+    "metrics": [
+      "200",
+      "0.965548",
+      "0.965630"
+    ],
+    "code": 200,
+    "message": "success",
+    "curl_error": ""
+  },
+  {
+    "role": "student",
+    "path": "/auth/login",
+    "utc": "2026-09-16T08:33:01Z",
+    "metrics": [
+      "200",
+      "1.236184",
+      "1.236330"
+    ],
+    "code": 200,
+    "message": "success",
+    "curl_error": ""
+  },
+  {
+    "role": "student",
+    "path": "/auth/userInfo",
+    "utc": "2026-09-16T08:33:02Z",
+    "metrics": [
+      "200",
+      "0.736863",
+      "0.737010"
+    ],
+    "code": 200,
+    "message": "success",
+    "curl_error": ""
+  },
+  {
+    "role": "student",
+    "path": "/mental/student/questionnaires?userId=3",
+    "utc": "2026-09-16T08:33:03Z",
+    "metrics": [
+      "200",
+      "0.909285",
+      "0.909368"
+    ],
+    "code": 200,
+    "message": "success",
+    "curl_error": ""
+  },
+  {
+    "role": "student",
+    "path": "/mental/student/assessments?userId=3",
+    "utc": "2026-09-16T08:33:04Z",
+    "metrics": [
+      "200",
+      "0.894504",
+      "0.894724"
+    ],
+    "code": 200,
+    "message": "success",
+    "curl_error": ""
+  }
+]

@@ -16,6 +16,11 @@
     <description>公共模块</description>
 
     <dependencies>
+        <!-- Shared liveness/readiness for every business service. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
         <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

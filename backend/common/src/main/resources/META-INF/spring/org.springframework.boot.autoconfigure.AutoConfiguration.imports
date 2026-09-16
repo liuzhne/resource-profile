@@ -4,3 +4,5 @@ com.edu.common.util.JwtUtil
 com.edu.common.exception.GlobalExceptionHandler
 com.edu.common.security.AccessGuard
 com.edu.common.security.FieldPermissionAutoConfiguration
+com.edu.common.config.DatabaseWarmupConfiguration
+com.edu.common.config.RequestTimingConfiguration
