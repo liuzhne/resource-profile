@@ -23,6 +23,7 @@ import com.edu.agent.service.RiskAnalyzeService;
 import com.edu.agent.service.StudentPortraitAggregator;
 import com.edu.agent.skill.SkillLoader;
 import com.edu.agent.sse.WarningPublisher;
+import com.edu.common.exception.BusinessException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -147,7 +149,15 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         }
 
         Long taskId = createTask(studentId);
-        asyncExecute(taskId);
+        try {
+            // Self-invocation bypasses @Async: explicitly enqueue instead of running the loop in HTTP.
+            agentExecutor.execute(() -> asyncExecute(taskId));
+        } catch (RejectedExecutionException e) {
+            failTask(taskId);
+            redisTemplate.delete(idemKey);
+            publishTerminal(taskId);
+            throw new BusinessException(503, "分析队列已满，请稍后重试");
+        }
         return taskId;
     }
 
@@ -446,11 +456,13 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private List<ToolCallback> resolveMcpTools() {
         ToolCallbackProvider provider = toolCallbackProviders.getIfAvailable();
         if (provider == null) {
-            log.warn("ToolCallbackProvider 不可用，AgentLoop 将以零工具运行");
-            return List.of();
+            throw new BusinessException(503, "MCP 工具尚未就绪，请稍后重试");
         }
         ToolCallback[] arr = provider.getToolCallbacks();
-        return (arr == null || arr.length == 0) ? List.of() : Arrays.asList(arr);
+        if (arr == null || arr.length == 0) {
+            throw new BusinessException(503, "MCP 工具尚未就绪，请稍后重试");
+        }
+        return Arrays.asList(arr);
     }
 
     /** AgentLoop final_answer 解析结果。riskJson / planJson 已序列化为字符串落库；riskLevel 解析失败默认 MEDIUM。 */

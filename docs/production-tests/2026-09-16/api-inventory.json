@@ -1,0 +1,394 @@
+[
+  {
+    "method": "GET",
+    "path": "/teacher/list",
+    "source": "backend/teacher-service/src/main/java/com/edu/teacher/controller/TeacherController.java",
+    "line": 20,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/teacher/{id}",
+    "source": "backend/teacher-service/src/main/java/com/edu/teacher/controller/TeacherController.java",
+    "line": 35,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/teacher",
+    "source": "backend/teacher-service/src/main/java/com/edu/teacher/controller/TeacherController.java",
+    "line": 45,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "PUT",
+    "path": "/teacher/{id}",
+    "source": "backend/teacher-service/src/main/java/com/edu/teacher/controller/TeacherController.java",
+    "line": 55,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "DELETE",
+    "path": "/teacher/{id}",
+    "source": "backend/teacher-service/src/main/java/com/edu/teacher/controller/TeacherController.java",
+    "line": 66,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/student/questionnaires",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java",
+    "line": 36,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/student/questionnaires/{id}",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java",
+    "line": 46,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/mental/student/assessments",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java",
+    "line": 52,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/student/assessments",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java",
+    "line": 62,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/student/assessments/{assessmentId}",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java",
+    "line": 72,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/overview",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 29,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/analysis",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 56,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/questionnaires",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 68,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/questionnaires/{id}",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 75,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/mental/questionnaires",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 80,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "PUT",
+    "path": "/mental/questionnaires/{id}",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 86,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "DELETE",
+    "path": "/mental/questionnaires/{id}",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 93,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/questionnaires/{id}/full",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 101,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/questionnaires/{id}/questions",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 108,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/mental/questionnaires/{id}/questions",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 113,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "PUT",
+    "path": "/mental/questions/{questionId}",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 119,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "DELETE",
+    "path": "/mental/questions/{questionId}",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 126,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/mental/questionnaires/{id}/completion",
+    "source": "backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java",
+    "line": 134,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/agent/api/v1/warning/stream",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/sse/WarningSseController.java",
+    "line": 39,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/agent/api/v1/task/{taskId}/export",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/ExportController.java",
+    "line": 38,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/agent/api/v1/export/{jobId}",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/ExportController.java",
+    "line": 57,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/agent/api/v1/export/{jobId}/download",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/ExportController.java",
+    "line": 71,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/agent/api/v1/task/trigger/{studentId}",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/AgentTaskController.java",
+    "line": 36,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/agent/api/v1/task/{taskId}",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/AgentTaskController.java",
+    "line": 57,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/agent/api/v1/task/list",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/AgentTaskController.java",
+    "line": 74,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/diagnostics/llm-metrics",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/DiagnosticsController.java",
+    "line": 36,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/agent/api/v1/intervention/feedback",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/InterventionFeedbackController.java",
+    "line": 37,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/agent/api/v1/intervention/feedback/report",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/InterventionFeedbackController.java",
+    "line": 56,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/agent/api/v1/intervention/feedback/report.csv",
+    "source": "backend/agent-service/src/main/java/com/edu/agent/controller/InterventionFeedbackController.java",
+    "line": 70,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/data/dashboard/statistics",
+    "source": "backend/data-service/src/main/java/com/edu/data/controller/DashboardController.java",
+    "line": 31,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/data/dashboard/trend",
+    "source": "backend/data-service/src/main/java/com/edu/data/controller/DashboardController.java",
+    "line": 40,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/data/dashboard/distribution",
+    "source": "backend/data-service/src/main/java/com/edu/data/controller/DashboardController.java",
+    "line": 50,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/data/dashboard/recentLogins",
+    "source": "backend/data-service/src/main/java/com/edu/data/controller/DashboardController.java",
+    "line": 59,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/student/list",
+    "source": "backend/student-service/src/main/java/com/edu/student/controller/StudentController.java",
+    "line": 27,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/student/ids",
+    "source": "backend/student-service/src/main/java/com/edu/student/controller/StudentController.java",
+    "line": 42,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/student/{id}",
+    "source": "backend/student-service/src/main/java/com/edu/student/controller/StudentController.java",
+    "line": 48,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/student",
+    "source": "backend/student-service/src/main/java/com/edu/student/controller/StudentController.java",
+    "line": 61,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "PUT",
+    "path": "/student/{id}",
+    "source": "backend/student-service/src/main/java/com/edu/student/controller/StudentController.java",
+    "line": 73,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "DELETE",
+    "path": "/student/{id}",
+    "source": "backend/student-service/src/main/java/com/edu/student/controller/StudentController.java",
+    "line": 87,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/student/{id}/academic",
+    "source": "backend/student-service/src/main/java/com/edu/student/controller/StudentAcademicController.java",
+    "line": 28,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/student/{id}/attendance",
+    "source": "backend/student-service/src/main/java/com/edu/student/controller/StudentAttendanceController.java",
+    "line": 31,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/student/{id}/attendance/summary",
+    "source": "backend/student-service/src/main/java/com/edu/student/controller/StudentAttendanceController.java",
+    "line": 43,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/user/list",
+    "source": "backend/user-service/src/main/java/com/edu/user/controller/UserController.java",
+    "line": 20,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/user/{id}",
+    "source": "backend/user-service/src/main/java/com/edu/user/controller/UserController.java",
+    "line": 35,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/user",
+    "source": "backend/user-service/src/main/java/com/edu/user/controller/UserController.java",
+    "line": 45,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "PUT",
+    "path": "/user/{id}",
+    "source": "backend/user-service/src/main/java/com/edu/user/controller/UserController.java",
+    "line": 55,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "DELETE",
+    "path": "/user/{id}",
+    "source": "backend/user-service/src/main/java/com/edu/user/controller/UserController.java",
+    "line": 66,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/login",
+    "source": "backend/auth-service/src/main/java/com/edu/auth/controller/AuthController.java",
+    "line": 24,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "GET",
+    "path": "/auth/userInfo",
+    "source": "backend/auth-service/src/main/java/com/edu/auth/controller/AuthController.java",
+    "line": 31,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/logout",
+    "source": "backend/auth-service/src/main/java/com/edu/auth/controller/AuthController.java",
+    "line": 42,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  },
+  {
+    "method": "POST",
+    "path": "/auth/refresh",
+    "source": "backend/auth-service/src/main/java/com/edu/auth/controller/AuthController.java",
+    "line": 52,
+    "production_validation": "待按只读实测核对；写入接口未在生产修改真实记录"
+  }
+]

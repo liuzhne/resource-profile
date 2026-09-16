@@ -24,12 +24,8 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public Map<String, Object> getStatistics() {
-        Map<String, Object> result = new HashMap<>();
-        result.put("teacherCount", dashboardMapper.countActiveTeachers());
-        result.put("studentCount", dashboardMapper.countActiveStudents());
-        result.put("questionnaireCount", dashboardMapper.countActiveQuestionnaires());
-        result.put("warningCount", dashboardMapper.countWarningStudents());
-        return result;
+        // One DB round trip instead of four sequential TLS-network queries.
+        return dashboardMapper.selectStatistics();
     }
 
     @Override

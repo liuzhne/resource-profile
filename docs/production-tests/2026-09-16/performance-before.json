@@ -1,0 +1,17 @@
+{
+  "role": "admin",
+  "base": "https://edu-portrait-frontend.onrender.com/api",
+  "measurement": "wall-clock full response, persistent requests.Session, sequential",
+  "rows": [
+    {
+      "path": "/auth/login",
+      "method": "POST",
+      "run": 1,
+      "utc": "2026-09-16T08:50:07.968426+00:00",
+      "ms": 15790.5,
+      "ok": false,
+      "error_type": "ReadTimeout",
+      "under_500ms": false
+    }
+  ]
+}

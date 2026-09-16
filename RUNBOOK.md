@@ -1,6 +1,6 @@
 # Resource-Profile 运行手册
 
-> 最近更新：2026-09-01
+> 最近更新：2026-09-16
 > 适用范围：当前仓库的开发、测试、排错和发布准备。真实 AI/生产签字状态以 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) R-5/R-6 为准。
 
 ## 1. 前置条件
@@ -699,3 +699,47 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 增加 GPT-OSS JSON Object Mode、配额预算与复验步骤 | 线上 PARSE_ERROR 已复现；配置级测试和部署复验待完成 |
 | 2026-09-15 / RENDER-CD-20260915 | 增加 main 即生产的发布流程、CI 门控部署验证、排错与回滚步骤 | 官方 Schema 与路径覆盖自检通过；Blueprint 同步与首次门控部署待合入后验证 |
+
+## 生产诊断复现与复验：PROD-AUDIT-20260916（2026-09-16）
+
+前提：已授权生产验收，Render CLI已登录正确workspace；用户明确追加授权后才读取教师/学生演示账号的心理列表与历史。仅保留状态/耗时，凭据、JWT和个人心理记录不进入报告。[生产验收报告](./docs/production-tests/2026-09-16/REPORT.md)与同目录JSON为本次证据。
+
+已执行：经Static Site `/api`入口低频测量接口两次、浏览器验证原型按钮/详情，读取Render服务/部署/应用日志；user列表先429、唤醒后200/业务200（6.647→0.764秒），Agent本次MCP429启动失败、SSE两次60秒无首字节，普通业务与授权角色只读接口通过。user健康探针HTTP200/业务500，不得计为通过。
+
+只读日志复现命令（UTC；输出先脱敏，网关DEBUG可能包含Bearer token）：
+
+```bash
+render logs -r srv-da9vk4e7bikc73f168o0 --start 2026-09-16T08:25:00Z --text 'Invalid SSE,cancelling refresh,Application run failed,Starting AgentServiceApplication,Langfuse' --limit 100 -o json
+render logs -r srv-da9vk4e7bikc73f168q0 --start 2026-09-16T08:31:00Z --text 'Hikari,Starting,Started,Completed initialization,No static resource actuator/health' --limit 100 -o json
+render services -o json
+render deploys list srv-da9vk4e7bikc73f168o0 -o json
+```
+
+排错：先判断HTTP与body.code，SSE需有成功首字节与正确content-type；对照网关上下游耗时与应用初始化日志，勿把HTTP000当HTTP响应。MCP异常未标connection名，继续查具体connection与Render平台事件；无对应日志不代表依赖健康。user冷启动后复测列表而非拿缺失health路由作判据。
+
+修复后验证（全部待验证）：真实user健康语义通过；Agent冷唤醒成功Started、双MCP工具初始化完成、无run-failed/重启，SSE握手在约定预算内成功；user首请求与热请求各测、记录池初始化/SQL阶段；Langfuse出现活trace；用户/学业前端调用真实API。写入类能力需独立测试记录，未经实跑不标通过。
+
+回滚：本次仅报告与文档，没有生产变更可回滚。后续修复应事前保存服务配置差异与部署ID，再按验证失败项逐项回退；不得回滚鉴权或改密，也不得以关闭健康检查作为故障恢复。
+
+## PERF-500MS-20260916：部署与500ms验收（2026-09-16）
+
+前提：JDK17、现有 Render workspace/API凭证、演示账号只读授权。报告不得包含JWT、完整响应记录或原始 DEBUG 日志。使用 [bench-production-api.py](./scripts/bench-production-api.py) 顺序发送持久连接请求，外部完整响应耗时与 Server-Timing 分列，快速429/503不算通过。第一笔连接和休眠唤醒独立保留；热态统计取稳定样本并同时报告最大值，不能仅报告最佳值。
+
+```bash
+cd backend
+mvn -B -ntp clean test
+cd ..
+bash scripts/test-preflight-prod.sh
+# 密码通过环境变量设置，不写入报告；角色可选 admin/teacher/student。
+python3 scripts/bench-production-api.py --role admin --rounds 5 --output /tmp/performance.json
+# 先只读查看配置差异；生产授权后才 --apply。凭证仅在环境/内存。
+python3 scripts/sync-render-performance.py --output /tmp/render-plan.json
+python3 scripts/sync-render-performance.py --apply --output /tmp/render-applied.json
+render blueprints validate render.yaml --output json
+```
+
+`BENCH_PASSWORD`/`BENCH_USERNAME` 和 `RENDER_API_KEY` 需调用者预先设置。sync 脚本只更改允许列表的非敏感性能配置、健康检查路径，不改计划/生成密钥/部署；bulk PUT 前读取并保留全部直接设置变量，避免清除既有凭证，变化证据仅保存允许列表。然后发布已通过CI的确定提交至9个Java服务，逐个确认live提交与真实 readiness；前端/Python无代码改变则无须重建。
+
+排错：`app;dur` 为Servlet过滤器进入到响应序列化前，`gateway;dur` 包含JWT/会话/转发至上游响应头，不包含客户端传输；二者不应相加。若应用快而端到端超过500ms，检查网络地区、Static Site rewrite/公网转发和免费实例休眠；若 app 慢，按具体路径查SQL/外部调用/线程池；若MCP未就绪，查后台 connection/errorType 重连日志及依赖探针，不将任务FAILED判为成功。启动预热失败必须阻止ready，不靠静态404/业务500健康响应放行。
+
+回滚：部署各服务上一次live提交；Agent回退旧代码前，恢复 `SPRING_AI_MCP_CLIENT_ENABLED=true` 并禁用 `EDUCARE_MCP_DEFERRED_ENABLED`，否则旧代码无法取得工具。其他性能变量可按render-applied.json的previous值恢复（previous为空时删除服务级覆盖、回到环境组）；保留原有JWT/MCP/数据库凭证。无需数据库回滚（未执行DDL）。本地验证已通过，生产部署和端到端500ms验收在 PERFORMANCE.md 更新实测；未覆盖的写入/内部推理接口标为待验证，不能声称全接口通过。

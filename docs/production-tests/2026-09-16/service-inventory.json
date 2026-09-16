@@ -1,0 +1,137 @@
+[
+  {
+    "id": "srv-da9vk4e7bikc73f168og",
+    "name": "edu-portrait-frontend",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": null,
+    "healthCheckPath": null,
+    "buildFilter": {
+      "ignoredPaths": [],
+      "paths": [
+        "frontend/**"
+      ]
+    }
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168o0",
+    "name": "edu-portrait-agent",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168ng",
+    "name": "edu-portrait-ai-inference",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "/health",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168p0",
+    "name": "edu-portrait-auth",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f1690g",
+    "name": "edu-portrait-data",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168u0",
+    "name": "edu-portrait-gateway",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "/actuator/health",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168n0",
+    "name": "edu-portrait-mcp-student",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "/actuator/health",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168vg",
+    "name": "edu-portrait-mental",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168l0",
+    "name": "edu-portrait-mysql",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4m7bikc73f16bj0",
+    "name": "edu-portrait-redis",
+    "branch": null,
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168s0",
+    "name": "edu-portrait-student",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168qg",
+    "name": "edu-portrait-teacher",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "",
+    "buildFilter": null
+  },
+  {
+    "id": "srv-da9vk4e7bikc73f168q0",
+    "name": "edu-portrait-user",
+    "branch": "main",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "plan": "free",
+    "healthCheckPath": "",
+    "buildFilter": null
+  }
+]
