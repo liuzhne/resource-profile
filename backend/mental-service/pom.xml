@@ -54,6 +54,11 @@
             <artifactId>lombok</artifactId>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Test：StudentMentalController 越权(IDOR)校验单测 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

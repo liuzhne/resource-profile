@@ -13,6 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDateTime;
 
 import java.util.Collections;
 import java.util.List;
@@ -86,12 +88,14 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     @Override
+    @Transactional
     public void saveBatch(Long questionnaireId, List<Question> questions) {
         if (questions == null || questions.isEmpty()) {
             syncQuestionCount(questionnaireId);
             return;
         }
         int order = 1;
+        LocalDateTime now = LocalDateTime.now();
         for (Question question : questions) {
             question.setQuestionnaireId(questionnaireId);
             if (question.getSortOrder() == null) {
@@ -100,8 +104,13 @@ public class QuestionServiceImpl implements QuestionService {
             if (question.getRequired() == null) {
                 question.setRequired(1);
             }
-            questionMapper.insert(question);
+            // Custom bulk SQL does not use MyBatis-Plus insert auto-fill.
+            if (question.getCreateTime() == null) question.setCreateTime(now);
+            if (question.getUpdateTime() == null) question.setUpdateTime(now);
             order++;
+        }
+        for (int offset = 0; offset < questions.size(); offset += 100) {
+            questionMapper.insertBulk(questions.subList(offset, Math.min(offset + 100, questions.size())));
         }
         syncQuestionCount(questionnaireId);
     }

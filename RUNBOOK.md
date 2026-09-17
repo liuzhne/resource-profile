@@ -743,3 +743,9 @@ render blueprints validate render.yaml --output json
 排错：`app;dur` 为Servlet过滤器进入到响应序列化前，`gateway;dur` 包含JWT/会话/转发至上游响应头，不包含客户端传输；二者不应相加。若应用快而端到端超过500ms，检查网络地区、Static Site rewrite/公网转发和免费实例休眠；若 app 慢，按具体路径查SQL/外部调用/线程池；若MCP未就绪，查后台 connection/errorType 重连日志及依赖探针，不将任务FAILED判为成功。启动预热失败必须阻止ready，不靠静态404/业务500健康响应放行。
 
 回滚：部署各服务上一次live提交；Agent回退旧代码前，恢复 `SPRING_AI_MCP_CLIENT_ENABLED=true` 并禁用 `EDUCARE_MCP_DEFERRED_ENABLED`，否则旧代码无法取得工具。其他性能变量可按render-applied.json的previous值恢复（previous为空时删除服务级覆盖、回到环境组）；保留原有JWT/MCP/数据库凭证。无需数据库回滚（未执行DDL）。本地验证已通过，生产部署和端到端500ms验收在 PERFORMANCE.md 更新实测；未覆盖的写入/内部推理接口标为待验证，不能声称全接口通过。
+
+PERF-500MS-20260916 补充（2026-09-16）：Excel批量写入验证可执行 `mvn -B -ntp test -pl mental-service -am`；QuestionBulkImportTest验证205题只写3批且保留默认值/显式排序，QuestionBulkSqlTest在本地临时H2通过实际MyBatis SQL验证JSON/null/中文及回滚。没有对生产心理问卷执行写入测试，完整上传/解析耗时待带测试夹具验收；回退上一次mental镜像即可，无生产DDL回滚。
+
+PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报toolCallbackResolver/MCP未就绪，确认镜像包含动态resolver补充修复；DeferredMcpConfigurationTest包含真实Spring AI自动装配，必须通过。首轮44a1074 Agent未上线，需用包含补充修复的提交再部署，不能将update_failed记录标为live。 实现见 [DeferredMcpConfiguration](./backend/agent-service/src/main/java/com/edu/agent/config/DeferredMcpConfiguration.java)。
+
+2026-09-16 / PERF-500MS-20260916：生产 Server-Timing 出现重复 app 指标，原因是领域服务扫描 common 的 @RestControllerAdvice，同时自动配置再次创建 advice。以 ConditionalOnMissingBean 保证唯一注册，并限制 servlet 条件；启动上下文覆盖扫描/不扫描两种注册路径。此项无架构边界变化，影响 common RequestTimingConfiguration。网关首轮现已 live（09:20:08Z），内存可见样本约233MB，不能据此把此前无报错重启归因为OOM。最终指标必须以全部服务稳定发布后复测为准；回滚恢复原提交和原始 render-performance-plan 配置。

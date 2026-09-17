@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.MethodParameter;
@@ -40,9 +41,11 @@ public class RequestTimingConfiguration {
         return registration;
     }
     @Bean
+    @ConditionalOnMissingBean(TimingAdvice.class)
     public TimingAdvice requestTimingAdvice() { return new TimingAdvice(); }
 
     @RestControllerAdvice
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     public static class TimingAdvice implements ResponseBodyAdvice<Object> {
         @Override
         public boolean supports(MethodParameter method, Class<? extends HttpMessageConverter<?>> converter) { return true; }

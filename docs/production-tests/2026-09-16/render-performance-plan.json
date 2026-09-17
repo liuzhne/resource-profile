@@ -1,0 +1,451 @@
+[
+  {
+    "service": "edu-portrait-gateway",
+    "id": "srv-da9vk4e7bikc73f168u0",
+    "applied": false,
+    "changes": {
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": {
+        "previous": null,
+        "desired": "1"
+      },
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": {
+        "previous": null,
+        "desired": "org.apache.ibatis.logging.nologging.NoLoggingImpl"
+      },
+      "SERVER_COMPRESSION_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_HEALTH_REDIS_ENABLED": {
+        "previous": null,
+        "desired": "false"
+      },
+      "DB_MAXIMUM_POOL_SIZE": {
+        "previous": null,
+        "desired": "3"
+      },
+      "DB_MINIMUM_IDLE": {
+        "previous": null,
+        "desired": "2"
+      },
+      "DB_MAX_LIFETIME_MS": {
+        "previous": null,
+        "desired": "600000"
+      },
+      "SPRING_MAIN_LAZY_INITIALIZATION": {
+        "previous": "true",
+        "desired": "false"
+      }
+    },
+    "previous_health": "/actuator/health",
+    "health": "/actuator/health"
+  },
+  {
+    "service": "edu-portrait-auth",
+    "id": "srv-da9vk4e7bikc73f168p0",
+    "applied": false,
+    "changes": {
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": {
+        "previous": null,
+        "desired": "1"
+      },
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": {
+        "previous": null,
+        "desired": "org.apache.ibatis.logging.nologging.NoLoggingImpl"
+      },
+      "SERVER_COMPRESSION_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_HEALTH_REDIS_ENABLED": {
+        "previous": null,
+        "desired": "false"
+      },
+      "DB_MAXIMUM_POOL_SIZE": {
+        "previous": null,
+        "desired": "3"
+      },
+      "DB_MINIMUM_IDLE": {
+        "previous": null,
+        "desired": "2"
+      },
+      "DB_MAX_LIFETIME_MS": {
+        "previous": null,
+        "desired": "600000"
+      },
+      "SPRING_MAIN_LAZY_INITIALIZATION": {
+        "previous": "true",
+        "desired": "false"
+      }
+    },
+    "previous_health": "",
+    "health": "/actuator/health/readiness"
+  },
+  {
+    "service": "edu-portrait-user",
+    "id": "srv-da9vk4e7bikc73f168q0",
+    "applied": false,
+    "changes": {
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": {
+        "previous": null,
+        "desired": "1"
+      },
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": {
+        "previous": null,
+        "desired": "org.apache.ibatis.logging.nologging.NoLoggingImpl"
+      },
+      "SERVER_COMPRESSION_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_HEALTH_REDIS_ENABLED": {
+        "previous": null,
+        "desired": "false"
+      },
+      "DB_MAXIMUM_POOL_SIZE": {
+        "previous": null,
+        "desired": "3"
+      },
+      "DB_MINIMUM_IDLE": {
+        "previous": null,
+        "desired": "2"
+      },
+      "DB_MAX_LIFETIME_MS": {
+        "previous": null,
+        "desired": "600000"
+      },
+      "SPRING_MAIN_LAZY_INITIALIZATION": {
+        "previous": "true",
+        "desired": "false"
+      }
+    },
+    "previous_health": "",
+    "health": "/actuator/health/readiness"
+  },
+  {
+    "service": "edu-portrait-teacher",
+    "id": "srv-da9vk4e7bikc73f168qg",
+    "applied": false,
+    "changes": {
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": {
+        "previous": null,
+        "desired": "1"
+      },
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": {
+        "previous": null,
+        "desired": "org.apache.ibatis.logging.nologging.NoLoggingImpl"
+      },
+      "SERVER_COMPRESSION_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_HEALTH_REDIS_ENABLED": {
+        "previous": null,
+        "desired": "false"
+      },
+      "DB_MAXIMUM_POOL_SIZE": {
+        "previous": null,
+        "desired": "3"
+      },
+      "DB_MINIMUM_IDLE": {
+        "previous": null,
+        "desired": "2"
+      },
+      "DB_MAX_LIFETIME_MS": {
+        "previous": null,
+        "desired": "600000"
+      },
+      "SPRING_MAIN_LAZY_INITIALIZATION": {
+        "previous": "true",
+        "desired": "false"
+      }
+    },
+    "previous_health": "",
+    "health": "/actuator/health/readiness"
+  },
+  {
+    "service": "edu-portrait-student",
+    "id": "srv-da9vk4e7bikc73f168s0",
+    "applied": false,
+    "changes": {
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": {
+        "previous": null,
+        "desired": "1"
+      },
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": {
+        "previous": null,
+        "desired": "org.apache.ibatis.logging.nologging.NoLoggingImpl"
+      },
+      "SERVER_COMPRESSION_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_HEALTH_REDIS_ENABLED": {
+        "previous": null,
+        "desired": "false"
+      },
+      "DB_MAXIMUM_POOL_SIZE": {
+        "previous": null,
+        "desired": "3"
+      },
+      "DB_MINIMUM_IDLE": {
+        "previous": null,
+        "desired": "2"
+      },
+      "DB_MAX_LIFETIME_MS": {
+        "previous": null,
+        "desired": "600000"
+      },
+      "SPRING_MAIN_LAZY_INITIALIZATION": {
+        "previous": "true",
+        "desired": "false"
+      }
+    },
+    "previous_health": "",
+    "health": "/actuator/health/readiness"
+  },
+  {
+    "service": "edu-portrait-mental",
+    "id": "srv-da9vk4e7bikc73f168vg",
+    "applied": false,
+    "changes": {
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": {
+        "previous": null,
+        "desired": "1"
+      },
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": {
+        "previous": null,
+        "desired": "org.apache.ibatis.logging.nologging.NoLoggingImpl"
+      },
+      "SERVER_COMPRESSION_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_HEALTH_REDIS_ENABLED": {
+        "previous": null,
+        "desired": "false"
+      },
+      "DB_MAXIMUM_POOL_SIZE": {
+        "previous": null,
+        "desired": "3"
+      },
+      "DB_MINIMUM_IDLE": {
+        "previous": null,
+        "desired": "2"
+      },
+      "DB_MAX_LIFETIME_MS": {
+        "previous": null,
+        "desired": "600000"
+      },
+      "SPRING_MAIN_LAZY_INITIALIZATION": {
+        "previous": "true",
+        "desired": "false"
+      }
+    },
+    "previous_health": "",
+    "health": "/actuator/health/readiness"
+  },
+  {
+    "service": "edu-portrait-data",
+    "id": "srv-da9vk4e7bikc73f1690g",
+    "applied": false,
+    "changes": {
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": {
+        "previous": null,
+        "desired": "1"
+      },
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": {
+        "previous": null,
+        "desired": "org.apache.ibatis.logging.nologging.NoLoggingImpl"
+      },
+      "SERVER_COMPRESSION_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_HEALTH_REDIS_ENABLED": {
+        "previous": null,
+        "desired": "false"
+      },
+      "DB_MAXIMUM_POOL_SIZE": {
+        "previous": null,
+        "desired": "3"
+      },
+      "DB_MINIMUM_IDLE": {
+        "previous": null,
+        "desired": "2"
+      },
+      "DB_MAX_LIFETIME_MS": {
+        "previous": null,
+        "desired": "600000"
+      },
+      "SPRING_MAIN_LAZY_INITIALIZATION": {
+        "previous": "true",
+        "desired": "false"
+      }
+    },
+    "previous_health": "",
+    "health": "/actuator/health/readiness"
+  },
+  {
+    "service": "edu-portrait-agent",
+    "id": "srv-da9vk4e7bikc73f168o0",
+    "applied": false,
+    "changes": {
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": {
+        "previous": null,
+        "desired": "1"
+      },
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": {
+        "previous": null,
+        "desired": "org.apache.ibatis.logging.nologging.NoLoggingImpl"
+      },
+      "SERVER_COMPRESSION_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_HEALTH_REDIS_ENABLED": {
+        "previous": null,
+        "desired": "false"
+      },
+      "DB_MAXIMUM_POOL_SIZE": {
+        "previous": null,
+        "desired": "3"
+      },
+      "DB_MINIMUM_IDLE": {
+        "previous": null,
+        "desired": "2"
+      },
+      "DB_MAX_LIFETIME_MS": {
+        "previous": null,
+        "desired": "600000"
+      },
+      "SPRING_AI_MCP_CLIENT_ENABLED": {
+        "previous": "true",
+        "desired": "false"
+      },
+      "EDUCARE_MCP_DEFERRED_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MAIN_LAZY_INITIALIZATION": {
+        "previous": null,
+        "desired": "false"
+      }
+    },
+    "previous_health": "",
+    "health": "/actuator/health/readiness"
+  },
+  {
+    "service": "edu-portrait-mcp-student",
+    "id": "srv-da9vk4e7bikc73f168n0",
+    "applied": false,
+    "changes": {
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": {
+        "previous": null,
+        "desired": "true"
+      },
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": {
+        "previous": null,
+        "desired": "1"
+      },
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": {
+        "previous": null,
+        "desired": "org.apache.ibatis.logging.nologging.NoLoggingImpl"
+      },
+      "SERVER_COMPRESSION_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": {
+        "previous": null,
+        "desired": "true"
+      },
+      "MANAGEMENT_HEALTH_REDIS_ENABLED": {
+        "previous": null,
+        "desired": "false"
+      },
+      "DB_MAXIMUM_POOL_SIZE": {
+        "previous": null,
+        "desired": "3"
+      },
+      "DB_MINIMUM_IDLE": {
+        "previous": null,
+        "desired": "2"
+      },
+      "DB_MAX_LIFETIME_MS": {
+        "previous": null,
+        "desired": "600000"
+      },
+      "SPRING_MAIN_LAZY_INITIALIZATION": {
+        "previous": "true",
+        "desired": "false"
+      }
+    },
+    "previous_health": "/actuator/health",
+    "health": "/actuator/health"
+  }
+]
