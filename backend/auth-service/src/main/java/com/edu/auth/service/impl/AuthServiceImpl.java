@@ -35,8 +35,10 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse login(LoginRequest request) {
+        long started = System.nanoTime();
         // 查询用户
         User user = userMapper.selectByUsername(request.getUsername());
+        long lookupDone = System.nanoTime();
         if (user == null) {
             // 用户不存在与密码错误返回同一 401 消息，避免用户名枚举
             throw new BusinessException(401, "用户名或密码错误");
@@ -46,6 +48,7 @@ public class AuthServiceImpl implements AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new BusinessException(401, "用户名或密码错误");
         }
+        long passwordDone = System.nanoTime();
 
         // 检查用户状态
         if (user.getStatus() != 1) {
@@ -54,9 +57,11 @@ public class AuthServiceImpl implements AuthService {
 
         // 生成 JWT Token
         Map<String, Object> claims = buildClaims(user);
+        long claimsDone = System.nanoTime();
 
         String accessToken = jwtUtil.generateAccessToken(user.getId().toString(), claims);
         String refreshToken = jwtUtil.generateRefreshToken(user.getId().toString());
+        long jwtDone = System.nanoTime();
 
         // 存入 Redis
         redisTemplate.opsForValue().set(
@@ -65,6 +70,16 @@ public class AuthServiceImpl implements AuthService {
                 24,
                 TimeUnit.HOURS
         );
+        long sessionDone = System.nanoTime();
+        if (sessionDone - started >= TimeUnit.MILLISECONDS.toNanos(500)) {
+            // Phase durations only: never include username, password, user id, tokens or SQL.
+            log.info("Slow login phases lookupMs={} passwordMs={} rolesMs={} jwtMs={} sessionMs={}",
+                    TimeUnit.NANOSECONDS.toMillis(lookupDone - started),
+                    TimeUnit.NANOSECONDS.toMillis(passwordDone - lookupDone),
+                    TimeUnit.NANOSECONDS.toMillis(claimsDone - passwordDone),
+                    TimeUnit.NANOSECONDS.toMillis(jwtDone - claimsDone),
+                    TimeUnit.NANOSECONDS.toMillis(sessionDone - jwtDone));
+        }
 
         LoginResponse response = new LoginResponse();
         response.setToken(accessToken);
