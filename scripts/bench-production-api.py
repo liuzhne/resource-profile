@@ -38,6 +38,7 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--extended', action='store_true', help='Also measure further non-mutating business reads')
     parser.add_argument('--sse', action='store_true', help='Also measure SSE headers/first hello frame, then close')
+    parser.add_argument('--sse-base', help='SSE base URL when production connects directly to the gateway')
     args = parser.parse_args()
     password = os.environ['BENCH_PASSWORD']
     rows = []
@@ -90,7 +91,7 @@ def main():
                            'utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                            'measurement': 'SSE first frame, connection closed after hello'}
                     try:
-                        with session.get(args.base.rstrip('/') + path, stream=True, timeout=args.timeout) as response:
+                        with session.get((args.sse_base or args.base).rstrip('/') + path, stream=True, timeout=args.timeout) as response:
                             row['http'] = response.status_code
                             row['headers_ms'] = round((time.perf_counter() - start) * 1000, 2)
                             row['server_timing'] = response.headers.get('Server-Timing')

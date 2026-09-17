@@ -422,3 +422,5 @@ PERF-500MS-20260916 补充（2026-09-16）：问卷Excel逐题 INSERT 为N次数
 PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent在toolCallbackResolver创建时因MCP未就绪失败。选择配置条件内动态resolver而不是返回空工具或吞掉503，避免静态空工具快照且保留失败显式语义。新增真实ToolCallingAutoConfiguration启动及刷新工具解析回归通过；默认本地resolver不变。 实现见 [DeferredMcpConfiguration](./backend/agent-service/src/main/java/com/edu/agent/config/DeferredMcpConfiguration.java)。
 
 2026-09-16 / PERF-500MS-20260916：生产 Server-Timing 出现重复 app 指标，原因是领域服务扫描 common 的 @RestControllerAdvice，同时自动配置再次创建 advice。以 ConditionalOnMissingBean 保证唯一注册，并限制 servlet 条件；启动上下文覆盖扫描/不扫描两种注册路径。此项无架构边界变化，影响 common RequestTimingConfiguration。网关首轮现已 live（09:20:08Z），内存可见样本约233MB，不能据此把此前无报错重启归因为OOM。最终指标必须以全部服务稳定发布后复测为准；回滚恢复原提交和原始 render-performance-plan 配置。
+
+2026-09-17 / PERF-500MS-20260916：生产静态站的外部rewrite未及时转发SSE首帧，Agent和网关直连首帧可用。Warning.vue通过VITE_SSE_BASE_URL直连网关，仍携带Bearer并经过网关会话鉴权；普通API保持原路由。选择绕过静态代理，放弃调长超时及绕过鉴权的Agent直连。render.yaml记录构建变量。验证：前端构建/体积门通过，lint零错误一个既有格式警告；网关CORS预检允许Authorization和站点Origin，直连hello测试通过。前端最终部署待验证；回滚前端提交和该构建变量恢复原路由。完整生产验收记录保留本地，不纳入公开提交；不能据此宣称所有请求满足500ms。
