@@ -251,7 +251,9 @@ const connectSse = async () => {
   if (sseAbortCtrl) sseAbortCtrl.abort()
   sseAbortCtrl = new AbortController()
   try {
-    await fetchEventSource('/api/agent/api/v1/warning/stream', {
+    // Render static-site rewrites buffer this long-lived response; use the gateway in production.
+    const sseBase = (import.meta.env.VITE_SSE_BASE_URL || '/api').replace(/\/$/, '')
+    await fetchEventSource(`${sseBase}/agent/api/v1/warning/stream`, {
       signal: sseAbortCtrl.signal,
       headers: userStore.token ? { Authorization: `Bearer ${userStore.token}` } : {},
       openWhenHidden: true, // 切到后台标签页也保持连接

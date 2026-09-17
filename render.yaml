@@ -83,6 +83,9 @@ services:
       # 未配置 LLM 供应商前隐藏 AI 预警与 LLM 追踪入口。
       - key: VITE_AI_ENABLED
         value: "true"
+      # Long-lived SSE must bypass the static site's buffering external rewrite.
+      - key: VITE_SSE_BASE_URL
+        value: "https://edu-portrait-gateway.onrender.com"
       # 打开网站即并行唤醒的后端服务（逗号分隔的公网健康检查地址；网关已内置，经 /api 同源唤醒）。
       # 免费层各服务独立休眠，逐个撞上冷启动是串行叠加；并行唤醒把等待压成一段（见 src/utils/prewarm.js）。
       # 只列前端实际调用的服务：user-service 前端未使用；agent 链路（agent / MCP / ai-inference）
