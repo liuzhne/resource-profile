@@ -1,0 +1,413 @@
+{
+  "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+  "read_samples": 125,
+  "read_success": 125,
+  "read_client_under500": 71,
+  "warm_client": {
+    "median_ms": 473.88,
+    "p95_ms": 651.51,
+    "max_ms": 1107.1
+  },
+  "results": [
+    {
+      "path": "/agent/api/v1/task/list?pageNum=1&pageSize=10",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 1,
+      "client": {
+        "median_ms": 519.23,
+        "p95_ms": 676.8,
+        "max_ms": 676.8
+      },
+      "application_before_serialization": {
+        "median_ms": 104.96,
+        "p95_ms": 131.37,
+        "max_ms": 131.37
+      }
+    },
+    {
+      "path": "/auth/userInfo",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 4,
+      "client": {
+        "median_ms": 428.09,
+        "p95_ms": 435.35,
+        "max_ms": 435.35
+      },
+      "application_before_serialization": {
+        "median_ms": 53.39,
+        "p95_ms": 70.07,
+        "max_ms": 70.07
+      }
+    },
+    {
+      "path": "/data/dashboard/distribution",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 4,
+      "client": {
+        "median_ms": 425.81,
+        "p95_ms": 437.64,
+        "max_ms": 437.64
+      },
+      "application_before_serialization": {
+        "median_ms": 24.09,
+        "p95_ms": 24.27,
+        "max_ms": 24.27
+      }
+    },
+    {
+      "path": "/data/dashboard/recentLogins",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 4,
+      "client": {
+        "median_ms": 415.09,
+        "p95_ms": 460.8,
+        "max_ms": 460.8
+      },
+      "application_before_serialization": {
+        "median_ms": 24.25,
+        "p95_ms": 24.31,
+        "max_ms": 24.31
+      }
+    },
+    {
+      "path": "/data/dashboard/statistics",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 3,
+      "client": {
+        "median_ms": 433.94,
+        "p95_ms": 562.11,
+        "max_ms": 562.11
+      },
+      "application_before_serialization": {
+        "median_ms": 24.99,
+        "p95_ms": 44.64,
+        "max_ms": 44.64
+      }
+    },
+    {
+      "path": "/data/dashboard/trend?period=month",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 3,
+      "client": {
+        "median_ms": 444.5,
+        "p95_ms": 526.08,
+        "max_ms": 526.08
+      },
+      "application_before_serialization": {
+        "median_ms": 46.23,
+        "p95_ms": 46.96,
+        "max_ms": 46.96
+      }
+    },
+    {
+      "path": "/data/dashboard/trend?period=week",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 3,
+      "client": {
+        "median_ms": 489.6,
+        "p95_ms": 522.71,
+        "max_ms": 522.71
+      },
+      "application_before_serialization": {
+        "median_ms": 45.38,
+        "p95_ms": 45.53,
+        "max_ms": 45.53
+      }
+    },
+    {
+      "path": "/data/dashboard/trend?period=year",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 3,
+      "client": {
+        "median_ms": 459.44,
+        "p95_ms": 755.47,
+        "max_ms": 755.47
+      },
+      "application_before_serialization": {
+        "median_ms": 45.53,
+        "p95_ms": 45.98,
+        "max_ms": 45.98
+      }
+    },
+    {
+      "path": "/mental/analysis",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 0,
+      "client": {
+        "median_ms": 517.96,
+        "p95_ms": 573.63,
+        "max_ms": 573.63
+      },
+      "application_before_serialization": {
+        "median_ms": 93.38,
+        "p95_ms": 111.27,
+        "max_ms": 111.27
+      }
+    },
+    {
+      "path": "/mental/overview",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 2,
+      "client": {
+        "median_ms": 492.58,
+        "p95_ms": 537.33,
+        "max_ms": 537.33
+      },
+      "application_before_serialization": {
+        "median_ms": 68.87,
+        "p95_ms": 77.8,
+        "max_ms": 77.8
+      }
+    },
+    {
+      "path": "/mental/questionnaires/1",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 4,
+      "client": {
+        "median_ms": 436.8,
+        "p95_ms": 447.19,
+        "max_ms": 447.19
+      },
+      "application_before_serialization": {
+        "median_ms": 23.92,
+        "p95_ms": 24.3,
+        "max_ms": 24.3
+      }
+    },
+    {
+      "path": "/mental/questionnaires/1/completion",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 4,
+      "client": {
+        "median_ms": 453.79,
+        "p95_ms": 477.53,
+        "max_ms": 477.53
+      },
+      "application_before_serialization": {
+        "median_ms": 24.73,
+        "p95_ms": 29.29,
+        "max_ms": 29.29
+      }
+    },
+    {
+      "path": "/mental/questionnaires/1/full",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 1,
+      "client": {
+        "median_ms": 600.19,
+        "p95_ms": 678.14,
+        "max_ms": 678.14
+      },
+      "application_before_serialization": {
+        "median_ms": 67.19,
+        "p95_ms": 67.74,
+        "max_ms": 67.74
+      }
+    },
+    {
+      "path": "/mental/questionnaires/1/questions",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 4,
+      "client": {
+        "median_ms": 457.16,
+        "p95_ms": 479.71,
+        "max_ms": 479.71
+      },
+      "application_before_serialization": {
+        "median_ms": 23.99,
+        "p95_ms": 24.43,
+        "max_ms": 24.43
+      }
+    },
+    {
+      "path": "/mental/questionnaires?pageNum=1&pageSize=10",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 2,
+      "client": {
+        "median_ms": 505.09,
+        "p95_ms": 549.03,
+        "max_ms": 549.03
+      },
+      "application_before_serialization": {
+        "median_ms": 70.12,
+        "p95_ms": 92.48,
+        "max_ms": 92.48
+      }
+    },
+    {
+      "path": "/student/1",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 3,
+      "client": {
+        "median_ms": 459.75,
+        "p95_ms": 514.58,
+        "max_ms": 514.58
+      },
+      "application_before_serialization": {
+        "median_ms": 34.38,
+        "p95_ms": 43.61,
+        "max_ms": 43.61
+      }
+    },
+    {
+      "path": "/student/1/academic",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 1,
+      "client": {
+        "median_ms": 559.3,
+        "p95_ms": 647.89,
+        "max_ms": 647.89
+      },
+      "application_before_serialization": {
+        "median_ms": 61.34,
+        "p95_ms": 70.99,
+        "max_ms": 70.99
+      }
+    },
+    {
+      "path": "/student/1/attendance",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 4,
+      "client": {
+        "median_ms": 466.87,
+        "p95_ms": 478.62,
+        "max_ms": 478.62
+      },
+      "application_before_serialization": {
+        "median_ms": 48.88,
+        "p95_ms": 50.97,
+        "max_ms": 50.97
+      }
+    },
+    {
+      "path": "/student/1/attendance/summary",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 3,
+      "client": {
+        "median_ms": 480.97,
+        "p95_ms": 602.77,
+        "max_ms": 602.77
+      },
+      "application_before_serialization": {
+        "median_ms": 49.64,
+        "p95_ms": 68.31,
+        "max_ms": 68.31
+      }
+    },
+    {
+      "path": "/student/ids",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 3,
+      "client": {
+        "median_ms": 432.92,
+        "p95_ms": 504.35,
+        "max_ms": 504.35
+      },
+      "application_before_serialization": {
+        "median_ms": 24.83,
+        "p95_ms": 28.95,
+        "max_ms": 28.95
+      }
+    },
+    {
+      "path": "/student/list?pageNum=1&pageSize=10",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 0,
+      "client": {
+        "median_ms": 576.94,
+        "p95_ms": 657.12,
+        "max_ms": 657.12
+      },
+      "application_before_serialization": {
+        "median_ms": 155.6,
+        "p95_ms": 204.58,
+        "max_ms": 204.58
+      }
+    },
+    {
+      "path": "/teacher/1",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 3,
+      "client": {
+        "median_ms": 459.44,
+        "p95_ms": 530.0,
+        "max_ms": 530.0
+      },
+      "application_before_serialization": {
+        "median_ms": 26.4,
+        "p95_ms": 28.18,
+        "max_ms": 28.18
+      }
+    },
+    {
+      "path": "/teacher/list?pageNum=1&pageSize=10",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 0,
+      "client": {
+        "median_ms": 533.96,
+        "p95_ms": 575.5,
+        "max_ms": 575.5
+      },
+      "application_before_serialization": {
+        "median_ms": 130.36,
+        "p95_ms": 170.54,
+        "max_ms": 170.54
+      }
+    },
+    {
+      "path": "/user/1",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 3,
+      "client": {
+        "median_ms": 436.57,
+        "p95_ms": 618.94,
+        "max_ms": 618.94
+      },
+      "application_before_serialization": {
+        "median_ms": 26.36,
+        "p95_ms": 184.85,
+        "max_ms": 184.85
+      }
+    },
+    {
+      "path": "/user/list?page=1&size=10",
+      "warm_samples": 4,
+      "success": 4,
+      "client_under500": 2,
+      "client": {
+        "median_ms": 516.72,
+        "p95_ms": 1107.1,
+        "max_ms": 1107.1
+      },
+      "application_before_serialization": {
+        "median_ms": 36.8,
+        "p95_ms": 47.87,
+        "max_ms": 47.87
+      }
+    }
+  ]
+}

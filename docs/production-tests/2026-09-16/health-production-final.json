@@ -1,0 +1,74 @@
+[
+  {
+    "service": "gateway",
+    "path": "/actuator/health",
+    "http": 200,
+    "status": "UP",
+    "ms": 698.77,
+    "utc": "2026-09-17T00:42:31.447547+00:00"
+  },
+  {
+    "service": "auth",
+    "path": "/actuator/health/readiness",
+    "http": 200,
+    "status": "UP",
+    "ms": 646.51,
+    "utc": "2026-09-17T00:42:31.395472+00:00"
+  },
+  {
+    "service": "user",
+    "path": "/actuator/health/readiness",
+    "http": 200,
+    "status": "UP",
+    "ms": 715.2,
+    "utc": "2026-09-17T00:42:31.464264+00:00"
+  },
+  {
+    "service": "teacher",
+    "path": "/actuator/health/readiness",
+    "http": 200,
+    "status": "UP",
+    "ms": 714.82,
+    "utc": "2026-09-17T00:42:31.464011+00:00"
+  },
+  {
+    "service": "student",
+    "path": "/actuator/health/readiness",
+    "http": 200,
+    "status": "UP",
+    "ms": 692.26,
+    "utc": "2026-09-17T00:42:31.441562+00:00"
+  },
+  {
+    "service": "mental",
+    "path": "/actuator/health/readiness",
+    "http": 200,
+    "status": "UP",
+    "ms": 645.44,
+    "utc": "2026-09-17T00:42:31.395350+00:00"
+  },
+  {
+    "service": "data",
+    "path": "/actuator/health/readiness",
+    "http": 200,
+    "status": "UP",
+    "ms": 1009.84,
+    "utc": "2026-09-17T00:42:31.759946+00:00"
+  },
+  {
+    "service": "agent",
+    "path": "/actuator/health/readiness",
+    "http": 200,
+    "status": "UP",
+    "ms": 1198.43,
+    "utc": "2026-09-17T00:42:31.948948+00:00"
+  },
+  {
+    "service": "mcp-student",
+    "path": "/actuator/health",
+    "http": 200,
+    "status": "UP",
+    "ms": 696.65,
+    "utc": "2026-09-17T00:42:31.447282+00:00"
+  }
+]

@@ -1,0 +1,69 @@
+[
+  {
+    "measurement": "CORS preflight",
+    "http": 200,
+    "allow_origin": "*",
+    "allow_headers": "authorization",
+    "allow_methods": "GET"
+  },
+  {
+    "measurement": "SSE first hello frame",
+    "run": 1,
+    "base": "https://edu-portrait-gateway.onrender.com",
+    "http": 200,
+    "headers_ms": 452.38,
+    "server_timing": "gateway;dur=123.72",
+    "allow_origin": "*",
+    "ok": true,
+    "ms": 452.94,
+    "under_500ms": true
+  },
+  {
+    "measurement": "SSE first hello frame",
+    "run": 2,
+    "base": "https://edu-portrait-gateway.onrender.com",
+    "http": 200,
+    "headers_ms": 884.03,
+    "server_timing": "gateway;dur=113.94",
+    "allow_origin": "*",
+    "ok": true,
+    "ms": 884.59,
+    "under_500ms": false
+  },
+  {
+    "measurement": "SSE first hello frame",
+    "run": 3,
+    "base": "https://edu-portrait-gateway.onrender.com",
+    "http": 200,
+    "headers_ms": 1129.49,
+    "server_timing": "gateway;dur=78.29",
+    "allow_origin": "*",
+    "ok": true,
+    "ms": 1131.08,
+    "under_500ms": false
+  },
+  {
+    "measurement": "SSE first hello frame",
+    "run": 4,
+    "base": "https://edu-portrait-gateway.onrender.com",
+    "http": 200,
+    "headers_ms": 734.58,
+    "server_timing": "gateway;dur=98.72",
+    "allow_origin": "*",
+    "ok": true,
+    "ms": 735.19,
+    "under_500ms": false
+  },
+  {
+    "measurement": "SSE first hello frame",
+    "run": 5,
+    "base": "https://edu-portrait-gateway.onrender.com",
+    "http": 200,
+    "headers_ms": 770.52,
+    "server_timing": "gateway;dur=92.78",
+    "allow_origin": "*",
+    "ok": true,
+    "ms": 771.01,
+    "under_500ms": false
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "utc": "2026-09-17T00:58:47.35016618Z",
+    "lookup_ms": 314,
+    "password_ms": 594,
+    "roles_ms": 110,
+    "jwt_ms": 887,
+    "session_ms": 3589
+  },
+  {
+    "utc": "2026-09-17T00:58:48.549862429Z",
+    "lookup_ms": 42,
+    "password_ms": 556,
+    "roles_ms": 41,
+    "jwt_ms": 48,
+    "session_ms": 1
+  },
+  {
+    "utc": "2026-09-17T00:58:49.647834065Z",
+    "lookup_ms": 22,
+    "password_ms": 663,
+    "roles_ms": 42,
+    "jwt_ms": 0,
+    "session_ms": 52
+  },
+  {
+    "utc": "2026-09-17T00:58:50.571690332Z",
+    "lookup_ms": 27,
+    "password_ms": 432,
+    "roles_ms": 107,
+    "jwt_ms": 0,
+    "session_ms": 1
+  },
+  {
+    "utc": "2026-09-17T00:58:51.451811941Z",
+    "lookup_ms": 22,
+    "password_ms": 434,
+    "roles_ms": 22,
+    "jwt_ms": 66,
+    "session_ms": 1
+  }
+]

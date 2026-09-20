@@ -1,0 +1,26 @@
+[
+  {
+    "utc": "2026-09-17T01:09:56.533728359Z",
+    "lookup_ms": 316,
+    "password_ms": 684,
+    "roles_ms": 44,
+    "jwt_ms": 2,
+    "session_ms": 51
+  },
+  {
+    "utc": "2026-09-17T01:09:57.736342642Z",
+    "lookup_ms": 43,
+    "password_ms": 587,
+    "roles_ms": 43,
+    "jwt_ms": 47,
+    "session_ms": 2
+  },
+  {
+    "utc": "2026-09-17T01:09:58.733388018Z",
+    "lookup_ms": 22,
+    "password_ms": 507,
+    "roles_ms": 43,
+    "jwt_ms": 1,
+    "session_ms": 50
+  }
+]

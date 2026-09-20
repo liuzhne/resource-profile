@@ -1,0 +1,12 @@
+{
+  "utc": "2026-09-17T00:56:46.030746+00:00",
+  "http": 200,
+  "assets": [
+    {
+      "asset": "Warning-Bc4LLhjS.js",
+      "direct_gateway_config": true,
+      "warning_stream_path": true
+    }
+  ],
+  "verified": true
+}

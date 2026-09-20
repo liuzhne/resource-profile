@@ -1,0 +1,25 @@
+[
+  {
+    "surface": "edu-portrait-frontend.onrender.com",
+    "error_type": "ReadTimeout",
+    "ms": 20329.29
+  },
+  {
+    "surface": "edu-portrait-gateway.onrender.com",
+    "http": 200,
+    "headers_ms": 980.78,
+    "content_type": "text/event-stream",
+    "server_timing": "gateway;dur=97.31",
+    "hello": true,
+    "ms": 981.29
+  },
+  {
+    "surface": "edu-portrait-agent.onrender.com",
+    "http": 200,
+    "headers_ms": 732.18,
+    "content_type": "text/event-stream",
+    "server_timing": null,
+    "hello": true,
+    "ms": 733.02
+  }
+]
