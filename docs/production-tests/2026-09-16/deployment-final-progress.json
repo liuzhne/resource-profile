@@ -1,0 +1,101 @@
+[
+  {
+    "service": "edu-portrait-gateway",
+    "service_id": "srv-da9vk4e7bikc73f168u0",
+    "deploy_id": "dep-daljcmajnfac739phv2g",
+    "status": "live",
+    "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "expected_commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "utc": "2026-09-17T00:40:22.219910+00:00",
+    "created_at": "2026-09-17T00:37:45.943749Z",
+    "finished_at": "2026-09-17T00:39:41.940122Z"
+  },
+  {
+    "service": "edu-portrait-auth",
+    "service_id": "srv-da9vk4e7bikc73f168p0",
+    "deploy_id": "dep-daljcmu5vjqs73fk6d10",
+    "status": "live",
+    "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "expected_commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "utc": "2026-09-17T00:40:23.167055+00:00",
+    "created_at": "2026-09-17T00:37:47.629253Z",
+    "finished_at": "2026-09-17T00:39:56.33279Z"
+  },
+  {
+    "service": "edu-portrait-user",
+    "service_id": "srv-da9vk4e7bikc73f168q0",
+    "deploy_id": "dep-daljcnek1f9s738f34lg",
+    "status": "live",
+    "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "expected_commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "utc": "2026-09-17T00:40:23.897974+00:00",
+    "created_at": "2026-09-17T00:37:49.148803Z",
+    "finished_at": "2026-09-17T00:39:42.487561Z"
+  },
+  {
+    "service": "edu-portrait-teacher",
+    "service_id": "srv-da9vk4e7bikc73f168qg",
+    "deploy_id": "dep-daljcnijnfac739pi310",
+    "status": "live",
+    "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "expected_commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "utc": "2026-09-17T00:40:24.803567+00:00",
+    "created_at": "2026-09-17T00:37:50.868273Z",
+    "finished_at": "2026-09-17T00:39:32.393218Z"
+  },
+  {
+    "service": "edu-portrait-student",
+    "service_id": "srv-da9vk4e7bikc73f168s0",
+    "deploy_id": "dep-daljco61egvs73eqhtlg",
+    "status": "live",
+    "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "expected_commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "utc": "2026-09-17T00:40:25.676296+00:00",
+    "created_at": "2026-09-17T00:37:52.502959Z",
+    "finished_at": "2026-09-17T00:39:46.824285Z"
+  },
+  {
+    "service": "edu-portrait-mental",
+    "service_id": "srv-da9vk4e7bikc73f168vg",
+    "deploy_id": "dep-daljcom5vjqs73fk6k60",
+    "status": "live",
+    "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "expected_commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "utc": "2026-09-17T00:40:26.661650+00:00",
+    "created_at": "2026-09-17T00:37:54.268243Z",
+    "finished_at": "2026-09-17T00:39:52.665017Z"
+  },
+  {
+    "service": "edu-portrait-data",
+    "service_id": "srv-da9vk4e7bikc73f1690g",
+    "deploy_id": "dep-daljcouk1f9s738f39ig",
+    "status": "live",
+    "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "expected_commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "utc": "2026-09-17T00:40:27.570420+00:00",
+    "created_at": "2026-09-17T00:37:55.967912Z",
+    "finished_at": "2026-09-17T00:39:51.007669Z"
+  },
+  {
+    "service": "edu-portrait-agent",
+    "service_id": "srv-da9vk4e7bikc73f168o0",
+    "deploy_id": "dep-daljcph42hec73cmqcq0",
+    "status": "update_in_progress",
+    "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "expected_commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "utc": "2026-09-17T00:40:28.267356+00:00",
+    "created_at": "2026-09-17T00:37:58.294131Z",
+    "finished_at": null
+  },
+  {
+    "service": "edu-portrait-mcp-student",
+    "service_id": "srv-da9vk4e7bikc73f168n0",
+    "deploy_id": "dep-daljcpqjnfac739piao0",
+    "status": "live",
+    "commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "expected_commit": "a0a2a588920d15acb0888c8bca12be2bc71a35d4",
+    "utc": "2026-09-17T00:40:29.259811+00:00",
+    "created_at": "2026-09-17T00:37:59.918022Z",
+    "finished_at": "2026-09-17T00:40:02.505359Z"
+  }
+]

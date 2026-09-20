@@ -1,0 +1,52 @@
+[
+  {
+    "path": "/mental/student/questionnaires/1",
+    "run": 1,
+    "http": 200,
+    "code": 200,
+    "ms": 638.57,
+    "server_timing": "app;dur=71.87, gateway;dur=209.05",
+    "ok": true,
+    "under_500ms": false
+  },
+  {
+    "path": "/mental/student/questionnaires/1",
+    "run": 2,
+    "http": 200,
+    "code": 200,
+    "ms": 553.55,
+    "server_timing": "app;dur=49.03, gateway;dur=102.92",
+    "ok": true,
+    "under_500ms": false
+  },
+  {
+    "path": "/mental/student/questionnaires/1",
+    "run": 3,
+    "http": 200,
+    "code": 200,
+    "ms": 646.01,
+    "server_timing": "app;dur=71.44, gateway;dur=127.08",
+    "ok": true,
+    "under_500ms": false
+  },
+  {
+    "path": "/mental/student/questionnaires/1",
+    "run": 4,
+    "http": 200,
+    "code": 200,
+    "ms": 503.25,
+    "server_timing": "app;dur=69.00, gateway;dur=119.98",
+    "ok": true,
+    "under_500ms": false
+  },
+  {
+    "path": "/mental/student/questionnaires/1",
+    "run": 5,
+    "http": 200,
+    "code": 200,
+    "ms": 625.84,
+    "server_timing": "app;dur=50.61, gateway;dur=99.85",
+    "ok": true,
+    "under_500ms": false
+  }
+]

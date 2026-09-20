@@ -1,0 +1,34 @@
+[
+  {
+    "path": "/user/list",
+    "http": 401,
+    "code": 401,
+    "expected": 401,
+    "passed": true,
+    "ms": 810.56
+  },
+  {
+    "path": "/student/_internal/probe",
+    "http": 403,
+    "code": 403,
+    "expected": 403,
+    "passed": true,
+    "ms": 416.39
+  },
+  {
+    "path": "/mental/student/assessments?userId=1",
+    "http": 200,
+    "code": 403,
+    "expected": 403,
+    "passed": true,
+    "ms": 490.2
+  },
+  {
+    "path": "/agent/api/v1/task/list",
+    "http": 200,
+    "code": 403,
+    "expected": 403,
+    "passed": true,
+    "ms": 2828.34
+  }
+]

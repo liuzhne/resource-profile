@@ -1,0 +1,7 @@
+{
+  "service_id": "srv-da9vk4e7bikc73f168og",
+  "key": "VITE_SSE_BASE_URL",
+  "previous": null,
+  "desired": "https://edu-portrait-gateway.onrender.com",
+  "verified": true
+}

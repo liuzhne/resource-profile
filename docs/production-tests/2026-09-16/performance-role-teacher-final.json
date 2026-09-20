@@ -1,0 +1,139 @@
+{
+  "role": "teacher",
+  "base": "https://edu-portrait-frontend.onrender.com/api",
+  "measurement": "wall-clock full response, persistent requests.Session, sequential",
+  "rows": [
+    {
+      "path": "/auth/login",
+      "method": "POST",
+      "run": 1,
+      "utc": "2026-09-17T00:41:12.765241+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 1367.56,
+      "server_timing": "app;dur=569.48",
+      "ok": true,
+      "under_500ms": false
+    },
+    {
+      "path": "/auth/userInfo",
+      "method": "GET",
+      "run": 1,
+      "utc": "2026-09-17T00:41:14.133109+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 417.18,
+      "server_timing": "app;dur=51.24",
+      "ok": true,
+      "under_500ms": true
+    },
+    {
+      "path": "/auth/userInfo",
+      "method": "GET",
+      "run": 2,
+      "utc": "2026-09-17T00:41:14.550413+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 426.4,
+      "server_timing": "app;dur=48.22",
+      "ok": true,
+      "under_500ms": true
+    },
+    {
+      "path": "/auth/userInfo",
+      "method": "GET",
+      "run": 3,
+      "utc": "2026-09-17T00:41:14.976898+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 422.3,
+      "server_timing": "app;dur=48.26",
+      "ok": true,
+      "under_500ms": true
+    },
+    {
+      "path": "/auth/userInfo",
+      "method": "GET",
+      "run": 4,
+      "utc": "2026-09-17T00:41:15.399607+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 620.38,
+      "server_timing": "app;dur=199.90",
+      "ok": true,
+      "under_500ms": false
+    },
+    {
+      "path": "/auth/userInfo",
+      "method": "GET",
+      "run": 5,
+      "utc": "2026-09-17T00:41:16.020106+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 608.07,
+      "server_timing": "app;dur=221.68",
+      "ok": true,
+      "under_500ms": false
+    },
+    {
+      "path": "/mental/overview",
+      "method": "GET",
+      "run": 1,
+      "utc": "2026-09-17T00:41:16.628336+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 2335.6,
+      "server_timing": "app;dur=1467.72, gateway;dur=1945.03",
+      "ok": true,
+      "under_500ms": false
+    },
+    {
+      "path": "/mental/overview",
+      "method": "GET",
+      "run": 2,
+      "utc": "2026-09-17T00:41:18.964095+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 570.11,
+      "server_timing": "app;dur=90.10, gateway;dur=134.85",
+      "ok": true,
+      "under_500ms": false
+    },
+    {
+      "path": "/mental/overview",
+      "method": "GET",
+      "run": 3,
+      "utc": "2026-09-17T00:41:19.534367+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 795.84,
+      "server_timing": "app;dur=216.49, gateway;dur=255.56",
+      "ok": true,
+      "under_500ms": false
+    },
+    {
+      "path": "/mental/overview",
+      "method": "GET",
+      "run": 4,
+      "utc": "2026-09-17T00:41:20.330446+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 562.18,
+      "server_timing": "app;dur=68.45, gateway;dur=164.57",
+      "ok": true,
+      "under_500ms": false
+    },
+    {
+      "path": "/mental/overview",
+      "method": "GET",
+      "run": 5,
+      "utc": "2026-09-17T00:41:20.892728+00:00",
+      "http": 200,
+      "code": 200,
+      "ms": 489.04,
+      "server_timing": "app;dur=69.77, gateway;dur=116.22",
+      "ok": true,
+      "under_500ms": true
+    }
+  ]
+}

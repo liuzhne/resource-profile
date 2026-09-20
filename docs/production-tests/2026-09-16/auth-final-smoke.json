@@ -1,0 +1,20 @@
+[
+  {
+    "check": "login",
+    "http": 200,
+    "code": 200,
+    "passed": true
+  },
+  {
+    "check": "teacher userInfo and role claims",
+    "http": 200,
+    "code": 200,
+    "passed": true
+  },
+  {
+    "check": "auth readiness",
+    "http": 200,
+    "status": "UP",
+    "passed": true
+  }
+]
