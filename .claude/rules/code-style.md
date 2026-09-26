@@ -5,7 +5,7 @@
 - 中文是 user-facing 文字的默认语言；代码标识符、路径保持英文。
 - 注释解释「为什么」，不复述「做了什么」。
 
-## 后端（Java / Spring Boot 3.2.5 · Java 17）
+## 后端（Java / Spring Boot 3.2.5 · Java 21）
 - 分层固定：`entity / mapper / service(+impl) / controller / dto / config`。
 - ORM 用 **MyBatis-Plus**：Mapper 继承 `BaseMapper<Entity>`，**无 XML**，SQL 走注解或 Wrapper。
 - 逻辑删除字段 `deleted`（1=删 / 0=未删）；ID `auto`；`map-underscore-to-camel-case: true`。
