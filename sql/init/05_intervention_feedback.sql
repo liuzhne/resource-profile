@@ -1,3 +1,6 @@
+-- docker-entrypoint-initdb.d 的 mysql 客户端默认按 latin1 连接，不显式声明会把中文种子数据双重编码
+SET NAMES utf8mb4;
+
 -- I-5.1：干预反馈闭环表。
 -- 辅导员在干预方案落地一段时间（建议 1 个月）后回填评分与结果，用于闭环复盘与月度报表。
 -- 与 agent_task 同库（edu_portrait），task_id 关联 agent_task.id。

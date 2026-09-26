@@ -1,3 +1,6 @@
+-- docker-entrypoint-initdb.d 的 mysql 客户端默认按 latin1 连接，不显式声明会把中文种子数据双重编码
+SET NAMES utf8mb4;
+
 -- 问卷调查功能扩展（学生作答闭环）
 -- 在 01_init.sql 已建立 mental_questionnaire / mental_assessment 基础上，
 -- 补充：等级规则、自增 ID 修复、问题题库、响应记录。

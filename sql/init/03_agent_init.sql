@@ -1,3 +1,6 @@
+-- docker-entrypoint-initdb.d 的 mysql 客户端默认按 latin1 连接，不显式声明会把中文种子数据双重编码
+SET NAMES utf8mb4;
+
 -- EduCare Agent 子系统数据库初始化
 -- 依赖：edu_portrait 数据库已在 01_init.sql 中创建
 USE edu_portrait;

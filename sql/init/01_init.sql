@@ -1,3 +1,6 @@
+-- docker-entrypoint-initdb.d 的 mysql 客户端默认按 latin1 连接，不显式声明会把中文种子数据双重编码
+SET NAMES utf8mb4;
+
 -- 师生资源画像系统数据库初始化脚本
 
 -- 创建数据库

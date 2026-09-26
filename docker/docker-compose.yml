@@ -129,7 +129,8 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ../sql/init:/docker-entrypoint-initdb.d
-    command: --default-authentication-plugin=mysql_native_password
+    # 与 Dockerfile.mysql（生产）保持一致；种子脚本另有 SET NAMES utf8mb4 兜底客户端连接字符集
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     networks:
       - edu-network
 
