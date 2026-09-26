@@ -279,7 +279,7 @@ MILVUS_HOST=localhost EMBEDDING_BASE_URL=http://localhost:8092/v1 python -m scri
 
 | 症状 | 检查 | 处理 |
 |---|---|---|
-| Maven 在 validate 直接失败 | `java -version`、`mvn -version` | 把 `JAVA_HOME` 切到 JDK 17；不要跳过 Enforcer |
+| Maven 在 validate 直接失败 | `java -version`、`mvn -version` | 把 `JAVA_HOME` 切到 JDK 21；不要跳过 Enforcer |
 | gateway 返回 503 | Redis 日志、`token:{userId}` | gateway 会话校验 fail-closed；恢复 Redis 与正确 `REDIS_PASSWORD` |
 | 有 JWT 仍 401 | JWT secret、Redis 当前 token、是否重新登录 | gateway/auth/agent 必须使用同一 `JWT_SECRET`；重新登录取得当前 token |
 | gateway 返回 503/404 service unavailable | Nacos readiness 和服务列表 | 确认目标服务已启动并注册；基础 compose 不含六个普通业务服务 |

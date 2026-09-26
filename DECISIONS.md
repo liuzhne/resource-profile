@@ -1,6 +1,6 @@
 # Resource-Profile 架构与工程决策
 
-> 最近更新：2026-09-16
+> 最近更新：2026-09-26
 > 记录范围：当前仍有效的项目级决策。历史阶段细节见 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) §6。
 
 每条记录包含背景、选择、放弃方案和后果。被替换的决策不得直接删除，应改为“已取代”并链接新决策。
@@ -9,7 +9,7 @@
 
 - 状态：已采纳
 - 背景：用户、教师、学生、心理、统计和 AI 编排有不同数据访问与发布节奏。
-- 选择：Java 17、Spring Boot 3.2.5、Spring Cloud 2023.0.1、Nacos 服务发现/可选配置；gateway 按 `/auth`、`/user`、`/teacher`、`/student`、`/mental`、`/data`、`/agent` 路由。
+- 选择：Java 21（2026-09-26 起，原 Java 17，见 ADR-028）、Spring Boot 3.2.5、Spring Cloud 2023.0.1、Nacos 服务发现/可选配置；gateway 按 `/auth`、`/user`、`/teacher`、`/student`、`/mental`、`/data`、`/agent` 路由。
 - 原因：保持领域边界，复用 Spring/MyBatis 生态，并允许 Agent 通过 Feign 组合已有服务。
 - 放弃方案：单体应用会把心理、用户和 AI 发布周期绑在一起；服务间共享 mapper 会绕过授权和领域所有权。
 - 后果：本地完整联调必须启动多个进程并保证 Nacos 可达；跨服务契约需要控制器/Feign/MCP 契约测试。
@@ -397,6 +397,7 @@
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 新增 ADR-024，对 Groq TPM 429 使用有界退避 | 保留完整 AgentLoop 质量；401/403 继续 fail-fast |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 新增 ADR-025，Render GPT-OSS 改用 JSON Object Mode 与低推理预算 | 保留 ReAct 主路径；本地 OpenAI 兼容端点维持 TEXT 默认值 |
 | 2026-09-15 / RENDER-CD-20260915 | 新增 ADR-026，main 即生产、CI 通过后按服务增量部署 | 部署以被部署提交的 CI 为准；buildFilter 与 CI push 路径须同步维护 |
+| 2026-09-26 / JDK21-UTF8MB4-20260926 | 新增 ADR-028，后端统一 JDK 21，种子脚本显式 utf8mb4 | Enforcer 改为 `[21,22)`；ADR-001 的 Java 版本随之更新 |
 
 ## ADR-027：生产诊断与待实施修复（PROD-AUDIT-20260916，2026-09-16）
 
@@ -430,3 +431,25 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 2026-09-17 / PERF-500MS-20260916：分阶段日志证实首次登录还有Redis连接及JWT初始化成本，热密码校验为主要耗时。新增 auth AuthDependencyWarmupConfiguration，在已有预热开关开启时于readiness前PING Redis并初始化内存签名；不写会话、无业务用户/凭证日志，Redis失败不能就绪。无架构影响，auth仍依赖原Redis白名单。放弃密码缓存/降低bcrypt及依赖故障时假健康；验收需验证启动、热登录阶段和401/403。新增预热成功只读与故障阻止就绪测试；生产行为待验证。回滚此auth提交移除额外启动预热，保留强验证与原配置。
 
 2026-09-17 / PERF-500MS-20260916 维护记录：相关代码已逐批经PR/main CI部署既有生产服务，SSE前端实际产物已核对，Auth依赖预热的阶段日志已确认生效；完整验收记录见 docs/production-tests/2026-09-16/ 的 FINAL_REPORT.md 与 JSON 证据。无新增架构边界或收费资源。500ms全接口目标未通过：热密码验证、跨区域传输、休眠唤醒仍超预算，真实写入/推理最终产物/下载尚未完整生产验收，不得将应用序列化前计时视作端到端结果。后续须明确验收网络区域、负载和可用常驻预算，不能通过降低密码成本、权限豁免或快速失败充当达标。回滚沿用前述提交及原配置plan；这条最终验收记录随上述目录一并提交，证据已脱敏，不含凭证、令牌或完整运行时元数据。
+
+## ADR-028：后端统一 JDK 21；种子脚本显式 utf8mb4（JDK21-UTF8MB4-20260926）
+
+- 状态：已采纳
+- 日期/修复标识：2026-09-26 / JDK21-UTF8MB4-20260926
+- 背景：Claude Code 云端开发环境只预装 JDK 21，父 POM Enforcer 锁 `[17,18)` 导致 validate 直接失败；
+  另在全新 MySQL 卷上起栈时，`docker-entrypoint-initdb.d` 的 mysql 客户端按 latin1 连接执行种子脚本，
+  中文被双重编码（`赵同学` 存为 `èµµåŒå­¦`），业务接口与 LLM 输入都拿到乱码。
+- 选择：`java.version`/`maven.compiler.*` 升到 21，Enforcer 改为 `[21,22)`（仍保留 fail-fast，防止 JDK 26 +
+  Lombok 静默失效复发）；全部 `docker/Dockerfile.*` 改用 `eclipse-temurin:21-{jdk,jre}-jammy`；`backend-ci`
+  改 `java-version: "21"`。`sql/init/*.sql` 首行 `SET NAMES utf8mb4;`，本地 compose 的 mysql 与生产
+  `Dockerfile.mysql` 一样加 `--character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci`。
+- 原因：21 是当前 LTS，Spring Boot 3.2.5、Lombok 1.18.30、JaCoCo 0.8.12 均支持；本地、CI、镜像、云端统一
+  一个 JDK。字符集在脚本内声明，不依赖客户端/容器 locale。
+- 放弃方案：① 放宽 Enforcer 为 `[17,22)`——CI 与镜像仍各用各的 JDK，失去"单一验证版本"的意义；
+  ② 云端跳过 Enforcer——绕过门禁；③ 只加服务端 `--character-set-server`——客户端握手仍按 latin1，
+  不能单独修复。
+- 后果：开发者本地须切到 JDK 21，否则 validate 按提示失败。已有的 MySQL 数据卷不会重跑 initdb，
+  已乱码的旧卷需自行重建或按 utf8mb4 重新导入；Render 上的 Aiven 库不受本变更影响。
+- 证据：JDK 21 下 `mvn -B -ntp clean test` 11 模块 198 例全绿、JaCoCo 门达标、`scripts/test-preflight-prod.sh`
+  通过，JDK 17 validate 按提示失败；全新 `mysql:8.0` 容器以新脚本初始化后 `student_info.name` 为正确 UTF-8
+  （`E8B5B5…`）。`eclipse-temurin:21-*-jammy` 镜像可拉取；完整镜像构建与 Render 部署待验证。

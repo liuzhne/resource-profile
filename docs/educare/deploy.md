@@ -11,7 +11,7 @@
 |---|---|
 | 操作系统 | macOS（Apple Silicon 推荐，Metal 加速）/ Linux（CUDA 待评估） |
 | Docker | Docker Desktop 4.x，docker-compose v2 |
-| Java | JDK 17 |
+| Java | JDK 21 |
 | Maven | 3.8+ |
 | Node.js | 18+，npm 9+ |
 | Python | 3.10（仅本地调试 ai-inference 时需要） |

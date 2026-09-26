@@ -24,7 +24,7 @@ The Java side handles business logic, persistence, and orchestration. AI calls g
 ## Backend — Spring Boot Microservices
 
 **Build Tool:** Maven 3+
-**Java Version:** 17
+**Java Version:** 21
 **Spring Boot:** 3.2.5
 **Spring Cloud:** 2023.0.1
 **Spring Cloud Alibaba:** 2023.0.1.0

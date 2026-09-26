@@ -4,7 +4,7 @@
 #     context: ../backend
 #     dockerfile: ../docker/Dockerfile.springboot
 #     args: { MODULE: agent-service }
-FROM eclipse-temurin:17-jdk-jammy AS builder
+FROM eclipse-temurin:21-jdk-jammy AS builder
 ARG MODULE
 WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends maven \
@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends maven \
 COPY . .
 RUN mvn -B -pl ${MODULE} -am clean package -DskipTests
 
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 ARG MODULE
 WORKDIR /app
 # curl 供 compose healthcheck 探活 /actuator/health

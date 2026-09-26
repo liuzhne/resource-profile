@@ -1,3 +1,6 @@
+-- docker-entrypoint-initdb.d 的 mysql 客户端默认按 latin1 连接，不显式声明会把中文种子数据双重编码
+SET NAMES utf8mb4;
+
 -- H-1.2：student-data MCP server 所需的成绩 / 考勤两张表
 -- 与现有 student_info 表配合，给 4 个 MCP tool 提供数据
 

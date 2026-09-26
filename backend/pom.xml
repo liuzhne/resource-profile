@@ -34,8 +34,9 @@
     </modules>
 
     <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Spring Boot -->
@@ -166,17 +167,17 @@
                 <version>3.5.0</version>
                 <executions>
                     <execution>
-                        <id>enforce-java-17</id>
+                        <id>enforce-java-21</id>
                         <phase>validate</phase>
                         <goals>
                             <goal>enforce</goal>
                         </goals>
                         <configuration>
                             <rules>
-                                <!-- Spring Boot 3.2/Lombok 1.18.30 构建链仅在 JDK 17 验证；错误 JDK 立即失败。 -->
+                                <!-- 构建链统一在 JDK 21 LTS 验证；其他版本（如 JDK 26 + Lombok 注解处理静默失效）立即失败。 -->
                                 <requireJavaVersion>
-                                    <version>[17,18)</version>
-                                    <message>EduCare backend requires JDK 17. Set JAVA_HOME to a JDK 17 installation.</message>
+                                    <version>[21,22)</version>
+                                    <message>EduCare backend requires JDK 21. Set JAVA_HOME to a JDK 21 installation.</message>
                                 </requireJavaVersion>
                             </rules>
                         </configuration>

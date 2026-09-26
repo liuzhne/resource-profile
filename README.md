@@ -50,7 +50,7 @@ EduCare 默认链路（`educare.agent.loop.enabled=true`）：
 ## 目录结构
 
 ```
-backend/                 Maven 多模块（Java 17）
+backend/                 Maven 多模块（Java 21）
   gateway/               8080  路由、JWT 门禁、CORS
   auth-service/          8081  登录 / 刷新 / 登出
   user-service/          8082  用户管理
@@ -73,7 +73,7 @@ render.yaml              Render Blueprint（云端演示部署）
 
 ## 快速开始（本地开发）
 
-**前置：** JDK 17 · Maven 3.8+ · Node.js 18+ · Docker（compose v2）· Python 3.10+。本地模型建议 Apple Silicon、内存 ≥ 24GB。
+**前置：** JDK 21 · Maven 3.8+ · Node.js 18+ · Docker（compose v2）· Python 3.10+。本地模型建议 Apple Silicon、内存 ≥ 24GB。
 
 ```bash
 # 1. 基础设施 + Python 推理服务

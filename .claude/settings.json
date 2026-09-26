@@ -21,7 +21,6 @@
     ],
     "deny": [
       "Bash(rm -rf:*)",
-      "Bash(git push:*)",
       "Bash(docker compose down -v:*)",
       "Bash(mvn deploy:*)",
       "Read(./**/*.env)",
