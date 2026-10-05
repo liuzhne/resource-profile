@@ -95,7 +95,8 @@ venv/
 .env.local
 .env.*.local
 docker/.env
-# Local credential copies stay outside version control.
+# docker/.env.* 一律视为本地密钥文件（如 preflight 演练生成的 .env.audit，见 RUNBOOK ENV-AUDIT-LEAK-20260914）。
+# 必须排在下方放行规则之前：gitignore 中后写的规则优先。
 docker/.env.*
 # 模板必须保留在版本库
 !.env.example

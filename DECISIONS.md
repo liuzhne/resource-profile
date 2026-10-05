@@ -432,6 +432,32 @@
   [QuestionServiceImplTest](./backend/mental-service/src/test/java/com/edu/mental/service/impl/QuestionServiceImplTest.java)。
   2026-10-05 已核对代码与端点规则；全后端 249 例测试、JaCoCo 门和前端构建/lint 通过，真实 HTTP 请求与浏览器角色验收待验证，命令与判据见 RUNBOOK。
 
+## ADR-031：本地密钥文件不入库；已入库即轮换，不改写历史
+
+- 状态：已采纳（轮换待部署方执行）
+- 日期/修复标识：2026-09-14 / ENV-AUDIT-LEAK-20260914
+- 背景：`docker/.env.audit` 在 `122ab6d`（2026-08-26，U-2 preflight 实测当天）随一次无关的 e2e 修复被提交，
+  再经 #4（`51b8410`）squash 进入公开仓库的 main。文件第 22-35 行是按 `.env.example` 生成命令产出的 14 个
+  强随机值（MySQL/Nacos/MinIO/Redis/JWT/MCP/Langfuse/Grafana）。`.gitignore` 只忽略 `docker/.env`，不覆盖
+  改名副本；仓库内没有任何脚本、CI 或 compose 引用该文件。
+- 选择：`git rm --cached` 移出版本库（本地副本保留）；`.gitignore` 用 `docker/.env.*` 忽略所有变体，仅放行
+  `.env.example`；`preflight-prod.sh` 拒绝被 git 跟踪的 `ENV_FILE` 以及仓库内任何 `docker/.env.*`（模板除外），
+  CI 的 preflight 回归兜底；14 个泄露值不论能否确认在用，一律按 RUNBOOK 清单轮换。不改写 git 历史。
+- 原因：公开仓库的历史已推送到多个远端分支，可能已被克隆或缓存，改写历史撤不回已公开的内容，只有轮换
+  能让泄露值失效。preflight 检查补上 `.gitignore` 管不到的场景：旧分支（`origin/dev` 等）的合并基点早于
+  该文件，合并时会把已跟踪的文件重新带回。
+- 放弃方案：`git filter-repo`/BFG + force push——撤不回已公开数据，GitHub 仍可按 SHA/PR ref 访问旧提交，
+  还会打断所有协作分支，且未获授权；只补 `.gitignore`——对已跟踪文件和合并带回无效；只轮换"确认在用"
+  的值——本机没有 `docker/.env`、Docker 未运行、生产主机不可见，无法证明未被使用。
+- 后果：轮换 `JWT_SECRET` 使全部已签发 token 失效（全员重新登录）；MySQL/Postgres/Grafana 的密码只在数据卷
+  首次初始化时读取，已有实例须先在服务内改密再改 `.env`；轮换 `LANGFUSE_SALT` 会使既有 Langfuse API key
+  失效。`origin/dev`、`docs/progress-audit-20260826`、`feat/ui-glass-refactor` 的分支末端仍含该文件，合并前须先
+  在分支上删除，否则 CI preflight 回归变红。Render 的 `JWT_SECRET`/`EDUCARE_MCP_TOKEN` 由 `generateValue`
+  生成，Aiven 凭据独立，按设计不来自该文件；若曾在 Dashboard 手工覆盖成该文件中的值，同样须轮换。
+- 证据：`git log --all -- docker/.env.audit` 只有 `122ab6d` 与 `51b8410` 两个提交；`git grep env.audit` 无引用；
+  值的长度与字符集和 `openssl rand -hex 24` / `-base64 48` / `-base64 32` 一致（全程未输出值）；
+  `test-preflight-prod.sh` 新增"被跟踪 env 文件"反例。轮换本身待验证。
+
 ## 新决策模板
 
 ```markdown
@@ -467,6 +493,7 @@
 | 2026-09-26 / JDK21-UTF8MB4-20260926 | 新增 ADR-028，后端统一 JDK 21，种子脚本显式 utf8mb4 | Enforcer 改为 `[21,22)`；ADR-001 的 Java 版本随之更新 |
 | 2026-09-14 / INTERNAL-AUTH-20260914 | 新增 ADR-029，下游服务入口要求 JWT 或内部凭证，`AccessGuard`/字段权限不再把无 token 当内网 | 补全 ADR-008：下游公网可达时仍 fail-closed；`EDUCARE_INTERNAL_TOKEN` 成为生产硬门 |
 | 2026-10-05 / MENTAL-AUTHZ-20261005 | 新增 ADR-030：心理问卷端点授权与作答视图 | 补全 ADR-029 的管理角色缺口；仅心理专业角色可改计分规则，学生模板移除计分信息 |
+| 2026-09-14 / ENV-AUDIT-LEAK-20260914 | 新增 ADR-031，误入库的 `docker/.env.audit` 移出版本库并要求全量轮换（待部署方执行） | 不改写历史；`docker/.env.*` 统一忽略，preflight 拒绝被跟踪的 env 文件 |
 
 ## ADR-027：生产诊断与待实施修复（PROD-AUDIT-20260916，2026-09-16）
 

@@ -204,6 +204,7 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 - agent-service 与两个 MCP server 可通过同一 `EDUCARE_MCP_TOKEN`/`X-MCP-Token` 互验；生产 preflight 强制其与 Redis 密码均不少于 32 字符。
 - 进入 LLM 的画像经过 `DataMasker`/`PromptSanitizer`；敏感心理工具还受 ToolGuard 约束。
 - `/agent/**/_internal/**` 经 gateway 一律 403。任何新增内部端点必须保持该边界。
+- 部署密钥只存在于未跟踪的 `docker/.env`（或仓库外经 `ENV_FILE` 指定的文件）与 Render/Aiven/Groq 秘密存储。`docker/.env.*` 除模板外一律忽略，preflight 拒绝被 git 跟踪的 env 文件；仓库公开，任何入库过的真实值都视为已泄露、必须轮换（`ENV-AUDIT-LEAK-20260914`）。
 
 ### 4.1 MENTAL-AUTHZ-20261005：心理问卷端点授权与作答视图
 
@@ -309,6 +310,7 @@ HTTP 403 显示权限提示并保留登录态；后端承担最终授权。
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | Render GPT-OSS 启用 JSON Object Mode 并收紧推理/输出预算 | 无架构影响；仅强化 ReAct 输出契约并降低免费 TPM 压力 |
 | 2026-09-15 / RENDER-CD-20260915 | Render 固定跟随 main，CI 通过后按服务 buildFilter 增量部署 | 无运行时架构影响；发布链路受 CI 门控，构建范围与 Maven 模块依赖绑定 |
 | 2026-10-05 / MENTAL-AUTHZ-20261005 | 补齐心理问卷端点授权与作答视图文档，链接管理控制器、作答服务和角色集合 | 收紧 mental-service 的管理角色、原始分和学生计分信息响应边界；服务拓扑与数据所有权不变 |
+| 2026-09-14 / ENV-AUDIT-LEAK-20260914 | 移出误入库的 `docker/.env.audit`，`docker/.env.*` 统一忽略，preflight 拒绝被 git 跟踪的 env 文件 | 无架构影响；明确密钥只存在于未跟踪文件与平台秘密存储，泄露值须全量轮换 |
 
 ## 生产诊断维护记录：PROD-AUDIT-20260916（2026-09-16）
 

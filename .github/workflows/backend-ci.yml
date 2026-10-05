@@ -13,7 +13,8 @@ on:
       - "backend/**"
       - "ai-inference-service/**"
       - "docker/Dockerfile.*"
-      - "docker/.env.example"
+      # Include credential-file variants so tracking them triggers the preflight gate.
+      - "docker/.env*"
       - "render.yaml"
       - "scripts/preflight-prod.sh"
       - "scripts/test-preflight-prod.sh"
@@ -27,7 +28,8 @@ on:
       - "backend/**"
       - "ai-inference-service/**"
       - "docker/Dockerfile.*"
-      - "docker/.env.example"
+      # Include credential-file variants so tracking them triggers the preflight gate.
+      - "docker/.env*"
       - "render.yaml"
       - "scripts/preflight-prod.sh"
       - "scripts/test-preflight-prod.sh"
