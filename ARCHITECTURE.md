@@ -344,3 +344,19 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：Spring AI默认ToolCall
 ## 维护记录补充：SAFE-PUSH-20261005（2026-10-05）
 
 无架构影响；本次提交清理涉及版本控制与本地部署配置。含凭证的 `docker/.env.audit` 取消 Git 跟踪但保留本地文件，`.gitignore` 忽略 `docker/.env.*` 并继续放行 `docker/.env.example`。此处描述新提交快照的边界，不表示已清除历史提交中的值。
+
+[`scripts/local_dev.sh`](scripts/local_dev.sh) 提供本地 Docker 基础设施与宿主 Java/前端的起停、状态和冒烟命令；日志和 PID 写入忽略的 `.local-run/`，不改变生产部署或服务调用边界。
+
+## 维护记录：MERGE-MAIN-20261005（2026-10-05）
+
+无架构影响；本次整合保留 main 的 JDK 21、Actuator、请求计时、数据库预热、异步任务与延迟 MCP 配置，
+同时保留 INTERNAL-AUTH-20260914、MENTAL-AUTHZ-20261005 与 ENV-AUDIT-LEAK-20260914 的安全边界。
+common 自动配置清单中的原有性能配置与新增服务入口鉴权同时生效，见
+[自动配置清单](./backend/common/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports)。
+
+[local_dev.sh](./scripts/local_dev.sh) 只编排本地 Docker 与宿主开发进程，使用 JDK 21；从 Docker Compose
+有效配置读取 MySQL、Redis、Nacos、JWT、内部调用与 MCP 共享凭证，避免容器和宿主使用不同值。
+日志、PID 和进程身份只保存在忽略的 `.local-run/`；停止操作校验脚本记录的进程归属，无法确认时跳过。
+该脚本不改变生产服务拓扑或权限。合并后 JDK 21 后端 11 模块/54 套测试/267 例与 10 个代码模块的
+JaCoCo 门通过；前端、preflight 和 Bash 5/macOS Bash 3.2 的脚本回归通过，详见 RUNBOOK 同名记录。
+真实起栈、R-5/R-6 与历史凭证轮换仍须取得独立环境证据。

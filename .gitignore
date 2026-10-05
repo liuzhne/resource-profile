@@ -150,3 +150,6 @@ backend/agent-service/src/main/resources/fonts/*.otf
 知识库数据/
 # 本地比赛交付材料（计划书 docx / 架构图 / 生成脚本），不纳入版本库
 deliverables/
+
+# Local development process IDs, logs and resolved environment files
+.local-run/

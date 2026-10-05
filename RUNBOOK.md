@@ -804,7 +804,7 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 增加 GPT-OSS JSON Object Mode、配额预算与复验步骤 | 线上 PARSE_ERROR 已复现；配置级测试和部署复验待完成 |
 | 2026-09-15 / RENDER-CD-20260915 | 增加 main 即生产的发布流程、CI 门控部署验证、排错与回滚步骤 | 官方 Schema 与路径覆盖自检通过；Blueprint 同步与首次门控部署待合入后验证 |
-| 2026-10-05 / MENTAL-AUTHZ-20261005 | 增加心理问卷端点授权与作答视图的复现、角色矩阵、回归命令及回滚约束 | 全后端 249 例、JaCoCo 门及前端构建/lint 通过；真实请求与浏览器验收待验证 |
+| 2026-10-05 / MENTAL-AUTHZ-20261005 | 增加心理问卷端点授权与作答视图的复现、角色矩阵、回归命令及回滚约束 | 原 heuristic 分支后端 249 例、JaCoCo 门及前端构建/lint 通过；合并回归见 MERGE-MAIN-20261005，真实请求与浏览器验收待验证 |
 | 2026-09-14 / ENV-AUDIT-LEAK-20260914 | 增加 `docker/.env.audit` 泄露的处置步骤、14 项轮换清单与旧分支合并带回的排错 | 本地移出版本库、忽略规则、preflight 回归与合并试算均通过；轮换待部署方执行 |
 
 ## 生产诊断复现与复验：PROD-AUDIT-20260916（2026-09-16）
@@ -876,3 +876,61 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 验证状态：本次已核对凭证文件取消跟踪、模板保留、忽略命中及本地副本仍在；最终暂存时还须执行 staged diff 检查。
 
 本次 `bash scripts/test-preflight-prod.sh` 已通过；原 heuristic 分支在 JDK 17 下全后端 11 模块、249 例测试通过，JaCoCo 门通过；最新前端构建通过，lint 为 0 errors（存在 Prettier 提示）。浏览器角色矩阵和实际部署验收仍待验证。 实际平台凭证轮换仍待部署方验证。
+
+开发脚本依赖 Docker Compose v2、npm、Python 和 JDK 21；可通过 `JAVA21=/path/to/jdk21` 指定。脚本从 Compose 有效配置读取共享凭证给宿主服务，运行文件写入 `.local-run/`。合并后的完整起停与真实冒烟待验证，验证命令与进程归属检查见 MERGE-MAIN-20261005。
+
+## MERGE-MAIN-20261005：整合分支的验证与本地开发（2026-10-05）
+
+- 复现：旧 `scripts/local_dev.sh` 使用 JDK 17 与固定 MySQL/Redis 参数，整合到 JDK 21 主线会触发 Enforcer
+  或内部取数 401；按名称停止 Vite/模型进程会超出当前项目范围。
+- 当前启动前提：JDK 21、Maven、Node/npm、Python、Docker Compose v2 及 Docker daemon。
+  `JAVA21` 优先于有效的 JDK 21 `JAVA_HOME`；未指定且当前 JAVA_HOME 不匹配时查找本机 JDK 21。
+  显式指定不符合 21.x 的 JAVA21 拒绝；status/down 无须配置 JDK。
+  Compose 采用标准环境变量与 `docker/.env` 优先级；脚本经 `docker compose config --format json` 读取
+  MySQL、Redis、Nacos、JWT、`EDUCARE_INTERNAL_TOKEN`、`EDUCARE_MCP_TOKEN` 并传给宿主 Java 服务。
+  凭证文件保持未跟踪，已有卷的真实密码须与配置一致。不要将 Compose JSON 或环境值输出到报告。
+- 合并后自动验证（从仓库根目录执行）：
+
+  ```bash
+  java -version
+  mvn -B -ntp -f backend/pom.xml clean test
+  bash -n scripts/local_dev.sh
+  /bin/bash -n scripts/local_dev.sh
+  bash scripts/test-preflight-prod.sh
+  npm --prefix frontend run lint:check
+  npm --prefix frontend run build
+  npm --prefix frontend run test:retry
+  npm --prefix frontend run size:check
+  ```
+
+- 本地起停与真实冒烟（待验证）：
+
+  ```bash
+  JAVA21=/path/to/jdk21 bash scripts/local_dev.sh up --core --build
+  bash scripts/local_dev.sh status
+  bash scripts/local_dev.sh smoke
+  bash scripts/local_dev.sh down
+  ```
+
+  完整 AI 链用 `up --build`，先确认本地 LLM、embedding 与双 MCP 前提。停止操作只处理 `.local-run/` 中
+  记录且启动时间/命令路径仍匹配的进程，身份无法确认时跳过；`down --all` 还停止本项目 Compose
+  容器并保留数据卷。不要为清理残留进程恢复按全局名称匹配的终止操作。
+  已配置 MCP token 时，现有 `mcp_smoke_test.sh` 不附鉴权头，helper 会提示用真实 Agent 工具调用验收；
+  该提示不等于 MCP 已通过。
+- 通过判据：JDK 显示 21；全后端测试与 JaCoCo 门通过；脚本语法、preflight 回归、前端 lint/build 通过；
+  实际服务健康、匿名业务请求 HTTP 401、登录后业务读取成功，内部取数不因共享凭证不一致失败。
+  起停验收须证明无关项目进程仍运行；真实 MCP/AgentLoop 仍按 §6 与 R-5/R-6 验收。
+- 排错：JDK validate 失败先核对 `JAVA21`/`JAVA_HOME`；服务 401 核对 Compose 和宿主使用的内部凭证是否一致；
+  MySQL/Redis 拒绝连接时先检查已有卷的密码，脚本不自动改密；进程归属无法确认时检查本项目 PID 记录，
+  保留无关进程。心理接口同时检查 HTTP 状态和 JSON 业务码，字段矩阵见 FIELD_PERMISSION §12。
+- 回滚：停止本项目开发进程，回退相关应用提交；不恢复凭证文件跟踪、不回滚到已泄露值、不关闭 JWT/
+  内部凭证/心理角色门。生产回滚仍采用 §9 与各修复条目的已记录版本和配置。
+- 验证状态：2026-10-05 合并代码 JDK 21 全后端 11 模块、54 套测试、267 例通过（0 失败/错误/跳过），
+  10 个代码模块 JaCoCo 门通过；combined preflight 回归通过；前端构建、重试断言 30/30、体积门通过，
+  lint 0 errors、1 条既有 vite.config.js 格式警告。脚本 Bash 5 与 macOS Bash 3.2 语法/临时 stub 回归通过，
+  覆盖 JDK 21 选择/拒绝 17、非默认 Compose 共享凭证与特殊字符、MySQL/Redis 鉴权探针、无凭证输出、
+  无临时配置残留、只停止所属 PID、无关 Vite/mock 进程保留、陈旧 PID 身份保护及无 JDK 的 status。
+  npm 生产依赖 audit 0 vulnerabilities；Render/Compose/backend-CI YAML 解析通过，POM 的 JDK 21 与
+  自动配置清单完整性/无重复断言通过。忽略的本地 docker/.env.audit 副本已恢复，不参与 Git 跟踪。
+  真实 Docker 全栈、GPU、HTTP/浏览器角色及生产验收未执行；原 heuristic 分支的 JDK 17 后端 249 例与
+  前端验证保留为历史证据，平台凭证轮换仍待部署方执行。
