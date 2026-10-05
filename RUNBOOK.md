@@ -1,6 +1,6 @@
 # Resource-Profile 运行手册
 
-> 最近更新：2026-09-01
+> 最近更新：2026-10-05
 > 适用范围：当前仓库的开发、测试、排错和发布准备。真实 AI/生产签字状态以 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) R-5/R-6 为准。
 
 ## 1. 前置条件
@@ -119,10 +119,11 @@ mvn -B -ntp install -DskipTests
 
 然后在独立终端按需运行。普通业务链至少启动 gateway、auth 及目标领域服务；Agent 全链还要启动 student、mental、data、mcp-student-data、agent-service。
 
-每个 Java 终端先设置同一个开发 JWT 密钥；缺失或少于 32 字节时 `JwtUtil` 会让服务 fail-fast：
+每个 Java 终端先设置同一个开发 JWT 密钥与内部调用凭证。JWT 密钥缺失或少于 32 字节时 `JwtUtil` 会让服务 fail-fast；内部调用凭证缺失时服务照常启动，但 student/mental/data 等会以 401 拒绝 agent-service / mcp-student-data 的 Feign 取数（不带 JWT 的请求一律不当内网，INTERNAL-AUTH-20260914）。两个值都必须与 docker-compose 中 agent-service / mcp-student-data 的一致：
 
 ```bash
 export JWT_SECRET=edu-portrait-dev-jwt-secret-change-in-prod-0123456789
+export EDUCARE_INTERNAL_TOKEN=edu-portrait-dev-internal-token-change-in-prod-0123456789
 ```
 
 ```bash
@@ -229,6 +230,14 @@ bash scripts/gateway_verify.sh
 
 字段权限和 IDOR 另按 [`docs/educare/FIELD_PERMISSION_VERIFY.md`](./docs/educare/FIELD_PERMISSION_VERIFY.md) 用多角色账号验证。
 
+下游服务公网可达的部署（如 Render），还要验证「直连下游必须带凭证」（INTERNAL-AUTH-20260914）。只探聚合端点，不要拿个人数据端点做探测：
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://edu-portrait-data.onrender.com/data/dashboard/statistics
+```
+
+通过判据：返回 `401`（修复前为 `200`）；同一路径经网关带教职工 token 仍为 `200`；触发一次 AgentLoop 任务后，student/mental/data 日志无 401，任务没有因取数失败进入 `FAILED`。
+
 ### 6.2 MCP 工具契约
 
 ```bash
@@ -285,6 +294,7 @@ MILVUS_HOST=localhost EMBEDDING_BASE_URL=http://localhost:8092/v1 python -m scri
 | gateway 返回 503/404 service unavailable | Nacos readiness 和服务列表 | 确认目标服务已启动并注册；基础 compose 不含六个普通业务服务 |
 | agent-service 启动失败 | :8094/:8095 health、MCP initialize 日志 | 先启动两个 MCP；核对 URL、endpoint `/mcp` 和 token |
 | MCP 返回 401 | 三端 `EDUCARE_MCP_TOKEN` | 使用相同非空值；生产至少 32 字符 |
+| AI 取数失败，Feign 调 student/mental/data 报 401 | 各服务 `EDUCARE_INTERNAL_TOKEN`；启动日志是否有「EDUCARE_INTERNAL_TOKEN 未配置」WARN | agent-service、mcp-student-data 与 student/mental/data 使用同一非空值，生产至少 32 字符；不要为排障关掉 `educare.service-auth.enabled` |
 | Agent 任务 `FAILED` | agent 日志、`agent_task.status`、LLM 原始输出 | 先区分 LLM 连接、JSON parse、ToolGuard、工具调用和 DB CAS；不要直接改成 COMPLETED |
 | RAG 返回空 chunks | :8092、Milvus collection、embedding dim、灌库记录 | 确认维度 1024、集合存在、真语料已 upsert；reranker 可临时关闭定位 |
 | `/api/v1/rag/upsert` 返回 404 | FastAPI OpenAPI、`app/main.py` router 注册 | 当前主 app 未挂载 `rag_upsert.router`，不能当作运行能力 |
@@ -605,6 +615,54 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 - 验证状态：2026-09-04 已在线复现任务 7 的单线程 PARSE_ERROR，并核对 Groq 官方 JSON Object Mode
   能力；配置和测试已更新，部署后线上复验待完成。
 
+### MENTAL-AUTHZ-20261005：心理问卷端点授权与作答视图
+
+- 适用代码：[MentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java)、
+  [StudentMentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java)、
+  [QuestionServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)、
+  [问卷管理页](./frontend/src/views/mental/questionnaire.vue)及 [Axios 响应处理](./frontend/src/utils/request.js)。
+- 启动前提：JDK 17、项目依赖、MySQL 与网关/mental/auth 服务可用；JWT、Redis 会话与内部凭证配置按
+  §4.4/§6.1 一致。使用本地合成学生及测试问卷，准备 student、teacher、admin/psychologist 角色账号，
+  同时有状态 0（未开始）、1（进行中）、2（已结束）问卷。凭据保存在环境/秘密存储，不输出到日志。
+- 复现：在修复前的隔离环境，学生合法 JWT 请求 `/mental/overview` 或问卷管理读写可返回成功；
+  `/mental/student/questionnaires/{id}` 可包含选项 score、scoringRules、levelRules。教师完成情况响应
+  可包含量表原始 score。只用合成数据复现，禁止在真实学生记录上演示未经授权读写。
+- 后端自动验证（从仓库根目录执行）：
+
+  ```bash
+  mvn -B -ntp -f backend/pom.xml -pl mental-service -am clean test
+  ```
+
+  [MentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/MentalControllerTest.java)
+  验证学生/匿名拒绝、教师可读但不可写、admin/psychologist 可写、内部凭证仅放行 analysis、学生 JWT
+  附内部头仍不提权及完成情况 score 分级；[StudentMentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/StudentMentalControllerTest.java)
+  验证本人授权与模板 JWT 要求；[QuestionServiceImplTest](./backend/mental-service/src/test/java/com/edu/mental/service/impl/QuestionServiceImplTest.java)
+  验证计分信息裁剪、问卷状态、非法选项 JSON 和完整设计视图保留。
+- 前端自动验证（从仓库根目录执行）：
+
+  ```bash
+  npm --prefix frontend run lint:check
+  npm --prefix frontend run build
+  ```
+
+- 运行验证：student 请求管理概览、问卷列表、完整设计视图和写操作均拒绝；teacher 可以读取管理端，写
+  请求拒绝且完成情况 score=null；admin/psychologist 可在合成问卷上完成增删改并保留 score。内部调用不带
+  JWT 时只能通过管理端 analysis；带学生 JWT 同时附内部头仍拒绝。学生模板请求必须有合法 JWT，问卷状态
+  0/null 返回拒绝，状态 1/2 不含选项 score 或 scoringRules，问卷 levelRules=null、DTO levelRules=[]。
+  非数组或非法选项 JSON 的 options=null。提交合成答案后核对服务端仍按数据库原始规则计分，结果页可回显。
+  浏览器中 teacher 的新建/编辑/删除入口隐藏，admin/psychologist 的入口可用；用户角色未加载时默认隐藏。
+  控制台不再出现未定义 `canWrite` 的 Vue 警告；403 显示权限提示且保持登录态。
+- 通过判据：后端测试和前端命令成功；拒绝请求不触达领域写入；上述角色矩阵和响应裁剪一致。控制器
+  返回 `Result.error(403, ...)` 是响应 JSON 的业务码，HTTP 可能仍为 200；入口缺失/非法凭证则由
+  `ServiceAuthFilter` 返回 HTTP 401，验证时同时查看 HTTP 状态与 JSON code。
+- 排错：先区分 401 身份/会话错误和 403 角色拒绝，再核对 JWT 的 roles 是否使用项目角色码；合法内部凭证
+  在管理端非 analysis 路径被拒是预期。管理员按钮不显示时核对问卷页的角色计算与用户信息加载；模板
+  没有选项时先在有权管理视图检查原始 options 是否数组 JSON；不要把剥掉分值的响应写回数据库。
+- 回滚：此修复不涉及 schema。可恢复上一应用版本，但会重新放开已关闭的越权与计分信息泄漏；如必须
+  紧急降级，先在网关/反向代理限制心理管理路由仅受控教职工可达，并暂停学生作答功能，再回退应用。
+  回滚后保留 INTERNAL-AUTH-20260914 的入口凭证门，恢复修复版本后重新跑角色矩阵与测评计分验收。
+- 验证状态：2026-10-05 当前工作区 JDK 17 全后端 11 模块、249 例测试通过（0 失败/错误/跳过），JaCoCo 门通过；前端构建与只读 lint 通过（0 errors，既有格式提示）。真实 HTTP 请求及浏览器角色验收待验证。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -636,3 +694,15 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-04 / AIVEN-DNS-20260904 | 增加 Aiven DNS 故障复现、凭据核验、验证与回滚步骤 | 原免费服务已恢复 Running；DNS、聚合 health、登录与数据库回读通过 |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 增加 GPT-OSS JSON Object Mode、配额预算与复验步骤 | 线上 PARSE_ERROR 已复现；配置级测试和部署复验待完成 |
+| 2026-10-05 / MENTAL-AUTHZ-20261005 | 增加心理问卷端点授权与作答视图的复现、角色矩阵、回归命令及回滚约束 | 全后端 249 例、JaCoCo 门及前端构建/lint 通过；真实请求与浏览器验收待验证 |
+
+## SAFE-PUSH-20261005：提交前排除与核对（2026-10-05）
+
+1. 复现：`git ls-files -- docker/.env.audit` 可识别旧基线是否仍跟踪本地凭证文件。只检查路径，不输出文件内容。
+2. 排除：`git rm --cached -- docker/.env.audit` 保留本地副本并暂存取消跟踪；`.gitignore` 增加 `docker/.env.*`，模板放行规则保留在其后。
+3. 核对：`git ls-files -- 'docker/.env*'` 仅应包含 `docker/.env.example`；`git check-ignore -- docker/.env.audit` 应命中；`test -f docker/.env.audit` 应成功；`git diff --cached --check` 应无输出。
+4. 回滚：可回退代码提交，但不得恢复凭证文件的 Git 跟踪；本地副本持续保留。历史凭证的轮换需部署环境另行验证。
+
+验证状态：本次已核对凭证文件取消跟踪、模板保留、忽略命中及本地副本仍在；最终暂存时还须执行 staged diff 检查。
+
+本次 `bash scripts/test-preflight-prod.sh` 已通过；JDK 17 下全后端 11 模块、249 例测试通过，JaCoCo 门通过；最新前端构建通过，lint 为 0 errors（存在 Prettier 提示）。浏览器角色矩阵和实际部署验收仍待验证。

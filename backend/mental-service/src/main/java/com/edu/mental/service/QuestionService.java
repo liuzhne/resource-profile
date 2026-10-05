@@ -11,6 +11,12 @@ public interface QuestionService {
 
     QuestionnaireFullDto getFull(Long questionnaireId);
 
+    /**
+     * 作答视图：去掉计分答案（选项分值、scoringRules、等级规则），未开始的问卷拒绝下发。
+     * 学生答题 / 结果页用；教职工预览走 {@link #getFull}。
+     */
+    QuestionnaireFullDto getForRespondent(Long questionnaireId);
+
     Question save(Question question);
 
     void update(Question question);

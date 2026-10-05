@@ -1,6 +1,6 @@
 # Resource-Profile 架构与工程决策
 
-> 最近更新：2026-09-01
+> 最近更新：2026-10-05
 > 记录范围：当前仍有效的项目级决策。历史阶段细节见 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) §6。
 
 每条记录包含背景、选择、放弃方案和后果。被替换的决策不得直接删除，应改为“已取代”并链接新决策。
@@ -334,6 +334,72 @@
 - 证据：线上任务 7 单线程执行、无 429，却连续两轮 parse error；Groq 官方 API 文档与 GPT-OSS 模型页
   明确列出 JSON Object Mode。配置级测试覆盖 response format 与 reasoning effort；线上复验待部署后执行。
 
+## ADR-026：下游服务入口要求 JWT 或内部凭证，「无 token」不再等于内网
+
+- 状态：已采纳（补全 ADR-008）
+- 日期/修复标识：2026-09-14 / INTERNAL-AUTH-20260914
+- 背景：Render Blueprint 中 student/mental/data/teacher/user/agent/mcp-student 都是 `type: web`，各有公网
+  `https://edu-portrait-<name>.onrender.com`；免费实例收不到私网流量，内部 Feign 也只能走公网 HTTPS。
+  `AccessGuard.allowSelfRoleOrInternal` 把「无 Authorization」当可信内网放行，`FieldPermissionAdvice` 对无 token
+  请求不脱敏，`MentalController`、`/student/ids` 等端点更没有任何端点级校验，于是任何人不带 token 直连下游
+  都能拿到完整数据（含未成年人心理数据、预警名单）。2026-09-14 只用聚合端点实测：直连
+  `edu-portrait-data.onrender.com/data/dashboard/statistics` 无 token 返回 200，经网关同路径返回 401。
+  ADR-008 的多层防线默认了下游不可公网直达，这个前提在 Render 上不成立。
+- 选择：① 新增共享密钥 `EDUCARE_INTERNAL_TOKEN`（Render env group `generateValue`）；agent-service 的
+  student/mental/data 与 mcp-student-data 的 student/mental Feign 客户端按客户端挂 `InternalCallFeignConfig`，
+  附 `X-Internal-Token`。② common 新增 `ServiceAuthFilter`（默认开）：服务入口要求合法 JWT（签名+过期）或
+  内部凭证（SHA-256 摘要 + `MessageDigest.isEqual`），否则 401，`/actuator/health` 豁免；auth-service、
+  agent-service、mcp-student-data 显式关闭，分别由「只公开 `/auth/**` + Spring Security」、`AgentSelfAuthFilter`、
+  `McpTokenFilter` 把守。③ `AccessGuard` 与 `RoleContextFilter`/`FieldPermissionAdvice` 只把「无 token 且凭证匹配」
+  视为内部调用，带 token 一律按端用户处理，匿名只留 PUBLIC 字段。④ 网关 `InternalHeaderStripFilter` 最先剥掉
+  客户端自带的同名头。⑤ 未配置密钥时所有 profile 一律不承认内部调用（fail-closed）；开发默认值只写在
+  compose 与 RUNBOOK，preflight 拒绝该默认值和不足 32 字符的值。
+- 原因：Render 免费层没有私网隔离，只能用正向凭证区分内部调用；入口统一拦截能覆盖所有端点（含没接
+  `AccessGuard` 的历史端点）；端点与字段两层保留作纵深防御，入口门被关掉时也不会退化为放行。
+- 放弃方案：只改 `AccessGuard`/字段权限 —— `MentalController` 等无校验端点仍可被匿名读写；Render 私有服务 ——
+  免费层不提供，需计费授权；Feign 改走网关 —— 网关要求用户 JWT，定时扫描等系统任务没有用户上下文；
+  按 profile 名决定未配置时是否信任无 token 请求 —— profile 名写错就回到漏洞状态；全局 Feign 拦截器 ——
+  会把凭证发给 ai-inference 等不需要它的目标。
+- 后果：部署后匿名直连下游返回 401。滚动部署期间若下游已升级而 agent/mcp 尚未升级，AI 取数会短暂 401
+  并走 fallback。残余风险：下游入口不查 Redis 会话，已登出但未过期的 token 仍可直连下游（≤24h）；单一共享
+  密钥，泄露需全服务轮换。原先 `MentalController` 缺少角色授权的问题现由 ADR-027 收口；其余残余风险仍有效。
+- 证据：`ServiceAuthFilterTest`(9)、`AccessGuardTest`(17)、`FieldPermissionAdviceWalkTest`(9)、`RoleContextFilterTest`(5)、
+  `InternalCallCredentialTest`(4)、`InternalCallFeignConfigTest`(2)、`InternalHeaderStripFilterTest`(4)、两个 Feign
+  挂载测试，以及 student/mental/data/teacher/user/agent 各 controller 的匿名拒绝 / 内部凭证放行用例；JDK 17 全后端
+  `mvn -B -ntp clean test` 11 模块 222 例通过，JaCoCo 定向门（新增 6 个类）通过；`scripts/test-preflight-prod.sh`
+  通过。线上复验待部署后执行，只探聚合端点（RUNBOOK §6.1）。
+
+## ADR-027：心理问卷端点授权与作答视图
+
+- 状态：已采纳（补全 ADR-008、ADR-026）
+- 日期/修复标识：2026-10-05 / MENTAL-AUTHZ-20261005
+- 背景：内部凭证入口门只能确认调用身份，无法阻止已登录学生读取预警名单、完成情况或增删改问卷。
+  学生侧复用完整问卷 DTO 会下发选项分值、计分规则和等级阈值，允许作答者按分挑选项；完成情况返回
+  Map 行，注解驱动的字段脱敏无法覆盖原始 score。本条补齐代码中既有 `MENTAL-AUTHZ-20260914` 的文档。
+- 选择：管理读取使用 `STAFF_VIEW`；写入问卷、题目及等级规则使用 `MENTAL_WRITE`（admin/psychologist）；
+  完成情况原始 score 只对 `EXTREME_VIEW`（admin/psychologist）保留，其余教职工返回 null。管理端仅
+  `/mental/analysis` 接受已验证内部凭证，其他端点只认可 JWT 角色。学生模板仅认可合法 JWT，使用
+  `getForRespondent` 去掉选项 score、scoringRules 和 levelRules，并拒绝未开始或状态为空的问卷；已结束
+  问卷保留去分值模板以支持本人结果回显。问卷页补齐缺失的 `canWrite` 计算，依据 Pinia 用户角色只显示
+  admin/psychologist 写入口；角色缺失时默认隐藏。403 提示不会注销有效会话。
+- 原因：计分规则影响心理等级、预警与后续 AI 输入，修改权限需要与心理专业角色绑定。控制器拒绝在领域
+  service 前完成，覆盖直接调用 API；作答响应裁剪与服务端按数据库原题计分保持分离，避免更改数据库结构。
+- 放弃方案：只隐藏按钮不能阻止直接 HTTP 调用；依赖统一字段注解无法处理 Map 行和嵌在选项 JSON 内的
+  分值；让所有教职工修改问卷会扩大对筛查规则的控制权；全部管理端接受共享内部凭证会扩大凭证泄露影响；
+  拒绝已结束问卷模板会破坏结果页回显；将学生模板也视为内部端点没有实际调用方支持，因而不放行内部凭证。
+- 后果：教师失去问卷修改权限但保留设计读取和完成情况查看；学生无法读取管理端；普通教职工完成情况
+  score 为 null，前端应展示空值。选项 JSON 非法时作答视图不下发选项，管理人员须修正题目；这里移除的是
+  已定义的 score 属性，新增计分属性须同步裁剪和测试。学生模板没有用户/问卷分配绑定，任何已登录用户
+  仍可取开放或已结束的去分值模板。当前不增加数据库迁移，不改变个人记录的本人/内部调用授权。
+- 证据：[MentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java)、
+  [StudentMentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java)、
+  [QuestionServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)、
+  [Roles](./backend/common/src/main/java/com/edu/common/security/Roles.java)；回归用例见
+  [MentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/MentalControllerTest.java)、
+  [StudentMentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/StudentMentalControllerTest.java)、
+  [QuestionServiceImplTest](./backend/mental-service/src/test/java/com/edu/mental/service/impl/QuestionServiceImplTest.java)。
+  2026-10-05 已核对代码与端点规则；全后端 249 例测试、JaCoCo 门和前端构建/lint 通过，真实 HTTP 请求与浏览器角色验收待验证，命令与判据见 RUNBOOK。
+
 ## 新决策模板
 
 ```markdown
@@ -365,3 +431,14 @@
 | 2026-09-04 / AIVEN-DNS-20260904 | 新增 ADR-023，以 Aiven 当前连接信息修复失效 DNS | 不猜测端点、不绕过健康检查，数据库凭据继续仅存 Render secret |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 新增 ADR-024，对 Groq TPM 429 使用有界退避 | 保留完整 AgentLoop 质量；401/403 继续 fail-fast |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 新增 ADR-025，Render GPT-OSS 改用 JSON Object Mode 与低推理预算 | 保留 ReAct 主路径；本地 OpenAI 兼容端点维持 TEXT 默认值 |
+| 2026-09-14 / INTERNAL-AUTH-20260914 | 新增 ADR-026，下游服务入口要求 JWT 或内部凭证，`AccessGuard`/字段权限不再把无 token 当内网 | 补全 ADR-008：下游公网可达时仍 fail-closed；`EDUCARE_INTERNAL_TOKEN` 成为生产硬门 |
+| 2026-10-05 / MENTAL-AUTHZ-20261005 | 新增 ADR-027：心理问卷端点授权与作答视图 | 补全 ADR-026 的管理角色缺口；仅心理专业角色可改计分规则，学生模板移除计分信息 |
+
+## SAFE-PUSH-20261005：提交前排除本地凭证文件
+
+- 日期：2026-10-05。
+- 背景：发布本地待提交改动时，发现旧基线仍跟踪 `docker/.env.audit`；它包含非模板凭证，不适合进入新的分支快照。
+- 选择：保留本地文件，取消 Git 跟踪；以 `.gitignore` 的 `docker/.env.*` 规则阻止副本再次入库，并保留模板例外。源码中的明确测试夹具和开发默认账户可保留。
+- 原因：仅不暂存一个已跟踪文件，不能把它从新分支快照排除；必须提交取消跟踪。
+- 放弃方案：删除本地文件会破坏本地配置；只忽略已跟踪文件不能生效；本次不改写已发布 Git 历史。
+- 代价与约束：这些值仍存在于此前的历史提交，曾实际使用的凭证需由对应部署环境轮换；本次不声称已完成轮换。

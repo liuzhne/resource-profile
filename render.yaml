@@ -30,6 +30,11 @@ envVarGroups:
       # MCP 内部通信安全 Token（纵深防御）
       - key: EDUCARE_MCP_TOKEN
         generateValue: true
+      # 服务间内部调用凭证（X-Internal-Token）。本 Blueprint 的下游服务都是 type: web，各有公网 URL，
+      # 网关不是唯一入口：无 JWT 的请求只有出示此凭证才被当作内部调用（agent-service / mcp-student-data
+      # 的 Feign 自动附带）。未配置时下游拒绝一切无 JWT 请求（fail-closed）。
+      - key: EDUCARE_INTERNAL_TOKEN
+        generateValue: true
       # Aiven Free MySQL 强制 TLS。
       # 连接配额实测（2026-09-12）：max_connections=76，历史峰值 Max_used_connections=4，
       # Connection_errors_max_connections=0（从未触顶）。实际连库的仅 7 个服务

@@ -74,7 +74,12 @@ request.interceptors.response.use(
     const res = response.data
 
     if (res.code !== 200) {
-      ElMessage.error(res.message || '请求失败')
+      if (res.code === 403) {
+        // 端点级授权拒绝（AccessGuard）：身份有效、只是角色不够，提示即可，不登出
+        ElMessage.warning(res.message || '无权限执行该操作')
+      } else {
+        ElMessage.error(res.message || '请求失败')
+      }
 
       if (res.code === 401) {
         const userStore = useUserStore()
@@ -106,10 +111,14 @@ request.interceptors.response.use(
     }
 
     // 重试用尽后才提示，且把冷启动类失败翻译成人话，避免用户看到「timeout of 60000ms exceeded」
-    const message = isColdStartFailure(error)
-      ? '服务唤醒超时，请稍后重试'
-      : error.response?.data?.message || error.message || '网络错误'
-    ElMessage.error(message)
+    if (isColdStartFailure(error)) {
+      ElMessage.error('服务唤醒超时，请稍后重试')
+    } else if (error.response?.status === 403) {
+      // HTTP 403（如网关拦下 /_internal/）响应体常为空，给出可读提示
+      ElMessage.warning(error.response?.data?.message || '无权限访问该资源')
+    } else {
+      ElMessage.error(error.response?.data?.message || error.message || '网络错误')
+    }
     return Promise.reject(error)
   }
 )

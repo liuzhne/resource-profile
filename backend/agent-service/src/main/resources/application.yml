@@ -141,6 +141,11 @@ educare:
   # 与两个 MCP server 配同一值即开启 X-MCP-Token 互验（McpClientConfig 给出站请求附头）。
   mcp:
     token: ${EDUCARE_MCP_TOKEN:}
+  # common 的服务入口鉴权门（ServiceAuthFilter）在本服务关闭：AgentSelfAuthFilter 已要求所有业务请求带 JWT
+  # （还兼容 SSE ?token=），也没有服务以内部凭证调用 agent-service。出站调 student/mental/data 仍附
+  # X-Internal-Token（EDUCARE_INTERNAL_TOKEN，见 InternalCallFeignConfig）。
+  service-auth:
+    enabled: false
   export:
     # F-1：PDF 导出落盘目录。需可写；启动时若不存在自动创建。
     storage-path: ${EDUCARE_EXPORT_PATH:/tmp/edu-exports}

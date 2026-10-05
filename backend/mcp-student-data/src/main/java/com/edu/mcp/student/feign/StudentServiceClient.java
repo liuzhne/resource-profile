@@ -1,6 +1,7 @@
 package com.edu.mcp.student.feign;
 
 import com.edu.common.result.Result;
+import com.edu.common.security.InternalCallFeignConfig;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,8 +17,10 @@ import java.util.Map;
  * Gateway 路由 /student/** → student-service (StripPrefix=0)，
  * 本地/Nacos 环境留空 URL 时走 lb://student-service；Render 等无注册中心环境通过
  * STUDENT_SERVICE_URL 注入固定 HTTPS 地址。
+ * 直连下游不经网关，附 X-Internal-Token 作为内部调用凭证（{@link InternalCallFeignConfig}）。
  */
-@FeignClient(name = "student-service", url = "${STUDENT_SERVICE_URL:}")
+@FeignClient(name = "student-service", url = "${STUDENT_SERVICE_URL:}",
+        configuration = InternalCallFeignConfig.class)
 public interface StudentServiceClient {
 
     /** 学生基础档案 */

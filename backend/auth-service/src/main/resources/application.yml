@@ -1,6 +1,12 @@
 server:
   port: ${PORT:8081}
 
+# common 的服务入口鉴权门（ServiceAuthFilter）在本服务关闭：/auth/** 登录/刷新本就公开
+# （Render 前端直连本服务），其余路径由自身 Spring Security 拒绝。
+educare:
+  service-auth:
+    enabled: false
+
 spring:
   application:
     name: auth-service

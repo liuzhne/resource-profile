@@ -3,11 +3,16 @@ package com.edu.user.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
+import com.edu.common.security.InternalCallCredential;
 import com.edu.common.util.JwtUtil;
 import com.edu.user.entity.User;
 import com.edu.user.service.UserService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Set;
 
@@ -21,6 +26,7 @@ import static org.mockito.Mockito.when;
 class UserControllerTest {
 
     private static final String AUTH = "Bearer tok";
+    private static final String INTERNAL_TOKEN = "internal-secret-at-least-32-chars-0001";
 
     private UserService userService;
     private JwtUtil jwtUtil;
@@ -30,12 +36,25 @@ class UserControllerTest {
     void setUp() {
         userService = mock(UserService.class);
         jwtUtil = mock(JwtUtil.class);
-        controller = new UserController(userService, new AccessGuard(jwtUtil));
+        controller = new UserController(userService,
+                new AccessGuard(jwtUtil, new InternalCallCredential(INTERNAL_TOKEN)));
         when(jwtUtil.getSubject("tok")).thenReturn("7");
+    }
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
     }
 
     private void asRole(String role) {
         when(jwtUtil.parseRoles("tok")).thenReturn(Set.of(role));
+    }
+
+    /** 模拟内部 Feign 调用：不带 token，只带合法 X-Internal-Token。 */
+    private static void asInternalCall() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(InternalCallCredential.HEADER, INTERNAL_TOKEN);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
     @Test
@@ -60,10 +79,18 @@ class UserControllerTest {
     }
 
     @Test
-    void get_internalAllowed() {
+    void get_internalCredentialAllowed() {
+        asInternalCall();
         when(userService.getById(3L)).thenReturn(new User());
         assertThat(controller.getById(3L, null).getCode()).isEqualTo(200);
         verify(userService).getById(3L);
+    }
+
+    @Test
+    void get_anonymousDeniedWithoutServiceCall() {
+        // 既无 token 也无内部凭证（直连下游公网 URL）→ 403，不再当内网放行
+        assertThat(controller.getById(3L, null).getCode()).isEqualTo(403);
+        verify(userService, never()).getById(any());
     }
 
     @Test

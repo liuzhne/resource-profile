@@ -1,6 +1,6 @@
 # Resource-Profile 架构说明
 
-> 最近更新：2026-09-01
+> 最近更新：2026-10-05
 > 状态：按当前仓库实现初始化；真实模型与生产全栈仍待 `docs/educare/EXECUTION_PLAN.md` 的 R-5/R-6 验收。
 
 本文说明项目级模块边界、核心调用链与数据流。EduCare 的历史计划与原子任务状态以 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) 为准；本文只描述当前仍在代码中的能力。
@@ -83,7 +83,7 @@ flowchart LR
 2. `auth-service` 校验 bcrypt 密码，生成 HS256 JWT，并把 access token 写入 Redis `token:{userId}`。
 3. 后续请求携带 `Authorization: Bearer <token>`；SSE 可使用 `?token=`。
 4. `gateway` 先校验签名和过期时间，再比对 Redis 中的当前会话；Redis 异常时 fail-closed 返回 503。
-5. 请求路由到领域服务。`AccessGuard` 做 self/role/内部调用判断，`FieldPermissionAdvice` 按角色过滤敏感字段。
+5. 请求路由到领域服务。服务入口 `ServiceAuthFilter` 先确认带合法 JWT 或内部凭证（下游在 Render 上公网可达，不能只靠网关）；`AccessGuard` 做 self/role/已验证内部调用判断，`FieldPermissionAdvice` 按角色过滤敏感字段。
 6. 登出或重新登录会删除/覆盖 Redis 会话，旧 token 立即失效。
 
 ### 2.2 默认 AgentLoop 风险画像链
@@ -199,10 +199,39 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 
 - 公网生产入口只允许 nginx 80/443；gateway、数据库、Redis、Nacos、Milvus、Agent 与 MCP 端口都绑定 `127.0.0.1` 或容器内网。
 - gateway 是第一道 JWT + 会话门；agent-service :8087 还有独立 `AgentSelfAuthFilter`，防本机直连绕过网关。
-- `AccessGuard` 负责对象级授权；字段权限默认开启。无 token 的内部 Feign 调用可保留完整字段，因此内部网络与 MCP token 是必要前提。
+- **网关不是唯一入口**：Render 部署下每个下游服务都是独立的公网 Web Service。user/teacher/student/mental/data 由 common 的 `ServiceAuthFilter` 在服务入口要求「合法 JWT」或「合法内部凭证 `X-Internal-Token`」，否则 401。内部凭证是共享密钥 `EDUCARE_INTERNAL_TOKEN`，只由 agent-service（student/mental/data 客户端）与 mcp-student-data（student/mental 客户端）的 Feign 附带，常量时间比较；网关 `InternalHeaderStripFilter` 剥掉客户端自带的同名头。未配置密钥即不承认任何内部调用（fail-closed）。
+- `AccessGuard` 负责对象级授权：带 token 按本人/角色判定，不带 token 只有出示合法内部凭证才放行。字段权限默认开启：仅已验证的内部调用不脱敏，匿名请求只留 PUBLIC 字段。详见 `docs/educare/FIELD_PERMISSION.md` §11（INTERNAL-AUTH-20260914）。
 - agent-service 与两个 MCP server 可通过同一 `EDUCARE_MCP_TOKEN`/`X-MCP-Token` 互验；生产 preflight 强制其与 Redis 密码均不少于 32 字符。
 - 进入 LLM 的画像经过 `DataMasker`/`PromptSanitizer`；敏感心理工具还受 ToolGuard 约束。
 - `/agent/**/_internal/**` 经 gateway 一律 403。任何新增内部端点必须保持该边界。
+
+### 4.1 MENTAL-AUTHZ-20261005：心理问卷端点授权与作答视图
+
+2026-10-05 补齐既有 `MENTAL-AUTHZ-20260914` 实现的项目级文档。服务入口的 JWT/内部凭证验证只解决
+身份准入；心理管理端点在 [MentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java)
+继续执行角色授权，角色集合统一定义在 [Roles](./backend/common/src/main/java/com/edu/common/security/Roles.java)。
+
+| 边界 | 当前访问规则 | 数据流约束 |
+|---|---|---|
+| 心理概览、问卷/题目读取及完成情况 | `STAFF_VIEW`：admin、teacher、counselor、academic_advisor、psychologist | 学生 token 返回业务码 403；内部凭证不授予管理权限 |
+| 问卷、题目及等级规则增删改 | `MENTAL_WRITE`：admin、psychologist | 验证通过才进入领域 service；教师只能读取 |
+| `/mental/analysis` 聚合统计 | `STAFF_VIEW` 或已验证内部调用 | 管理侧唯一保留内部凭证放行的端点，供 Agent 取聚合数据；带学生 JWT 同时附内部头不会提权 |
+| 完成情况中的量表原始 `score` | `EXTREME_VIEW`：admin、psychologist | 返回行是 Map，控制器显式将其他教职工的 score 置 null；姓名、等级和完成状态仍保留 |
+| `/mental/student/questionnaires/{id}` 作答模板 | 必须有合法 JWT；任何已登录角色可取 | 内部凭证不能代替登录；状态为 0 或 null 时拒绝，已结束问卷仍可用于结果回显 |
+
+[QuestionServiceImpl.getForRespondent](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)
+在构造的响应中移除选项对象的 `score`、题目的 `scoringRules` 及问卷等级阈值（问卷 `levelRules=null`、DTO
+`levelRules=[]`）；非法或非数组的选项 JSON 不下发。教职工 `/mental/questionnaires/{id}/full` 保留完整设计视图。
+数据库计分规则仍由 [MentalAssessmentServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/MentalAssessmentServiceImpl.java)
+在提交测评时读取，学生响应的裁剪不更新持久数据。个人问卷列表、测评历史、详情和提交继续由
+[StudentMentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java)
+执行本人或已验证内部调用授权；本次不新增教师跨学生读取通道。
+
+前端问卷管理页以 Pinia `userStore.userRoles` 计算 `canWrite`，仅 admin/psychologist 显示写入口，
+角色尚未加载或为空时默认隐藏；这也补齐模板使用 `canWrite` 却未定义该变量的缺口。Axios 对业务码或
+HTTP 403 显示权限提示并保留登录态；后端承担最终授权。
+此变更不增加服务、数据库表或迁移，收紧心理管理与学生作答两个响应边界。验证与回滚见
+[`RUNBOOK.md`](./RUNBOOK.md) 的同名修复条目。
 
 ## 5. 部署形态与已知边界
 
@@ -273,3 +302,8 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 | 2026-09-04 / AIVEN-DNS-20260904 | 记录 Render 当前 Aiven MySQL 主机名不可解析及端点校验要求 | 无架构影响；数据库仍位于 Aiven，仅外部连接配置待修复 |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 为 Groq 免费层 TPM 429 增加有界重试退避 | 无架构影响；仅增强 agent-service 外部 LLM 调用韧性 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | Render GPT-OSS 启用 JSON Object Mode 并收紧推理/输出预算 | 无架构影响；仅强化 ReAct 输出契约并降低免费 TPM 压力 |
+| 2026-10-05 / MENTAL-AUTHZ-20261005 | 补齐心理问卷端点授权与作答视图文档，链接管理控制器、作答服务和角色集合 | 收紧 mental-service 的管理角色、原始分和学生计分信息响应边界；服务拓扑与数据所有权不变 |
+
+## 维护记录补充：SAFE-PUSH-20261005（2026-10-05）
+
+无架构影响；本次提交清理涉及版本控制与本地部署配置。含凭证的 `docker/.env.audit` 取消 Git 跟踪但保留本地文件，`.gitignore` 忽略 `docker/.env.*` 并继续放行 `docker/.env.example`。此处描述新提交快照的边界，不表示已清除历史提交中的值。

@@ -1,6 +1,7 @@
 package com.edu.mental.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.edu.common.exception.BusinessException;
 import com.edu.mental.dto.LevelRule;
 import com.edu.mental.dto.QuestionnaireFullDto;
 import com.edu.mental.entity.Question;
@@ -8,8 +9,11 @@ import com.edu.mental.entity.Questionnaire;
 import com.edu.mental.mapper.QuestionMapper;
 import com.edu.mental.mapper.QuestionnaireMapper;
 import com.edu.mental.service.QuestionService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +25,10 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class QuestionServiceImpl implements QuestionService {
+
+    /** 问卷状态：0=未开始（可能仍在设计），1=进行中，2=已结束。 */
+    private static final int STATUS_NOT_STARTED = 0;
+    private static final String OPTION_SCORE = "score";
 
     private final QuestionMapper questionMapper;
     private final QuestionnaireMapper questionnaireMapper;
@@ -45,6 +53,25 @@ public class QuestionServiceImpl implements QuestionService {
         dto.setQuestionnaire(q);
         dto.setQuestions(listByQuestionnaire(questionnaireId));
         dto.setLevelRules(parseLevelRules(q.getLevelRules()));
+        return dto;
+    }
+
+    @Override
+    public QuestionnaireFullDto getForRespondent(Long questionnaireId) {
+        QuestionnaireFullDto dto = getFull(questionnaireId);
+        Integer status = dto.getQuestionnaire().getStatus();
+        // 已结束的仍要下发：结果页按题目回显本人作答
+        if (status == null || status == STATUS_NOT_STARTED) {
+            throw new BusinessException(403, "问卷当前未开放");
+        }
+        // 作答者拿到「哪个选项几分、几分算高危」就能按分挑选项躲过筛查；计分在 submit 时按库内原题完成，
+        // 作答页与结果页只用题干和选项文字
+        dto.getQuestionnaire().setLevelRules(null);
+        dto.setLevelRules(Collections.emptyList());
+        for (Question question : dto.getQuestions()) {
+            question.setOptions(stripOptionScores(question.getOptions()));
+            question.setScoringRules(null);
+        }
         return dto;
     }
 
@@ -125,6 +152,28 @@ public class QuestionServiceImpl implements QuestionService {
         } catch (Exception e) {
             log.warn("解析等级规则失败: {}", e.getMessage());
             return Collections.emptyList();
+        }
+    }
+
+    /** 去掉每个选项的 score，只留选项文字；解析不了就整体不下发（前端对非法 JSON 本来也渲染不出选项）。 */
+    private String stripOptionScores(String optionsJson) {
+        if (optionsJson == null || optionsJson.isBlank()) {
+            return optionsJson;
+        }
+        try {
+            JsonNode options = objectMapper.readTree(optionsJson);
+            if (!options.isArray()) {
+                return null;
+            }
+            for (JsonNode option : options) {
+                if (option instanceof ObjectNode o) {
+                    o.remove(OPTION_SCORE);
+                }
+            }
+            return objectMapper.writeValueAsString(options);
+        } catch (JsonProcessingException e) {
+            log.warn("作答视图剥离选项分值失败，不下发该题选项: {}", e.getMessage());
+            return null;
         }
     }
 }

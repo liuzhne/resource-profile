@@ -2,6 +2,7 @@ package com.edu.agent.feign;
 
 import com.edu.agent.feign.fallback.StudentServiceClientFallbackFactory;
 import com.edu.common.result.Result;
+import com.edu.common.security.InternalCallFeignConfig;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,10 +13,12 @@ import java.util.Map;
 /**
  * 调用 student-service (Port: 8084)
  * Gateway 路由: /student/** → student-service (StripPrefix=0)
+ * 直连下游不经网关，附 X-Internal-Token 作为内部调用凭证（{@link InternalCallFeignConfig}）。
  */
 @FeignClient(
         name = "student-service",
         url = "${STUDENT_SERVICE_URL:}",
+        configuration = InternalCallFeignConfig.class,
         fallbackFactory = StudentServiceClientFallbackFactory.class
 )
 public interface StudentServiceClient {

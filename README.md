@@ -19,7 +19,7 @@
 | 数据看板 | 统计聚合 + ECharts 可视化 |
 | EduCare 智能预警 | 风险任务触发、AgentLoop 画像、干预方案、合规审核、报告导出、干预反馈闭环、SSE 实时预警 |
 
-安全基线：网关统一 JWT 门禁（`/_internal/**` 一律 403）、`AccessGuard` 防越权（IDOR）、`@SensitiveField` 字段级权限默认开启、送模前 Prompt 清洗与脱敏。
+安全基线：网关统一 JWT 门禁（`/_internal/**` 一律 403）、下游服务入口 JWT/内部凭证门（`ServiceAuthFilter` + `X-Internal-Token`，防直连绕过网关）、`AccessGuard` 防越权（IDOR）、`@SensitiveField` 字段级权限默认开启、送模前 Prompt 清洗与脱敏。
 
 ## 架构
 
