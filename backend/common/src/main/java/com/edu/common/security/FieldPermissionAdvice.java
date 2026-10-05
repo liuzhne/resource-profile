@@ -29,8 +29,9 @@ import java.util.stream.Stream;
  * docs/educare/FIELD_PERMISSION.md §4 的矩阵决定是否置 {@code null}。
  *
  * <p><b>启用</b>：{@code educare.field-permission.enabled} 默认开；置 false 可关。
- * 仅对<b>带 token 的端用户请求</b>按角色脱敏；内网 Feign 匿名直调（无 token）放行不脱敏
- * （{@link RequestContext#isAuthenticated()}），故默认开不破坏 AI 取数链路。
+ * 只有<b>已验证的内部调用</b>（不带 token 且出示合法 {@link InternalCallCredential#HEADER}，
+ * 见 {@link RequestContext#isInternal()}）放行不脱敏，保 AI 取数链路完整；其余请求一律按角色脱敏，
+ * 匿名请求没有角色，只留 PUBLIC（fail-closed）。调用方分类见 FIELD_PERMISSION.md §11。
  *
  * <p><b>不支持的场景</b>（显式落档）：
  * <ul>
@@ -65,15 +66,15 @@ public class FieldPermissionAdvice implements ResponseBodyAdvice<Object> {
                                   Class<? extends HttpMessageConverter<?>> selectedConverterType,
                                   ServerHttpRequest request, ServerHttpResponse response) {
         if (body == null) return null;
-        // 内网 Feign 匿名直调（无 token）→ 可信，不脱敏（与 AccessGuard 内网放行一致），
-        // 保证 mcp-student-data / agent 等 AI 取数链路拿到完整画像。仅对端用户请求按角色脱敏。
-        if (!RequestContext.isAuthenticated()) {
+        // 已验证的内部调用（agent-service / mcp-student-data 的 Feign 出示 X-Internal-Token）→ 放行不脱敏。
+        // 旧实现把"无 token"当内网放行，而下游服务在 Render 上公网可达，那等于对匿名请求吐完整数据。
+        if (RequestContext.isInternal()) {
             return body;
         }
         Set<String> roles = RequestContext.getRoles();
-        // 端用户但无角色：保守走最低权限（只 PUBLIC），不抛错以免破坏链路
+        // 匿名或无角色 token：保守走最低权限（只 PUBLIC），不抛错以免破坏链路
         if (roles.isEmpty()) {
-            log.debug("FieldPermissionAdvice: authenticated but empty roles, applying PUBLIC-only filter on {}", body.getClass().getName());
+            log.debug("FieldPermissionAdvice: no roles (anonymous or role-less token), applying PUBLIC-only filter on {}", body.getClass().getName());
         }
         try {
             walk(body, roles, Collections.newSetFromMap(new IdentityHashMap<>()));

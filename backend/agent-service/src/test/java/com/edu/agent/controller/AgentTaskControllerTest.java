@@ -4,9 +4,14 @@ import com.edu.agent.entity.AgentTask;
 import com.edu.agent.service.AgentTaskService;
 import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
+import com.edu.common.security.InternalCallCredential;
 import com.edu.common.util.JwtUtil;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Set;
 
@@ -19,11 +24,12 @@ import static org.mockito.Mockito.when;
 
 /**
  * AgentTaskController 越权(IDOR)单测：真实 AccessGuard + mock JwtUtil。
- * 教职工面向端点（触发分析 / 看任务产物），学生越权 403 且不触达 service。
+ * 教职工面向端点（触发分析 / 看任务产物），学生越权、匿名直连 403 且不触达 service。
  */
 class AgentTaskControllerTest {
 
     private static final String AUTH = "Bearer tok";
+    private static final String INTERNAL_TOKEN = "internal-secret-at-least-32-chars-0001";
 
     private AgentTaskService agentTaskService;
     private JwtUtil jwtUtil;
@@ -33,7 +39,20 @@ class AgentTaskControllerTest {
     void setUp() {
         agentTaskService = mock(AgentTaskService.class);
         jwtUtil = mock(JwtUtil.class);
-        controller = new AgentTaskController(agentTaskService, new AccessGuard(jwtUtil));
+        controller = new AgentTaskController(agentTaskService,
+                new AccessGuard(jwtUtil, new InternalCallCredential(INTERNAL_TOKEN)));
+    }
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
+    }
+
+    /** 模拟内部调用：不带 token，只带合法 X-Internal-Token。 */
+    private static void asInternalCall() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(InternalCallCredential.HEADER, INTERNAL_TOKEN);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
     @Test
@@ -71,12 +90,22 @@ class AgentTaskControllerTest {
     }
 
     @Test
-    void trigger_internalNoToken_ok() {
+    void trigger_internalCredential_ok() {
+        asInternalCall();
         when(agentTaskService.triggerTask(5L)).thenReturn(100L);
 
         Result<Long> r = controller.trigger(5L, null);
 
         assertThat(r.getCode()).isEqualTo(200);
         verify(agentTaskService).triggerTask(5L);
+    }
+
+    @Test
+    void trigger_anonymous_forbidden_andNoServiceCall() {
+        // 既无 token 也无内部凭证 → 403（AgentSelfAuthFilter 被关时的第二道防线）
+        Result<Long> r = controller.trigger(5L, null);
+
+        assertThat(r.getCode()).isEqualTo(403);
+        verify(agentTaskService, never()).triggerTask(anyLong());
     }
 }

@@ -33,6 +33,7 @@ dev_default() {
     MINIO_ACCESS_KEY)           echo "minioadmin" ;;
     MINIO_SECRET_KEY)           echo "minioadmin" ;;
     JWT_SECRET)                 echo "edu-portrait-dev-jwt-secret-change-in-prod-0123456789" ;;
+    EDUCARE_INTERNAL_TOKEN)     echo "edu-portrait-dev-internal-token-change-in-prod-0123456789" ;;
     *)                          echo "" ;;
   esac
 }
@@ -55,7 +56,7 @@ set +a
 echo "=== 体检 $ENV_FILE ==="
 
 # 必须覆盖（留空 / 等于 dev 默认 / 仍含 change-me 即 fail）
-REQUIRED="MYSQL_ROOT_PASSWORD MYSQL_PASSWORD NACOS_PASSWORD NACOS_AUTH_TOKEN MINIO_ACCESS_KEY MINIO_SECRET_KEY JWT_SECRET REDIS_PASSWORD EDUCARE_MCP_TOKEN"
+REQUIRED="MYSQL_ROOT_PASSWORD MYSQL_PASSWORD NACOS_PASSWORD NACOS_AUTH_TOKEN MINIO_ACCESS_KEY MINIO_SECRET_KEY JWT_SECRET REDIS_PASSWORD EDUCARE_MCP_TOKEN EDUCARE_INTERNAL_TOKEN"
 
 for var in $REQUIRED; do
   val="$(getval "$var")"
@@ -101,6 +102,20 @@ if [[ -n "$mcp" && "$mcp" != *change-me* ]]; then
     err "EDUCARE_MCP_TOKEN 长度 $mcp_len < 32"
   else
     ok "EDUCARE_MCP_TOKEN 长度 $mcp_len ≥ 32"
+  fi
+fi
+
+# 服务间内部调用凭证（X-Internal-Token）：下游据此区分内部调用与匿名请求，泄露即可冒充内部服务。
+internal="$(getval EDUCARE_INTERNAL_TOKEN)"
+if [[ -n "$internal" && "$internal" != *change-me* && "$internal" != "$(dev_default EDUCARE_INTERNAL_TOKEN)" ]]; then
+  internal_len=${#internal}
+  if (( internal_len < 32 )); then
+    err "EDUCARE_INTERNAL_TOKEN 长度 $internal_len < 32"
+  else
+    ok "EDUCARE_INTERNAL_TOKEN 长度 $internal_len ≥ 32"
+  fi
+  if [[ -n "$mcp" && "$internal" == "$mcp" ]]; then
+    warn "EDUCARE_INTERNAL_TOKEN 与 EDUCARE_MCP_TOKEN 相同：建议分开，避免一处泄露两处失守"
   fi
 fi
 

@@ -1,6 +1,6 @@
 # Resource-Profile 运行手册
 
-> 最近更新：2026-09-01
+> 最近更新：2026-09-14
 > 适用范围：当前仓库的开发、测试、排错和发布准备。真实 AI/生产签字状态以 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) R-5/R-6 为准。
 
 ## 1. 前置条件
@@ -119,10 +119,11 @@ mvn -B -ntp install -DskipTests
 
 然后在独立终端按需运行。普通业务链至少启动 gateway、auth 及目标领域服务；Agent 全链还要启动 student、mental、data、mcp-student-data、agent-service。
 
-每个 Java 终端先设置同一个开发 JWT 密钥；缺失或少于 32 字节时 `JwtUtil` 会让服务 fail-fast：
+每个 Java 终端先设置同一个开发 JWT 密钥与内部调用凭证。JWT 密钥缺失或少于 32 字节时 `JwtUtil` 会让服务 fail-fast；内部调用凭证缺失时服务照常启动，但 student/mental/data 等会以 401 拒绝 agent-service / mcp-student-data 的 Feign 取数（不带 JWT 的请求一律不当内网，INTERNAL-AUTH-20260914）。两个值都必须与 docker-compose 中 agent-service / mcp-student-data 的一致：
 
 ```bash
 export JWT_SECRET=edu-portrait-dev-jwt-secret-change-in-prod-0123456789
+export EDUCARE_INTERNAL_TOKEN=edu-portrait-dev-internal-token-change-in-prod-0123456789
 ```
 
 ```bash
@@ -229,6 +230,14 @@ bash scripts/gateway_verify.sh
 
 字段权限和 IDOR 另按 [`docs/educare/FIELD_PERMISSION_VERIFY.md`](./docs/educare/FIELD_PERMISSION_VERIFY.md) 用多角色账号验证。
 
+下游服务公网可达的部署（如 Render），还要验证「直连下游必须带凭证」（INTERNAL-AUTH-20260914）。只探聚合端点，不要拿个人数据端点做探测：
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://edu-portrait-data.onrender.com/data/dashboard/statistics
+```
+
+通过判据：返回 `401`（修复前为 `200`）；同一路径经网关带教职工 token 仍为 `200`；触发一次 AgentLoop 任务后，student/mental/data 日志无 401，任务没有因取数失败进入 `FAILED`。
+
 ### 6.2 MCP 工具契约
 
 ```bash
@@ -285,6 +294,7 @@ MILVUS_HOST=localhost EMBEDDING_BASE_URL=http://localhost:8092/v1 python -m scri
 | gateway 返回 503/404 service unavailable | Nacos readiness 和服务列表 | 确认目标服务已启动并注册；基础 compose 不含六个普通业务服务 |
 | agent-service 启动失败 | :8094/:8095 health、MCP initialize 日志 | 先启动两个 MCP；核对 URL、endpoint `/mcp` 和 token |
 | MCP 返回 401 | 三端 `EDUCARE_MCP_TOKEN` | 使用相同非空值；生产至少 32 字符 |
+| AI 取数失败，Feign 调 student/mental/data 报 401 | 各服务 `EDUCARE_INTERNAL_TOKEN`；启动日志是否有「EDUCARE_INTERNAL_TOKEN 未配置」WARN | agent-service、mcp-student-data 与 student/mental/data 使用同一非空值，生产至少 32 字符；不要为排障关掉 `educare.service-auth.enabled` |
 | Agent 任务 `FAILED` | agent 日志、`agent_task.status`、LLM 原始输出 | 先区分 LLM 连接、JSON parse、ToolGuard、工具调用和 DB CAS；不要直接改成 COMPLETED |
 | RAG 返回空 chunks | :8092、Milvus collection、embedding dim、灌库记录 | 确认维度 1024、集合存在、真语料已 upsert；reranker 可临时关闭定位 |
 | `/api/v1/rag/upsert` 返回 404 | FastAPI OpenAPI、`app/main.py` router 注册 | 当前主 app 未挂载 `rag_upsert.router`，不能当作运行能力 |
@@ -636,3 +646,14 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-04 / AIVEN-DNS-20260904 | 增加 Aiven DNS 故障复现、凭据核验、验证与回滚步骤 | 原免费服务已恢复 Running；DNS、聚合 health、登录与数据库回读通过 |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 增加 GPT-OSS JSON Object Mode、配额预算与复验步骤 | 线上 PARSE_ERROR 已复现；配置级测试和部署复验待完成 |
+
+## SAFE-PUSH-20261005：提交前排除与核对（2026-10-05）
+
+1. 复现：`git ls-files -- docker/.env.audit` 可识别旧基线是否仍跟踪本地凭证文件。只检查路径，不输出文件内容。
+2. 排除：`git rm --cached -- docker/.env.audit` 保留本地副本并暂存取消跟踪；`.gitignore` 增加 `docker/.env.*`，模板放行规则保留在其后。
+3. 核对：`git ls-files -- 'docker/.env*'` 仅应包含 `docker/.env.example`；`git check-ignore -- docker/.env.audit` 应命中；`test -f docker/.env.audit` 应成功；`git diff --cached --check` 应无输出。
+4. 回滚：可回退代码提交，但不得恢复凭证文件的 Git 跟踪；本地副本持续保留。历史凭证的轮换需部署环境另行验证。
+
+验证状态：本次已核对凭证文件取消跟踪、模板保留、忽略命中及本地副本仍在；最终暂存时还须执行 staged diff 检查。
+
+本次 `bash scripts/test-preflight-prod.sh` 已通过；本工作区未独立重跑后端全量测试，共享的内部鉴权实现已随 heuristic 工作区的 249 例后端测试验证。线上直连和内部调用验收仍待部署后执行。
