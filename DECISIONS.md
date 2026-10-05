@@ -1,6 +1,6 @@
 # Resource-Profile 架构与工程决策
 
-> 最近更新：2026-09-26
+> 最近更新：2026-10-05
 > 记录范围：当前仍有效的项目级决策。历史阶段细节见 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) §6。
 
 每条记录包含背景、选择、放弃方案和后果。被替换的决策不得直接删除，应改为“已取代”并链接新决策。
@@ -365,6 +365,99 @@
   当前按 main 提交即部署；main 头提交 `bcb01c4` 的 check-runs 为空。本地 Schema 校验与路径覆盖自检见
   RUNBOOK 同名条目；Blueprint 同步与首次门控部署待验证。
 
+## ADR-029：下游服务入口要求 JWT 或内部凭证，「无 token」不再等于内网
+
+- 状态：已采纳（补全 ADR-008）
+- 日期/修复标识：2026-09-14 / INTERNAL-AUTH-20260914
+- 背景：Render Blueprint 中 student/mental/data/teacher/user/agent/mcp-student 都是 `type: web`，各有公网
+  `https://edu-portrait-<name>.onrender.com`；免费实例收不到私网流量，内部 Feign 也只能走公网 HTTPS。
+  `AccessGuard.allowSelfRoleOrInternal` 把「无 Authorization」当可信内网放行，`FieldPermissionAdvice` 对无 token
+  请求不脱敏，`MentalController`、`/student/ids` 等端点更没有任何端点级校验，于是任何人不带 token 直连下游
+  都能拿到完整数据（含未成年人心理数据、预警名单）。2026-09-14 只用聚合端点实测：直连
+  `edu-portrait-data.onrender.com/data/dashboard/statistics` 无 token 返回 200，经网关同路径返回 401。
+  ADR-008 的多层防线默认了下游不可公网直达，这个前提在 Render 上不成立。
+- 选择：① 新增共享密钥 `EDUCARE_INTERNAL_TOKEN`（Render env group `generateValue`）；agent-service 的
+  student/mental/data 与 mcp-student-data 的 student/mental Feign 客户端按客户端挂 `InternalCallFeignConfig`，
+  附 `X-Internal-Token`。② common 新增 `ServiceAuthFilter`（默认开）：服务入口要求合法 JWT（签名+过期）或
+  内部凭证（SHA-256 摘要 + `MessageDigest.isEqual`），否则 401，`/actuator/health` 豁免；auth-service、
+  agent-service、mcp-student-data 显式关闭，分别由「只公开 `/auth/**` + Spring Security」、`AgentSelfAuthFilter`、
+  `McpTokenFilter` 把守。③ `AccessGuard` 与 `RoleContextFilter`/`FieldPermissionAdvice` 只把「无 token 且凭证匹配」
+  视为内部调用，带 token 一律按端用户处理，匿名只留 PUBLIC 字段。④ 网关 `InternalHeaderStripFilter` 最先剥掉
+  客户端自带的同名头。⑤ 未配置密钥时所有 profile 一律不承认内部调用（fail-closed）；开发默认值只写在
+  compose 与 RUNBOOK，preflight 拒绝该默认值和不足 32 字符的值。
+- 原因：Render 免费层没有私网隔离，只能用正向凭证区分内部调用；入口统一拦截能覆盖所有端点（含没接
+  `AccessGuard` 的历史端点）；端点与字段两层保留作纵深防御，入口门被关掉时也不会退化为放行。
+- 放弃方案：只改 `AccessGuard`/字段权限 —— `MentalController` 等无校验端点仍可被匿名读写；Render 私有服务 ——
+  免费层不提供，需计费授权；Feign 改走网关 —— 网关要求用户 JWT，定时扫描等系统任务没有用户上下文；
+  按 profile 名决定未配置时是否信任无 token 请求 —— profile 名写错就回到漏洞状态；全局 Feign 拦截器 ——
+  会把凭证发给 ai-inference 等不需要它的目标。
+- 后果：部署后匿名直连下游返回 401。滚动部署期间若下游已升级而 agent/mcp 尚未升级，AI 取数会短暂 401
+  并走 fallback。残余风险：下游入口不查 Redis 会话，已登出但未过期的 token 仍可直连下游（≤24h）；单一共享
+  密钥，泄露需全服务轮换。原先 `MentalController` 缺少角色授权的问题现由 ADR-030 收口；其余残余风险仍有效。
+- 证据：`ServiceAuthFilterTest`(9)、`AccessGuardTest`(17)、`FieldPermissionAdviceWalkTest`(9)、`RoleContextFilterTest`(5)、
+  `InternalCallCredentialTest`(4)、`InternalCallFeignConfigTest`(2)、`InternalHeaderStripFilterTest`(4)、两个 Feign
+  挂载测试，以及 student/mental/data/teacher/user/agent 各 controller 的匿名拒绝 / 内部凭证放行用例；JDK 17 全后端
+  `mvn -B -ntp clean test` 11 模块 222 例通过，JaCoCo 定向门（新增 6 个类）通过；`scripts/test-preflight-prod.sh`
+  通过。线上复验待部署后执行，只探聚合端点（RUNBOOK §6.1）。
+
+
+## ADR-030：心理问卷端点授权与作答视图
+
+- 状态：已采纳（补全 ADR-008、ADR-029）
+- 日期/修复标识：2026-10-05 / MENTAL-AUTHZ-20261005
+- 背景：内部凭证入口门只能确认调用身份，无法阻止已登录学生读取预警名单、完成情况或增删改问卷。
+  学生侧复用完整问卷 DTO 会下发选项分值、计分规则和等级阈值，允许作答者按分挑选项；完成情况返回
+  Map 行，注解驱动的字段脱敏无法覆盖原始 score。本条补齐代码中既有 `MENTAL-AUTHZ-20260914` 的文档。
+- 选择：管理读取使用 `STAFF_VIEW`；写入问卷、题目及等级规则使用 `MENTAL_WRITE`（admin/psychologist）；
+  完成情况原始 score 只对 `EXTREME_VIEW`（admin/psychologist）保留，其余教职工返回 null。管理端仅
+  `/mental/analysis` 接受已验证内部凭证，其他端点只认可 JWT 角色。学生模板仅认可合法 JWT，使用
+  `getForRespondent` 去掉选项 score、scoringRules 和 levelRules，并拒绝未开始或状态为空的问卷；已结束
+  问卷保留去分值模板以支持本人结果回显。问卷页补齐缺失的 `canWrite` 计算，依据 Pinia 用户角色只显示
+  admin/psychologist 写入口；角色缺失时默认隐藏。403 提示不会注销有效会话。
+- 原因：计分规则影响心理等级、预警与后续 AI 输入，修改权限需要与心理专业角色绑定。控制器拒绝在领域
+  service 前完成，覆盖直接调用 API；作答响应裁剪与服务端按数据库原题计分保持分离，避免更改数据库结构。
+- 放弃方案：只隐藏按钮不能阻止直接 HTTP 调用；依赖统一字段注解无法处理 Map 行和嵌在选项 JSON 内的
+  分值；让所有教职工修改问卷会扩大对筛查规则的控制权；全部管理端接受共享内部凭证会扩大凭证泄露影响；
+  拒绝已结束问卷模板会破坏结果页回显；将学生模板也视为内部端点没有实际调用方支持，因而不放行内部凭证。
+- 后果：教师失去问卷修改权限但保留设计读取和完成情况查看；学生无法读取管理端；普通教职工完成情况
+  score 为 null，前端应展示空值。选项 JSON 非法时作答视图不下发选项，管理人员须修正题目；这里移除的是
+  已定义的 score 属性，新增计分属性须同步裁剪和测试。学生模板没有用户/问卷分配绑定，任何已登录用户
+  仍可取开放或已结束的去分值模板。当前不增加数据库迁移，不改变个人记录的本人/内部调用授权。
+- 证据：[MentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java)、
+  [StudentMentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java)、
+  [QuestionServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)、
+  [Roles](./backend/common/src/main/java/com/edu/common/security/Roles.java)；回归用例见
+  [MentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/MentalControllerTest.java)、
+  [StudentMentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/StudentMentalControllerTest.java)、
+  [QuestionServiceImplTest](./backend/mental-service/src/test/java/com/edu/mental/service/impl/QuestionServiceImplTest.java)。
+  2026-10-05 已核对代码与端点规则；全后端 249 例测试、JaCoCo 门和前端构建/lint 通过，真实 HTTP 请求与浏览器角色验收待验证，命令与判据见 RUNBOOK。
+
+## ADR-031：本地密钥文件不入库；已入库即轮换，不改写历史
+
+- 状态：已采纳（轮换待部署方执行）
+- 日期/修复标识：2026-09-14 / ENV-AUDIT-LEAK-20260914
+- 背景：`docker/.env.audit` 在 `122ab6d`（2026-08-26，U-2 preflight 实测当天）随一次无关的 e2e 修复被提交，
+  再经 #4（`51b8410`）squash 进入公开仓库的 main。文件第 22-35 行是按 `.env.example` 生成命令产出的 14 个
+  强随机值（MySQL/Nacos/MinIO/Redis/JWT/MCP/Langfuse/Grafana）。`.gitignore` 只忽略 `docker/.env`，不覆盖
+  改名副本；仓库内没有任何脚本、CI 或 compose 引用该文件。
+- 选择：`git rm --cached` 移出版本库（本地副本保留）；`.gitignore` 用 `docker/.env.*` 忽略所有变体，仅放行
+  `.env.example`；`preflight-prod.sh` 拒绝被 git 跟踪的 `ENV_FILE` 以及仓库内任何 `docker/.env.*`（模板除外），
+  CI 的 preflight 回归兜底；14 个泄露值不论能否确认在用，一律按 RUNBOOK 清单轮换。不改写 git 历史。
+- 原因：公开仓库的历史已推送到多个远端分支，可能已被克隆或缓存，改写历史撤不回已公开的内容，只有轮换
+  能让泄露值失效。preflight 检查补上 `.gitignore` 管不到的场景：旧分支（`origin/dev` 等）的合并基点早于
+  该文件，合并时会把已跟踪的文件重新带回。
+- 放弃方案：`git filter-repo`/BFG + force push——撤不回已公开数据，GitHub 仍可按 SHA/PR ref 访问旧提交，
+  还会打断所有协作分支，且未获授权；只补 `.gitignore`——对已跟踪文件和合并带回无效；只轮换"确认在用"
+  的值——本机没有 `docker/.env`、Docker 未运行、生产主机不可见，无法证明未被使用。
+- 后果：轮换 `JWT_SECRET` 使全部已签发 token 失效（全员重新登录）；MySQL/Postgres/Grafana 的密码只在数据卷
+  首次初始化时读取，已有实例须先在服务内改密再改 `.env`；轮换 `LANGFUSE_SALT` 会使既有 Langfuse API key
+  失效。`origin/dev`、`docs/progress-audit-20260826`、`feat/ui-glass-refactor` 的分支末端仍含该文件，合并前须先
+  在分支上删除，否则 CI preflight 回归变红。Render 的 `JWT_SECRET`/`EDUCARE_MCP_TOKEN` 由 `generateValue`
+  生成，Aiven 凭据独立，按设计不来自该文件；若曾在 Dashboard 手工覆盖成该文件中的值，同样须轮换。
+- 证据：`git log --all -- docker/.env.audit` 只有 `122ab6d` 与 `51b8410` 两个提交；`git grep env.audit` 无引用；
+  值的长度与字符集和 `openssl rand -hex 24` / `-base64 48` / `-base64 32` 一致（全程未输出值）；
+  `test-preflight-prod.sh` 新增"被跟踪 env 文件"反例。轮换本身待验证。
+
 ## 新决策模板
 
 ```markdown
@@ -398,6 +491,9 @@
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 新增 ADR-025，Render GPT-OSS 改用 JSON Object Mode 与低推理预算 | 保留 ReAct 主路径；本地 OpenAI 兼容端点维持 TEXT 默认值 |
 | 2026-09-15 / RENDER-CD-20260915 | 新增 ADR-026，main 即生产、CI 通过后按服务增量部署 | 部署以被部署提交的 CI 为准；buildFilter 与 CI push 路径须同步维护 |
 | 2026-09-26 / JDK21-UTF8MB4-20260926 | 新增 ADR-028，后端统一 JDK 21，种子脚本显式 utf8mb4 | Enforcer 改为 `[21,22)`；ADR-001 的 Java 版本随之更新 |
+| 2026-09-14 / INTERNAL-AUTH-20260914 | 新增 ADR-029，下游服务入口要求 JWT 或内部凭证，`AccessGuard`/字段权限不再把无 token 当内网 | 补全 ADR-008：下游公网可达时仍 fail-closed；`EDUCARE_INTERNAL_TOKEN` 成为生产硬门 |
+| 2026-10-05 / MENTAL-AUTHZ-20261005 | 新增 ADR-030：心理问卷端点授权与作答视图 | 补全 ADR-029 的管理角色缺口；仅心理专业角色可改计分规则，学生模板移除计分信息 |
+| 2026-09-14 / ENV-AUDIT-LEAK-20260914 | 新增 ADR-031，误入库的 `docker/.env.audit` 移出版本库并要求全量轮换（待部署方执行） | 不改写历史；`docker/.env.*` 统一忽略，preflight 拒绝被跟踪的 env 文件 |
 
 ## ADR-027：生产诊断与待实施修复（PROD-AUDIT-20260916，2026-09-16）
 
@@ -453,3 +549,37 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 证据：JDK 21 下 `mvn -B -ntp clean test` 11 模块 198 例全绿、JaCoCo 门达标、`scripts/test-preflight-prod.sh`
   通过，JDK 17 validate 按提示失败；全新 `mysql:8.0` 容器以新脚本初始化后 `student_info.name` 为正确 UTF-8
   （`E8B5B5…`）。`eclipse-temurin:21-*-jammy` 镜像可拉取；完整镜像构建与 Render 部署待验证。
+
+## SAFE-PUSH-20261005：提交前排除本地凭证文件
+
+- 日期：2026-10-05。
+- 背景：发布本地待提交改动时，发现旧基线仍跟踪 `docker/.env.audit`；它包含非模板凭证，不适合进入新的分支快照。
+- 选择：保留本地文件，取消 Git 跟踪；以 `.gitignore` 的 `docker/.env.*` 规则阻止副本再次入库，并保留模板例外。源码中的明确测试夹具和开发默认账户可保留。
+- 原因：仅不暂存一个已跟踪文件，不能把它从新分支快照排除；必须提交取消跟踪。
+- 放弃方案：删除本地文件会破坏本地配置；只忽略已跟踪文件不能生效；本次不改写已发布 Git 历史。
+- 代价与约束：这些值仍存在于此前的历史提交，曾实际使用的凭证需由对应部署环境轮换；本次不声称已完成轮换。
+- 本地开发脚本使用 JDK 21（`JAVA21=/path/to/jdk21` 可指定），与 main 的 Enforcer/CI/镜像一致；运行 PID 和日志仅写入忽略的 `.local-run/`，配置与停止边界见 MERGE-MAIN-20261005。
+
+## MERGE-MAIN-20261005：保留现行主线契约后整合四个分支（2026-10-05）
+
+- 背景：四个待合入分支基于不同日期的 main；内部鉴权、心理授权与凭证排除文档使用了重复 ADR 编号，
+  开发脚本仍要求 JDK 17、固定中间件密码，并按进程名停止服务。这与 main 的 JDK 21 与已有性能配置不一致。
+- 选择：保留 main 的 JDK 21、性能与发布链路，同时保留已提交的内部鉴权、心理权限与 env 排除修复；
+  内部鉴权、心理授权、env 管理分别使用 ADR-029/030/031，原 ADR-026/027/028 保持含义。
+  [common 自动配置清单](./backend/common/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports)
+  同时登记原有性能配置与服务入口鉴权。
+  [开发脚本](./scripts/local_dev.sh) 改为 JDK 21，并由 `docker compose config --format json` 提供容器和宿主
+  共用的凭证；进程停止须确认 `.local-run/` 中记录的 PID/身份归属，无法读取身份时不终止进程。
+- 原因：合并不能用旧分支覆盖已经验证的主线契约；同一开发栈必须共用配置，停止本项目不能影响其他项目。
+- 放弃方案：整份选择旧分支会丢失性能与 JDK 21 变更；只保留主线会丢失安全修复；跳过 Enforcer 会降低
+  版本一致性；固定密码与全局 `pkill` 无法保证配置和进程范围。
+- 代价与约束：本地脚本需 Docker Compose v2、Python、npm、JDK 21；读取 Compose 配置时不将凭证写入
+  仓库或输出。进程身份不可读取时需人工处理残留进程。已有数据库卷不因脚本切换自动改密。
+  合并后 JDK 21 全量测试已通过，真实起栈待验证；历史分支的 JDK 17 测试只作为原分支证据。
+  env 文件不恢复 Git 跟踪，历史值轮换继续按 ADR-031/B-2 执行；R-5/R-6 不因合并自动完成。
+- 验证：2026-10-05 合并代码在 JDK 21 下全后端 11 模块、54 套测试、267 例通过（0 失败/错误/跳过），
+  10 个代码模块 JaCoCo 门通过；前端构建、30/30 重试断言、体积门通过，lint 0 errors、1 条既有
+  vite.config.js 格式警告；combined preflight 回归通过。开发脚本 Bash 5/macOS Bash 3.2 语法和临时
+  stub 验证通过，覆盖非默认共享凭证与特殊字符、无凭证输出/临时配置残留、PID 归属/陈旧记录与无关进程安全。
+  npm 生产依赖 audit 0 vulnerabilities；Render/Compose/backend-CI YAML 解析与 JDK 21/POM/自动配置清单联合断言通过。
+  未执行真实全栈、GPU 或生产验收。

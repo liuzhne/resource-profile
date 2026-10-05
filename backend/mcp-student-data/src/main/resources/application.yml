@@ -6,6 +6,10 @@ server:
 educare:
   mcp:
     token: ${EDUCARE_MCP_TOKEN:}
+  # common 的服务入口鉴权门（ServiceAuthFilter）在本服务关闭：没有业务 controller，/mcp 由 McpTokenFilter 把守。
+  # 出站调 student/mental 附 X-Internal-Token（EDUCARE_INTERNAL_TOKEN，见 InternalCallFeignConfig）。
+  service-auth:
+    enabled: false
 
 spring:
   application:

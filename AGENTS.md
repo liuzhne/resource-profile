@@ -8,7 +8,7 @@ Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源
 
 ## EduCare 子系统路线图
 
-The AI subsystem (agent-service + ai-inference-service + Multi-Agent + RAG + 本地 LLM) is tracked in **`docs/educare/EXECUTION_PLAN.md`** — single source of truth for Phase G/H/I/J 与 Release Readiness 的可执行原子任务清单、§1 下一步指针、§6 变更记录、§8 已知阻塞。当前状态（2026-08-27）：Phase G/H/I/J 与 R-1~R-4 已完结；保留交付面为 AgentLoop ReAct 默认主路径、Java student-data MCP :8094、Python knowledge-rag MCP :8095、dense RAG、干预反馈闭环及安全/运维基线。memory-server、Hybrid Retrieval、ModelRouter 与百分比灰度已经按瘦身决策删除，不得按历史勾选项误判为当前能力。下一步为 R-5 真模型/可观测验收和 R-6 上线总验收。设计源见 `docs/educare/IMPROVEMENT_2026_MAY.md`。**Read EXECUTION_PLAN.md first** instead of grepping git log or prior session jsonls. After finishing an execution-plan atomic task, follow §0 Update Protocol: 勾选 + 追加 `完成于 YYYY-MM-DD：备注` 行 + 更新 §1 指针 + 顶部"最近更新"。
+The AI subsystem (agent-service + ai-inference-service + Multi-Agent + RAG + 本地 LLM) is tracked in **`docs/educare/EXECUTION_PLAN.md`** — single source of truth for Phase G/H/I/J 与 Release Readiness 的可执行原子任务清单、§1 下一步指针、§6 变更记录、§8 已知阻塞。当前状态（2026-10-05）：Phase G/H/I/J 与 R-1~R-4 已完结；保留交付面为 AgentLoop ReAct 默认主路径、Java student-data MCP :8094、Python knowledge-rag MCP :8095、dense RAG、干预反馈闭环及安全/运维基线。memory-server、Hybrid Retrieval、ModelRouter 与百分比灰度已经按瘦身决策删除，不得按历史勾选项误判为当前能力。下一步为 R-5 真模型/可观测验收和 R-6 上线总验收；历史凭证轮换仍为 §8 B-2，分支合并不等于上线验收。设计源见 `docs/educare/IMPROVEMENT_2026_MAY.md`。**Read EXECUTION_PLAN.md first** instead of grepping git log or prior session jsonls. After finishing an execution-plan atomic task, follow §0 Update Protocol: 勾选 + 追加 `完成于 YYYY-MM-DD：备注` 行 + 更新 §1 指针 + 顶部"最近更新"。
 
 ## 修复方案文档同步规则（强制）
 
@@ -34,7 +34,7 @@ The Java side handles business logic, persistence, and orchestration. AI calls g
 ## Backend — Spring Boot Microservices
 
 **Build Tool:** Maven 3+
-**Java Version:** 17
+**Java Version:** 21 (Maven Enforcer `[21,22)`, CI and images use JDK 21)
 **Spring Boot:** 3.2.5
 **Spring Cloud:** 2023.0.1
 **Spring Cloud Alibaba:** 2023.0.1.0
@@ -117,8 +117,10 @@ Global CORS is configured on the gateway (`allowedOrigins: "*"`).
 - On login: tokens generated, access token stored in Redis as `token:{userId}` with 24h TTL
 - Frontend sends `Authorization: Bearer {token}` header
 - Auth endpoints (`/auth/**`) are public; all other requests require authentication, **enforced at the gateway by `JwtAuthGlobalFilter`** (validates JWT signature + expiry, then checks the Redis session whitelist `token:{userId}` so logout/password-change revokes old tokens → 401 on failure; accepts `Authorization: Bearer` or `?token=` for SSE; `**/_internal/**` paths → 403; toggles `educare.gateway.auth.enabled` / `educare.gateway.auth.check-session`, both default on). `auth-service`'s own Spring Security only protects auth-service itself.
-- **Horizontal authorization (IDOR)** is enforced per-endpoint via `common`'s `AccessGuard.allowSelfRoleOrInternal` (self or privileged staff role; tokenless internal Feign calls trusted) across student/mental/agent/data controllers.
-- **Field-level permission** (`@SensitiveField` + `FieldPermissionAdvice`, `educare.field-permission.enabled`) **defaults on**: filters response fields by role for token-bearing end-user requests; tokenless internal Feign calls pass through unmasked (so the AI portrait chain keeps full data). See `docs/educare/FIELD_PERMISSION.md`.
+- **The gateway is not the only entry point**: on Render (`render.yaml`) every downstream service is a `type: web` service with its own public URL. `common`'s `ServiceAuthFilter` (`educare.service-auth.enabled`, default on; explicitly off in auth-service / agent-service / mcp-student-data, which have their own gates) requires each request to carry either a valid JWT or a valid internal credential `X-Internal-Token` (shared secret `EDUCARE_INTERNAL_TOKEN`, constant-time compare), else 401. The credential is attached only by `InternalCallFeignConfig` on the agent-service student/mental/data and mcp-student-data student/mental Feign clients; the gateway's `InternalHeaderStripFilter` strips any client-supplied copy. Unset secret = no request is ever treated as internal (fail-closed, all profiles).
+- **Horizontal authorization (IDOR)** is enforced per-endpoint via `common`'s `AccessGuard.allowSelfRoleOrInternal` (with a token: self or privileged staff role; without a token: allowed only with a valid `X-Internal-Token`, otherwise denied) across student/mental/agent/data controllers.
+- **Field-level permission** (`@SensitiveField` + `FieldPermissionAdvice`, `educare.field-permission.enabled`) **defaults on**: filters response fields by role; only verified internal calls (no JWT + valid `X-Internal-Token`) pass through unmasked so the AI portrait chain keeps full data; anonymous requests get PUBLIC fields only. See `docs/educare/FIELD_PERMISSION.md` §11.
+- **Mental management authorization**: reads require `STAFF_VIEW`; questionnaire/question/rule writes require `MENTAL_WRITE` (admin/psychologist); raw completion scores require `EXTREME_VIEW`. Only `/mental/analysis` accepts verified internal calls on the management controller. Respondent templates require JWT and omit scoring data; see `FIELD_PERMISSION.md` §12 and ADR-030.
 
 ## agent-service — AI Orchestration
 

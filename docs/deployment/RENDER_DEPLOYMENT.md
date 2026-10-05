@@ -61,8 +61,9 @@ graph TD
     Agent -. 当前关闭 .-> CloudLLM
 ```
 
-- **公网入口**：仅前端静态站点（`edu-portrait-frontend`）与后端网关（`edu-portrait-gateway`）对公网开放。
-- **业务微服务**：Auth/User/Teacher/Student/Mental/Data/Agent/MCP 均作为 **Private Services (`type: pserv`)**，仅内网可见，杜绝外网未授权直连。
+- **目标拓扑（尚未落地）**：仅前端静态站点与网关对公网开放，业务微服务作为 Private Services（`type: pserv`）仅内网可见。Render 免费层不提供 Private Services，落地需计费授权。
+- **当前 Blueprint 实况**：`render.yaml` 中 auth/user/teacher/student/mental/data/agent/mcp-student/ai-inference **全部是 `type: web`**，各有公网 `https://edu-portrait-<name>.onrender.com`，网关不是唯一入口；免费实例也收不到私网流量，服务间 Feign 走公网 HTTPS。
+- **补偿控制（INTERNAL-AUTH-20260914）**：user/teacher/student/mental/data 的服务入口 `ServiceAuthFilter` 要求合法 JWT 或 `X-Internal-Token`（`EDUCARE_INTERNAL_TOKEN`，env group `generateValue`），匿名直连一律 401；agent-service 由 `AgentSelfAuthFilter` 要求 JWT，mcp-student 的 `/mcp` 由 `X-MCP-Token` 把守，auth-service 只公开 `/auth/**`。下游不查 Redis 会话，已登出但未过期的 JWT 仍可直连下游，见 [`FIELD_PERMISSION.md`](../educare/FIELD_PERMISSION.md) §11。
 - **持久化数据**：MySQL 使用 Aiven Free MySQL；会话使用 Render Key Value。免费 Key Value 重启会
   清空会话，用户需重新登录。
 
@@ -157,6 +158,7 @@ graph TD
 | `SPRING_PROFILES_ACTIVE` | Spring Boot 运行环境 | `prod` |
 | `JWT_SECRET` | 用户会话签名密钥 | Render 自动生成 256 位随机字符串 |
 | `EDUCARE_MCP_TOKEN` | MCP 节点内部鉴权 Token | Render 自动生成 256 位随机字符串 |
+| `EDUCARE_INTERNAL_TOKEN` | 服务间内部调用凭证（`X-Internal-Token`），下游据此区分内部 Feign 与匿名直连 | Render 自动生成；同一 env group 内所有服务同值。缺失时下游拒绝一切无 JWT 请求 |
 | `MYSQL_HOST` | MySQL 数据库主机 | Private Service 内部主机或外部云主机；不能用普通 Web Service 公网域名 |
 | `MYSQL_PORT` | MySQL 端口 | Aiven Overview 显示的端口（通常不是 `3306`） |
 | `MYSQL_DATABASE` | 数据库名 | `edu_portrait` |

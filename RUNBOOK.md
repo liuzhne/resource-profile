@@ -1,13 +1,13 @@
 # Resource-Profile 运行手册
 
-> 最近更新：2026-09-16
+> 最近更新：2026-10-05
 > 适用范围：当前仓库的开发、测试、排错和发布准备。真实 AI/生产签字状态以 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) R-5/R-6 为准。
 
 ## 1. 前置条件
 
 | 工具 | 要求 | 说明 |
 |---|---|---|
-| JDK | **17，且只能是 17.x** | Maven Enforcer 要求 `[17,18)` |
+| JDK | **21，且只能是 21.x** | Maven Enforcer 要求 `[21,22)`（ADR-028） |
 | Maven | 3.x | 后端多模块构建 |
 | Node.js | 22（CI 基线） | 前端 Vite 8 构建 |
 | npm | 与 Node 22 配套 | 必须优先使用 `npm ci` |
@@ -119,10 +119,11 @@ mvn -B -ntp install -DskipTests
 
 然后在独立终端按需运行。普通业务链至少启动 gateway、auth 及目标领域服务；Agent 全链还要启动 student、mental、data、mcp-student-data、agent-service。
 
-每个 Java 终端先设置同一个开发 JWT 密钥；缺失或少于 32 字节时 `JwtUtil` 会让服务 fail-fast：
+每个 Java 终端先设置同一个开发 JWT 密钥与内部调用凭证。JWT 密钥缺失或少于 32 字节时 `JwtUtil` 会让服务 fail-fast；内部调用凭证缺失时服务照常启动，但 student/mental/data 等会以 401 拒绝 agent-service / mcp-student-data 的 Feign 取数（不带 JWT 的请求一律不当内网，INTERNAL-AUTH-20260914）。两个值都必须与 docker-compose 中 agent-service / mcp-student-data 的一致：
 
 ```bash
 export JWT_SECRET=edu-portrait-dev-jwt-secret-change-in-prod-0123456789
+export EDUCARE_INTERNAL_TOKEN=edu-portrait-dev-internal-token-change-in-prod-0123456789
 ```
 
 ```bash
@@ -229,6 +230,14 @@ bash scripts/gateway_verify.sh
 
 字段权限和 IDOR 另按 [`docs/educare/FIELD_PERMISSION_VERIFY.md`](./docs/educare/FIELD_PERMISSION_VERIFY.md) 用多角色账号验证。
 
+下游服务公网可达的部署（如 Render），还要验证「直连下游必须带凭证」（INTERNAL-AUTH-20260914）。只探聚合端点，不要拿个人数据端点做探测：
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://edu-portrait-data.onrender.com/data/dashboard/statistics
+```
+
+通过判据：返回 `401`（修复前为 `200`）；同一路径经网关带教职工 token 仍为 `200`；触发一次 AgentLoop 任务后，student/mental/data 日志无 401，任务没有因取数失败进入 `FAILED`。
+
 ### 6.2 MCP 工具契约
 
 ```bash
@@ -285,6 +294,7 @@ MILVUS_HOST=localhost EMBEDDING_BASE_URL=http://localhost:8092/v1 python -m scri
 | gateway 返回 503/404 service unavailable | Nacos readiness 和服务列表 | 确认目标服务已启动并注册；基础 compose 不含六个普通业务服务 |
 | agent-service 启动失败 | :8094/:8095 health、MCP initialize 日志 | 先启动两个 MCP；核对 URL、endpoint `/mcp` 和 token |
 | MCP 返回 401 | 三端 `EDUCARE_MCP_TOKEN` | 使用相同非空值；生产至少 32 字符 |
+| AI 取数失败，Feign 调 student/mental/data 报 401 | 各服务 `EDUCARE_INTERNAL_TOKEN`；启动日志是否有「EDUCARE_INTERNAL_TOKEN 未配置」WARN | agent-service、mcp-student-data 与 student/mental/data 使用同一非空值，生产至少 32 字符；不要为排障关掉 `educare.service-auth.enabled` |
 | Agent 任务 `FAILED` | agent 日志、`agent_task.status`、LLM 原始输出 | 先区分 LLM 连接、JSON parse、ToolGuard、工具调用和 DB CAS；不要直接改成 COMPLETED |
 | RAG 返回空 chunks | :8092、Milvus collection、embedding dim、灌库记录 | 确认维度 1024、集合存在、真语料已 upsert；reranker 可临时关闭定位 |
 | `/api/v1/rag/upsert` 返回 404 | FastAPI OpenAPI、`app/main.py` router 注册 | 当前主 app 未挂载 `rag_upsert.router`，不能当作运行能力 |
@@ -320,6 +330,8 @@ cp docker/.env.example docker/.env
 # 编辑 docker/.env，替换全部 change-me；不要提交该文件
 bash scripts/preflight-prod.sh
 ```
+
+演练或审计用的临时 env 放在仓库外（如 `mktemp` 生成的路径），用 `ENV_FILE=/path bash scripts/preflight-prod.sh` 体检，不要在仓库里另存副本。`docker/.env.*`（模板除外）已被忽略；preflight 会拒绝被 git 跟踪的 env 文件，一旦入库，其中的值按泄露处理并全部轮换（见 `ENV-AUDIT-LEAK-20260914`）。
 
 把 `fullchain.pem` 和 `privkey.pem` 放入 `docker/certs/`。新库初始化后必须轮换 admin/teacher/student 默认密码。
 
@@ -667,6 +679,99 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   依赖、14 类典型改动的重建/CI 预期）全部通过。`render blueprints validate` 因 CLI 未登录未执行；Blueprint
   同步与 main 上首次 CI 门控部署待合入后验证。
 
+### MENTAL-AUTHZ-20261005：心理问卷端点授权与作答视图
+
+- 适用代码：[MentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java)、
+  [StudentMentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java)、
+  [QuestionServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)、
+  [问卷管理页](./frontend/src/views/mental/questionnaire.vue)及 [Axios 响应处理](./frontend/src/utils/request.js)。
+- 启动前提：JDK 21、项目依赖、MySQL 与网关/mental/auth 服务可用；JWT、Redis 会话与内部凭证配置按
+  §4.4/§6.1 一致。使用本地合成学生及测试问卷，准备 student、teacher、admin/psychologist 角色账号，
+  同时有状态 0（未开始）、1（进行中）、2（已结束）问卷。凭据保存在环境/秘密存储，不输出到日志。
+- 复现：在修复前的隔离环境，学生合法 JWT 请求 `/mental/overview` 或问卷管理读写可返回成功；
+  `/mental/student/questionnaires/{id}` 可包含选项 score、scoringRules、levelRules。教师完成情况响应
+  可包含量表原始 score。只用合成数据复现，禁止在真实学生记录上演示未经授权读写。
+- 后端自动验证（从仓库根目录执行）：
+
+  ```bash
+  mvn -B -ntp -f backend/pom.xml -pl mental-service -am clean test
+  ```
+
+  [MentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/MentalControllerTest.java)
+  验证学生/匿名拒绝、教师可读但不可写、admin/psychologist 可写、内部凭证仅放行 analysis、学生 JWT
+  附内部头仍不提权及完成情况 score 分级；[StudentMentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/StudentMentalControllerTest.java)
+  验证本人授权与模板 JWT 要求；[QuestionServiceImplTest](./backend/mental-service/src/test/java/com/edu/mental/service/impl/QuestionServiceImplTest.java)
+  验证计分信息裁剪、问卷状态、非法选项 JSON 和完整设计视图保留。
+- 前端自动验证（从仓库根目录执行）：
+
+  ```bash
+  npm --prefix frontend run lint:check
+  npm --prefix frontend run build
+  ```
+
+- 运行验证：student 请求管理概览、问卷列表、完整设计视图和写操作均拒绝；teacher 可以读取管理端，写
+  请求拒绝且完成情况 score=null；admin/psychologist 可在合成问卷上完成增删改并保留 score。内部调用不带
+  JWT 时只能通过管理端 analysis；带学生 JWT 同时附内部头仍拒绝。学生模板请求必须有合法 JWT，问卷状态
+  0/null 返回拒绝，状态 1/2 不含选项 score 或 scoringRules，问卷 levelRules=null、DTO levelRules=[]。
+  非数组或非法选项 JSON 的 options=null。提交合成答案后核对服务端仍按数据库原始规则计分，结果页可回显。
+  浏览器中 teacher 的新建/编辑/删除入口隐藏，admin/psychologist 的入口可用；用户角色未加载时默认隐藏。
+  控制台不再出现未定义 `canWrite` 的 Vue 警告；403 显示权限提示且保持登录态。
+- 通过判据：后端测试和前端命令成功；拒绝请求不触达领域写入；上述角色矩阵和响应裁剪一致。控制器
+  返回 `Result.error(403, ...)` 是响应 JSON 的业务码，HTTP 可能仍为 200；入口缺失/非法凭证则由
+  `ServiceAuthFilter` 返回 HTTP 401，验证时同时查看 HTTP 状态与 JSON code。
+- 排错：先区分 401 身份/会话错误和 403 角色拒绝，再核对 JWT 的 roles 是否使用项目角色码；合法内部凭证
+  在管理端非 analysis 路径被拒是预期。管理员按钮不显示时核对问卷页的角色计算与用户信息加载；模板
+  没有选项时先在有权管理视图检查原始 options 是否数组 JSON；不要把剥掉分值的响应写回数据库。
+- 回滚：此修复不涉及 schema。可恢复上一应用版本，但会重新放开已关闭的越权与计分信息泄漏；如必须
+  紧急降级，先在网关/反向代理限制心理管理路由仅受控教职工可达，并暂停学生作答功能，再回退应用。
+  回滚后保留 INTERNAL-AUTH-20260914 的入口凭证门，恢复修复版本后重新跑角色矩阵与测评计分验收。
+- 验证状态：2026-10-05 原 heuristic 分支在 JDK 17 下全后端 11 模块、249 例测试通过（0 失败/错误/跳过），JaCoCo 门通过；前端构建与只读 lint 通过（0 errors，既有格式提示）。真实 HTTP 请求及浏览器角色验收待验证。
+
+### ENV-AUDIT-LEAK-20260914：docker/.env.audit 真实密钥进入公开仓库
+
+- 复现：`git log --all --format='%h %ad %s' -- docker/.env.audit` 显示 `122ab6d`（2026-08-26）引入、
+  `51b8410`（#4）带入 main；`gh repo view --json visibility` 为 PUBLIC。检查时只看键名和长度、不看值：
+  `awk -F= '{print NR": "$1" len="length(substr($0,index($0,"=")+1))}' docker/.env.audit`。
+- 修复步骤：① `git rm --cached docker/.env.audit`（本地副本保留），`.gitignore` 增加 `docker/.env.*`（必须排在
+  `!docker/.env.example` 之前）；② `preflight-prod.sh` 拒绝被跟踪的 `ENV_FILE` 以及仓库内任何 `docker/.env.*`
+  （模板除外），由 CI 的 `test-preflight-prod.sh` 覆盖；③ 按下表轮换全部 14 个值——文件虽已移出，历史提交中
+  仍然可见。不改写历史（见 ADR-031）。
+- 轮换清单（适用于任何用 docker compose 或宿主进程加载过这些值的环境；新值只写进未跟踪的 `docker/.env`
+  或平台秘密存储，生成方法见 `.env.example` 头部，禁止复用旧值）：
+
+| 变量 | 在哪里轮换 | 轮换后需重启/重登 |
+|---|---|---|
+| `MYSQL_ROOT_PASSWORD` | 已有数据卷：先在 MySQL 内对 root 执行 `ALTER USER`，再改 `.env`（该变量只在空卷首次初始化时生效） | 业务服务不用 root（Nacos 走 Derby，相关项已注释）；同步 `backup-mysql.sh`/`restore-mysql.sh` 的运行环境 |
+| `MYSQL_PASSWORD`（edu） | 同上，对 `edu` 账号 `ALTER USER` 后改 `.env` | 所有连库服务：compose 内 agent-service、mcp-student-data，宿主/外部部署的 auth/user/teacher/student/mental/data |
+| `NACOS_PASSWORD` | 先在 Nacos 控制台改 nacos 账号密码，再改 `.env` 与各 Java 服务环境 | 全部 Java 服务重启。当前 compose `NACOS_AUTH_ENABLE=false`（prod 覆盖层未开启），只有开启鉴权的环境才实际校验 |
+| `NACOS_AUTH_TOKEN` | `.env`（Base64，解码后 ≥32 字节） | 重启 nacos；已签发的 Nacos access token 与控制台会话失效，Java 服务随后重启 |
+| `NACOS_AUTH_IDENTITY_VALUE` | `.env` 与所有 Java 服务环境（必须同值） | nacos 与全部 Java 服务在同一窗口重启 |
+| `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | `.env` | 重建 minio；compose 目前没有把 MinIO 凭据传给 milvus-standalone，非默认凭据下须先补齐 Milvus 接线再验证 `/healthz` |
+| `REDIS_PASSWORD` | `.env`（≥32 字符） | redis（requirepass）与全部消费者同时重启：gateway、agent-service、ai-inference-service、knowledge-rag-mcp，以及宿主部署的 auth/user/data；切换窗口内会话校验失败 |
+| `JWT_SECRET` | `.env` 与所有 Java 服务环境（必须同值，≥32 字符） | 所有加载 `JwtUtil` 的 Java 服务同时重启；全部 access/refresh token 失效，全员重新登录 |
+| `EDUCARE_MCP_TOKEN` | `.env`（≥32 字符，三端同值） | agent-service、mcp-student-data、knowledge-rag-mcp 同时重启；进行中的 Agent 任务需重新触发 |
+| `LANGFUSE_DB_PASSWORD` | 已有卷：先在 langfuse-postgres 内 `ALTER USER`，再改 `.env` | 重启 langfuse-server |
+| `LANGFUSE_NEXTAUTH_SECRET` | `.env` | 重启 langfuse-server；Langfuse 控制台会话失效需重登 |
+| `LANGFUSE_SALT` | `.env` | 重启 langfuse-server；SALT 参与 API key 哈希，既有 project key 失效，须在控制台重建 `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` 并更新 agent-service、ai-inference-service 后重启，否则 trace 静默丢失 |
+| `GRAFANA_ADMIN_PASSWORD` | Grafana UI 或 `grafana cli admin reset-admin-password` 改密，再改 `.env`（该变量只在首次初始化生效） | 仅 Grafana 管理员重登 |
+
+- Render：`JWT_SECRET`/`EDUCARE_MCP_TOKEN` 由 `generateValue` 生成，MySQL 用 Aiven 凭据，Redis 用 Key Value
+  `connectionString`，按设计都不来自该文件；只有曾在 Dashboard 手工填入该文件中的值时才需轮换。
+- 修复后验证：`git ls-files | grep -E '(^|/)\.env'` 只剩两个 `.env.example`；`git check-ignore -v docker/.env.audit`
+  命中 `docker/.env.*`，`git check-ignore docker/.env.example` 无输出；`bash scripts/test-preflight-prod.sh`。
+  轮换后在各环境执行 `bash scripts/preflight-prod.sh`、`scripts/gateway_verify.sh`，并真跑一条 Agent 任务。
+- 通过判据：回归输出 `preflight-prod regression: PASS`；轮换后 preflight 全部通过，旧 JWT 访问业务接口返回 401、
+  重新登录后 200，Agent 任务经 MCP 互验完成，启用 Langfuse 时能收到新 trace。
+- 排错：改完 `.env` 服务起不来——先确认 MySQL/Postgres/Grafana/Nacos 已在服务内改密（这些变量只在首次初始化
+  时生效）；全面 401 查各 Java 服务 `JWT_SECRET` 是否一致；MCP 401/403 查三端 `EDUCARE_MCP_TOKEN`；Redis
+  `NOAUTH` 说明有消费者未重启；Milvus 不健康查 MinIO 凭据接线。合并 `origin/dev`、`docs/progress-audit-20260826`、
+  `feat/ui-glass-refactor` 会把该文件带回（它们与 main 的合并基点早于该文件入库），CI preflight 回归会报"仓库
+  跟踪了本地 env 文件"——先在源分支执行 `git rm --cached docker/.env.audit`。
+- 回滚：代码侧可直接 revert，但不得恢复对该文件的跟踪；轮换不回滚到旧值，新值有问题时逐项修正配置。
+- 验证状态：2026-09-14 本地已验证：移出版本库、忽略规则、preflight 回归（含"被跟踪 env 文件"反例）、临时
+  索引模拟重新跟踪被拦截、`origin/dev` 试合并确认会带回该文件。轮换待部署方执行——本机无 `docker/.env`、
+  Docker 未运行、生产主机不可见，按"可能在用"处理。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -699,6 +804,8 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 增加 GPT-OSS JSON Object Mode、配额预算与复验步骤 | 线上 PARSE_ERROR 已复现；配置级测试和部署复验待完成 |
 | 2026-09-15 / RENDER-CD-20260915 | 增加 main 即生产的发布流程、CI 门控部署验证、排错与回滚步骤 | 官方 Schema 与路径覆盖自检通过；Blueprint 同步与首次门控部署待合入后验证 |
+| 2026-10-05 / MENTAL-AUTHZ-20261005 | 增加心理问卷端点授权与作答视图的复现、角色矩阵、回归命令及回滚约束 | 原 heuristic 分支后端 249 例、JaCoCo 门及前端构建/lint 通过；合并回归见 MERGE-MAIN-20261005，真实请求与浏览器验收待验证 |
+| 2026-09-14 / ENV-AUDIT-LEAK-20260914 | 增加 `docker/.env.audit` 泄露的处置步骤、14 项轮换清单与旧分支合并带回的排错 | 本地移出版本库、忽略规则、preflight 回归与合并试算均通过；轮换待部署方执行 |
 
 ## 生产诊断复现与复验：PROD-AUDIT-20260916（2026-09-16）
 
@@ -723,7 +830,7 @@ render deploys list srv-da9vk4e7bikc73f168o0 -o json
 
 ## PERF-500MS-20260916：部署与500ms验收（2026-09-16）
 
-前提：JDK17、现有 Render workspace/API凭证、演示账号只读授权。报告不得包含JWT、完整响应记录或原始 DEBUG 日志。使用 [bench-production-api.py](./scripts/bench-production-api.py) 顺序发送持久连接请求，外部完整响应耗时与 Server-Timing 分列，快速429/503不算通过。第一笔连接和休眠唤醒独立保留；热态统计取稳定样本并同时报告最大值，不能仅报告最佳值。
+前提：JDK21、现有 Render workspace/API凭证、演示账号只读授权。报告不得包含JWT、完整响应记录或原始 DEBUG 日志。使用 [bench-production-api.py](./scripts/bench-production-api.py) 顺序发送持久连接请求，外部完整响应耗时与 Server-Timing 分列，快速429/503不算通过。第一笔连接和休眠唤醒独立保留；热态统计取稳定样本并同时报告最大值，不能仅报告最佳值。
 
 ```bash
 cd backend
@@ -757,3 +864,73 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 2026-09-17 / PERF-500MS-20260916：分阶段日志证实首次登录还有Redis连接及JWT初始化成本，热密码校验为主要耗时。新增 auth AuthDependencyWarmupConfiguration，在已有预热开关开启时于readiness前PING Redis并初始化内存签名；不写会话、无业务用户/凭证日志，Redis失败不能就绪。无架构影响，auth仍依赖原Redis白名单。放弃密码缓存/降低bcrypt及依赖故障时假健康；验收需验证启动、热登录阶段和401/403。新增预热成功只读与故障阻止就绪测试；生产行为待验证。回滚此auth提交移除额外启动预热，保留强验证与原配置。
 
 2026-09-17 / PERF-500MS-20260916 维护记录：相关代码已逐批经PR/main CI部署既有生产服务，SSE前端实际产物已核对，Auth依赖预热的阶段日志已确认生效；完整验收记录见 docs/production-tests/2026-09-16/ 的 FINAL_REPORT.md 与 JSON 证据。无新增架构边界或收费资源。500ms全接口目标未通过：热密码验证、跨区域传输、休眠唤醒仍超预算，真实写入/推理最终产物/下载尚未完整生产验收，不得将应用序列化前计时视作端到端结果。后续须明确验收网络区域、负载和可用常驻预算，不能通过降低密码成本、权限豁免或快速失败充当达标。回滚沿用前述提交及原配置plan；这条最终验收记录随上述目录一并提交，证据已脱敏，不含凭证、令牌或完整运行时元数据。
+
+
+## SAFE-PUSH-20261005：提交前排除与核对（2026-10-05）
+
+1. 复现：`git ls-files -- docker/.env.audit` 可识别旧基线是否仍跟踪本地凭证文件。只检查路径，不输出文件内容。
+2. 排除：`git rm --cached -- docker/.env.audit` 保留本地副本并暂存取消跟踪；`.gitignore` 增加 `docker/.env.*`，模板放行规则保留在其后。
+3. 核对：`git ls-files -- 'docker/.env*'` 仅应包含 `docker/.env.example`；`git check-ignore -- docker/.env.audit` 应命中；`test -f docker/.env.audit` 应成功；`git diff --cached --check` 应无输出。
+4. 回滚：可回退代码提交，但不得恢复凭证文件的 Git 跟踪；本地副本持续保留。历史凭证的轮换需部署环境另行验证。
+
+验证状态：本次已核对凭证文件取消跟踪、模板保留、忽略命中及本地副本仍在；最终暂存时还须执行 staged diff 检查。
+
+本次 `bash scripts/test-preflight-prod.sh` 已通过；原 heuristic 分支在 JDK 17 下全后端 11 模块、249 例测试通过，JaCoCo 门通过；最新前端构建通过，lint 为 0 errors（存在 Prettier 提示）。浏览器角色矩阵和实际部署验收仍待验证。 实际平台凭证轮换仍待部署方验证。
+
+开发脚本依赖 Docker Compose v2、npm、Python 和 JDK 21；可通过 `JAVA21=/path/to/jdk21` 指定。脚本从 Compose 有效配置读取共享凭证给宿主服务，运行文件写入 `.local-run/`。合并后的完整起停与真实冒烟待验证，验证命令与进程归属检查见 MERGE-MAIN-20261005。
+
+## MERGE-MAIN-20261005：整合分支的验证与本地开发（2026-10-05）
+
+- 复现：旧 `scripts/local_dev.sh` 使用 JDK 17 与固定 MySQL/Redis 参数，整合到 JDK 21 主线会触发 Enforcer
+  或内部取数 401；按名称停止 Vite/模型进程会超出当前项目范围。
+- 当前启动前提：JDK 21、Maven、Node/npm、Python、Docker Compose v2 及 Docker daemon。
+  `JAVA21` 优先于有效的 JDK 21 `JAVA_HOME`；未指定且当前 JAVA_HOME 不匹配时查找本机 JDK 21。
+  显式指定不符合 21.x 的 JAVA21 拒绝；status/down 无须配置 JDK。
+  Compose 采用标准环境变量与 `docker/.env` 优先级；脚本经 `docker compose config --format json` 读取
+  MySQL、Redis、Nacos、JWT、`EDUCARE_INTERNAL_TOKEN`、`EDUCARE_MCP_TOKEN` 并传给宿主 Java 服务。
+  凭证文件保持未跟踪，已有卷的真实密码须与配置一致。不要将 Compose JSON 或环境值输出到报告。
+- 合并后自动验证（从仓库根目录执行）：
+
+  ```bash
+  java -version
+  mvn -B -ntp -f backend/pom.xml clean test
+  bash -n scripts/local_dev.sh
+  /bin/bash -n scripts/local_dev.sh
+  bash scripts/test-preflight-prod.sh
+  npm --prefix frontend run lint:check
+  npm --prefix frontend run build
+  npm --prefix frontend run test:retry
+  npm --prefix frontend run size:check
+  ```
+
+- 本地起停与真实冒烟（待验证）：
+
+  ```bash
+  JAVA21=/path/to/jdk21 bash scripts/local_dev.sh up --core --build
+  bash scripts/local_dev.sh status
+  bash scripts/local_dev.sh smoke
+  bash scripts/local_dev.sh down
+  ```
+
+  完整 AI 链用 `up --build`，先确认本地 LLM、embedding 与双 MCP 前提。停止操作只处理 `.local-run/` 中
+  记录且启动时间/命令路径仍匹配的进程，身份无法确认时跳过；`down --all` 还停止本项目 Compose
+  容器并保留数据卷。不要为清理残留进程恢复按全局名称匹配的终止操作。
+  已配置 MCP token 时，现有 `mcp_smoke_test.sh` 不附鉴权头，helper 会提示用真实 Agent 工具调用验收；
+  该提示不等于 MCP 已通过。
+- 通过判据：JDK 显示 21；全后端测试与 JaCoCo 门通过；脚本语法、preflight 回归、前端 lint/build 通过；
+  实际服务健康、匿名业务请求 HTTP 401、登录后业务读取成功，内部取数不因共享凭证不一致失败。
+  起停验收须证明无关项目进程仍运行；真实 MCP/AgentLoop 仍按 §6 与 R-5/R-6 验收。
+- 排错：JDK validate 失败先核对 `JAVA21`/`JAVA_HOME`；服务 401 核对 Compose 和宿主使用的内部凭证是否一致；
+  MySQL/Redis 拒绝连接时先检查已有卷的密码，脚本不自动改密；进程归属无法确认时检查本项目 PID 记录，
+  保留无关进程。心理接口同时检查 HTTP 状态和 JSON 业务码，字段矩阵见 FIELD_PERMISSION §12。
+- 回滚：停止本项目开发进程，回退相关应用提交；不恢复凭证文件跟踪、不回滚到已泄露值、不关闭 JWT/
+  内部凭证/心理角色门。生产回滚仍采用 §9 与各修复条目的已记录版本和配置。
+- 验证状态：2026-10-05 合并代码 JDK 21 全后端 11 模块、54 套测试、267 例通过（0 失败/错误/跳过），
+  10 个代码模块 JaCoCo 门通过；combined preflight 回归通过；前端构建、重试断言 30/30、体积门通过，
+  lint 0 errors、1 条既有 vite.config.js 格式警告。脚本 Bash 5 与 macOS Bash 3.2 语法/临时 stub 回归通过，
+  覆盖 JDK 21 选择/拒绝 17、非默认 Compose 共享凭证与特殊字符、MySQL/Redis 鉴权探针、无凭证输出、
+  无临时配置残留、只停止所属 PID、无关 Vite/mock 进程保留、陈旧 PID 身份保护及无 JDK 的 status。
+  npm 生产依赖 audit 0 vulnerabilities；Render/Compose/backend-CI YAML 解析通过，POM 的 JDK 21 与
+  自动配置清单完整性/无重复断言通过。忽略的本地 docker/.env.audit 副本已恢复，不参与 Git 跟踪。
+  真实 Docker 全栈、GPU、HTTP/浏览器角色及生产验收未执行；原 heuristic 分支的 JDK 17 后端 249 例与
+  前端验证保留为历史证据，平台凭证轮换仍待部署方执行。

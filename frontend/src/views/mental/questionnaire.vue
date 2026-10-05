@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span>问卷管理</span>
-          <el-button type="primary" @click="handleAdd"><Plus /> 新建问卷</el-button>
+          <el-button v-if="canWrite" type="primary" @click="handleAdd"><Plus /> 新建问卷</el-button>
         </div>
       </template>
 
@@ -27,10 +27,14 @@
         <el-table-column label="操作" width="380" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="handleView(row)">查看</el-button>
-            <el-button link type="primary" @click="handleDesign(row)">设计题目</el-button>
+            <el-button link type="primary" @click="handleDesign(row)">{{
+              canWrite ? '设计题目' : '查看题目'
+            }}</el-button>
             <el-button link type="primary" @click="handleResult(row)">完成情况</el-button>
-            <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
-            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canWrite" link type="primary" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-if="canWrite" link type="danger" @click="handleDelete(row)"
+              >删除</el-button
+            >
           </template>
         </el-table-column>
       </el-table>
@@ -102,8 +106,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useUserStore } from '@/store/modules/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getQuestionnaireList,
@@ -114,6 +119,10 @@ import {
 } from '@/api/mental'
 
 const router = useRouter()
+const userStore = useUserStore()
+const canWrite = computed(() =>
+  userStore.userRoles.some((role: string) => ['admin', 'psychologist'].includes(role))
+)
 const handleDesign = (row: any) => router.push(`/mental/questionnaire/design/${row.id}`)
 const handleResult = (row: any) => router.push(`/mental/questionnaire/result/${row.id}`)
 

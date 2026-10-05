@@ -3,11 +3,16 @@ package com.edu.teacher.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
+import com.edu.common.security.InternalCallCredential;
 import com.edu.common.util.JwtUtil;
 import com.edu.teacher.entity.Teacher;
 import com.edu.teacher.service.TeacherService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Set;
 
@@ -21,6 +26,7 @@ import static org.mockito.Mockito.when;
 class TeacherControllerTest {
 
     private static final String AUTH = "Bearer tok";
+    private static final String INTERNAL_TOKEN = "internal-secret-at-least-32-chars-0001";
 
     private TeacherService teacherService;
     private JwtUtil jwtUtil;
@@ -30,12 +36,25 @@ class TeacherControllerTest {
     void setUp() {
         teacherService = mock(TeacherService.class);
         jwtUtil = mock(JwtUtil.class);
-        controller = new TeacherController(teacherService, new AccessGuard(jwtUtil));
+        controller = new TeacherController(teacherService,
+                new AccessGuard(jwtUtil, new InternalCallCredential(INTERNAL_TOKEN)));
         when(jwtUtil.getSubject("tok")).thenReturn("7");
+    }
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
     }
 
     private void asRole(String role) {
         when(jwtUtil.parseRoles("tok")).thenReturn(Set.of(role));
+    }
+
+    /** 模拟内部 Feign 调用：不带 token，只带合法 X-Internal-Token。 */
+    private static void asInternalCall() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(InternalCallCredential.HEADER, INTERNAL_TOKEN);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
     @Test
@@ -55,10 +74,18 @@ class TeacherControllerTest {
     }
 
     @Test
-    void get_internalAllowed() {
+    void get_internalCredentialAllowed() {
+        asInternalCall();
         when(teacherService.getById(3L)).thenReturn(new Teacher());
         assertThat(controller.getById(3L, null).getCode()).isEqualTo(200);
         verify(teacherService).getById(3L);
+    }
+
+    @Test
+    void get_anonymousDeniedWithoutServiceCall() {
+        // 既无 token 也无内部凭证（直连下游公网 URL）→ 403，不再当内网放行
+        assertThat(controller.getById(3L, null).getCode()).isEqualTo(403);
+        verify(teacherService, never()).getById(any());
     }
 
     @Test

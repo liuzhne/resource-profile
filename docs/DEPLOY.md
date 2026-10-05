@@ -86,7 +86,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml config | grep -A
     → Grafana http://localhost:3000（「EduCare 总览」看板已自动加载）、Prometheus http://localhost:9090（均仅 127.0.0.1）。
     监控 gateway/agent-service/mcp-student-data 的 HTTP 速率/错误率/P95 时延 + JVM 堆；告警规则见 `docker/monitoring/prometheus/alert-rules.yml`。
   - LLM trace：Langfuse 用 `--profile langfuse` 起，并在 `docker/.env` 配 `LANGFUSE_*`。
-- **内部服务凭据**：`EDUCARE_MCP_TOKEN` 与 `REDIS_PASSWORD` 均为生产硬门，必须设置至少 32 字符强值；agent-service 与两个 MCP server 通过前者互验，Redis 通过后者启用认证。
+- **内部服务凭据**：`EDUCARE_MCP_TOKEN`、`EDUCARE_INTERNAL_TOKEN` 与 `REDIS_PASSWORD` 均为生产硬门，必须设置至少 32 字符强值。agent-service 与两个 MCP server 通过 `EDUCARE_MCP_TOKEN` 互验；agent-service / mcp-student-data 调 student/mental/data 时附 `EDUCARE_INTERNAL_TOKEN`（`X-Internal-Token`），下游必须同值，否则内部调用 401 —— 六个业务服务不在 compose 内，以宿主进程或外部部署运行时同样要注入该变量；Redis 通过 `REDIS_PASSWORD` 启用认证。
 
 ## 六、备份与压测
 

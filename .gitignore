@@ -95,6 +95,9 @@ venv/
 .env.local
 .env.*.local
 docker/.env
+# docker/.env.* 一律视为本地密钥文件（如 preflight 演练生成的 .env.audit，见 RUNBOOK ENV-AUDIT-LEAK-20260914）。
+# 必须排在下方放行规则之前：gitignore 中后写的规则优先。
+docker/.env.*
 # 模板必须保留在版本库
 !.env.example
 !docker/.env.example
@@ -147,3 +150,6 @@ backend/agent-service/src/main/resources/fonts/*.otf
 知识库数据/
 # 本地比赛交付材料（计划书 docx / 架构图 / 生成脚本），不纳入版本库
 deliverables/
+
+# Local development process IDs, logs and resolved environment files
+.local-run/

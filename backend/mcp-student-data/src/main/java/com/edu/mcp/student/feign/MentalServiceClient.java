@@ -1,6 +1,7 @@
 package com.edu.mcp.student.feign;
 
 import com.edu.common.result.Result;
+import com.edu.common.security.InternalCallFeignConfig;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -12,8 +13,10 @@ import java.util.Map;
  * 调用 mental-service (port 8085)。
  * 注意：mental-service 的查询以 sys_user.userId 为参，而本服务 tool 入参是 student_info.id；
  * StudentDataTools 需要先 Feign 取 Student.userId 再调本接口。
+ * 直连下游不经网关，附 X-Internal-Token 作为内部调用凭证（{@link InternalCallFeignConfig}）。
  */
-@FeignClient(name = "mental-service", url = "${MENTAL_SERVICE_URL:}")
+@FeignClient(name = "mental-service", url = "${MENTAL_SERVICE_URL:}",
+        configuration = InternalCallFeignConfig.class)
 public interface MentalServiceClient {
 
     /** 学生的历次评估记录（按 userId 拉） */

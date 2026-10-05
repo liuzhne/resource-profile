@@ -54,6 +54,13 @@
             <artifactId>jjwt-jackson</artifactId>
         </dependency>
 
+        <!-- Feign（optional）：仅 InternalCallFeignConfig 使用；引用它的 agent-service / mcp-student-data 自带 OpenFeign -->
+        <dependency>
+            <groupId>io.github.openfeign</groupId>
+            <artifactId>feign-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Spring Boot Configuration Processor -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
