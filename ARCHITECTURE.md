@@ -305,3 +305,9 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：Spring AI默认ToolCall
 2026-09-17 / PERF-500MS-20260916：热登录仍超过预算；AuthServiceImpl 对成功且服务处理≥500ms的登录仅记录用户查询、密码校验、角色查询、JWT签发和Redis会话五阶段耗时，不记录身份、密码、令牌或SQL。无架构边界变化，不降低bcrypt成本、不缓存密码校验、不取消角色/会话检查；用于区分CPU校验和外部依赖成本，避免猜测原因。复测热登录并读取 Slow login phases 日志，若任一阶段仍超预算，则500ms未通过。此诊断实际生产结果待验证，回滚该提交移除计时日志。
 
 2026-09-17 / PERF-500MS-20260916：分阶段日志证实首次登录还有Redis连接及JWT初始化成本，热密码校验为主要耗时。新增 auth AuthDependencyWarmupConfiguration，在已有预热开关开启时于readiness前PING Redis并初始化内存签名；不写会话、无业务用户/凭证日志，Redis失败不能就绪。无架构影响，auth仍依赖原Redis白名单。放弃密码缓存/降低bcrypt及依赖故障时假健康；验收需验证启动、热登录阶段和401/403。新增预热成功只读与故障阻止就绪测试；生产行为待验证。回滚此auth提交移除额外启动预热，保留强验证与原配置。
+
+## 维护记录补充：SAFE-PUSH-20261005（2026-10-05）
+
+无架构影响；本次提交清理涉及版本控制与本地部署配置。含凭证的 `docker/.env.audit` 取消 Git 跟踪但保留本地文件，`.gitignore` 忽略 `docker/.env.*` 并继续放行 `docker/.env.example`。此处描述新提交快照的边界，不表示已清除历史提交中的值。
+
+[`scripts/local_dev.sh`](scripts/local_dev.sh) 提供本地 Docker 基础设施与宿主 Java/前端的起停、状态和冒烟命令；日志和 PID 写入忽略的 `.local-run/`，不改变生产部署或服务调用边界。
