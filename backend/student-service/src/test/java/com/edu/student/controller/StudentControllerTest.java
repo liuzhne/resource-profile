@@ -2,11 +2,16 @@ package com.edu.student.controller;
 
 import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
+import com.edu.common.security.InternalCallCredential;
 import com.edu.common.util.JwtUtil;
 import com.edu.student.entity.Student;
 import com.edu.student.service.StudentService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Set;
 
@@ -21,11 +26,12 @@ import static org.mockito.Mockito.when;
 
 /**
  * StudentController 越权(IDOR)单测：真实 AccessGuard + mock JwtUtil。
- * 读端点本人/教职工/内网可见；写/列端点限 admin/teacher；学生越权 403。
+ * 读端点本人/教职工/已验证内部调用可见；写/列端点限 admin/teacher；学生越权、匿名直连 403。
  */
 class StudentControllerTest {
 
     private static final String AUTH = "Bearer tok";
+    private static final String INTERNAL_TOKEN = "internal-secret-at-least-32-chars-0001";
 
     private StudentService studentService;
     private JwtUtil jwtUtil;
@@ -35,7 +41,20 @@ class StudentControllerTest {
     void setUp() {
         studentService = mock(StudentService.class);
         jwtUtil = mock(JwtUtil.class);
-        controller = new StudentController(studentService, new AccessGuard(jwtUtil));
+        controller = new StudentController(studentService,
+                new AccessGuard(jwtUtil, new InternalCallCredential(INTERNAL_TOKEN)));
+    }
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
+    }
+
+    /** 模拟 agent-service / mcp-student-data 的内部 Feign 调用：不带 token，只带合法 X-Internal-Token。 */
+    private static void asInternalCall() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(InternalCallCredential.HEADER, INTERNAL_TOKEN);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
     private Student studentOwnedBy(long userId) {
@@ -79,12 +98,24 @@ class StudentControllerTest {
     }
 
     @Test
-    void getById_internalNoToken_ok() {
+    void getById_internalCredential_ok() {
+        asInternalCall();
         when(studentService.getById(1L)).thenReturn(studentOwnedBy(7L));
 
         Result<Student> r = controller.getById(1L, null);
 
         assertThat(r.getCode()).isEqualTo(200);
+    }
+
+    @Test
+    void getById_anonymous_forbidden() {
+        // 既无 token 也无内部凭证（直连下游公网 URL）→ 403 且不回档案
+        when(studentService.getById(1L)).thenReturn(studentOwnedBy(7L));
+
+        Result<Student> r = controller.getById(1L, null);
+
+        assertThat(r.getCode()).isEqualTo(403);
+        assertThat(r.getData()).isNull();
     }
 
     @Test

@@ -1,13 +1,13 @@
 # Resource-Profile 运行手册
 
-> 最近更新：2026-09-16
+> 最近更新：2026-10-05
 > 适用范围：当前仓库的开发、测试、排错和发布准备。真实 AI/生产签字状态以 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) R-5/R-6 为准。
 
 ## 1. 前置条件
 
 | 工具 | 要求 | 说明 |
 |---|---|---|
-| JDK | **17，且只能是 17.x** | Maven Enforcer 要求 `[17,18)` |
+| JDK | **21，且只能是 21.x** | Maven Enforcer 要求 `[21,22)`（ADR-028） |
 | Maven | 3.x | 后端多模块构建 |
 | Node.js | 22（CI 基线） | 前端 Vite 8 构建 |
 | npm | 与 Node 22 配套 | 必须优先使用 `npm ci` |
@@ -119,10 +119,11 @@ mvn -B -ntp install -DskipTests
 
 然后在独立终端按需运行。普通业务链至少启动 gateway、auth 及目标领域服务；Agent 全链还要启动 student、mental、data、mcp-student-data、agent-service。
 
-每个 Java 终端先设置同一个开发 JWT 密钥；缺失或少于 32 字节时 `JwtUtil` 会让服务 fail-fast：
+每个 Java 终端先设置同一个开发 JWT 密钥与内部调用凭证。JWT 密钥缺失或少于 32 字节时 `JwtUtil` 会让服务 fail-fast；内部调用凭证缺失时服务照常启动，但 student/mental/data 等会以 401 拒绝 agent-service / mcp-student-data 的 Feign 取数（不带 JWT 的请求一律不当内网，INTERNAL-AUTH-20260914）。两个值都必须与 docker-compose 中 agent-service / mcp-student-data 的一致：
 
 ```bash
 export JWT_SECRET=edu-portrait-dev-jwt-secret-change-in-prod-0123456789
+export EDUCARE_INTERNAL_TOKEN=edu-portrait-dev-internal-token-change-in-prod-0123456789
 ```
 
 ```bash
@@ -229,6 +230,14 @@ bash scripts/gateway_verify.sh
 
 字段权限和 IDOR 另按 [`docs/educare/FIELD_PERMISSION_VERIFY.md`](./docs/educare/FIELD_PERMISSION_VERIFY.md) 用多角色账号验证。
 
+下游服务公网可达的部署（如 Render），还要验证「直连下游必须带凭证」（INTERNAL-AUTH-20260914）。只探聚合端点，不要拿个人数据端点做探测：
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://edu-portrait-data.onrender.com/data/dashboard/statistics
+```
+
+通过判据：返回 `401`（修复前为 `200`）；同一路径经网关带教职工 token 仍为 `200`；触发一次 AgentLoop 任务后，student/mental/data 日志无 401，任务没有因取数失败进入 `FAILED`。
+
 ### 6.2 MCP 工具契约
 
 ```bash
@@ -285,6 +294,7 @@ MILVUS_HOST=localhost EMBEDDING_BASE_URL=http://localhost:8092/v1 python -m scri
 | gateway 返回 503/404 service unavailable | Nacos readiness 和服务列表 | 确认目标服务已启动并注册；基础 compose 不含六个普通业务服务 |
 | agent-service 启动失败 | :8094/:8095 health、MCP initialize 日志 | 先启动两个 MCP；核对 URL、endpoint `/mcp` 和 token |
 | MCP 返回 401 | 三端 `EDUCARE_MCP_TOKEN` | 使用相同非空值；生产至少 32 字符 |
+| AI 取数失败，Feign 调 student/mental/data 报 401 | 各服务 `EDUCARE_INTERNAL_TOKEN`；启动日志是否有「EDUCARE_INTERNAL_TOKEN 未配置」WARN | agent-service、mcp-student-data 与 student/mental/data 使用同一非空值，生产至少 32 字符；不要为排障关掉 `educare.service-auth.enabled` |
 | Agent 任务 `FAILED` | agent 日志、`agent_task.status`、LLM 原始输出 | 先区分 LLM 连接、JSON parse、ToolGuard、工具调用和 DB CAS；不要直接改成 COMPLETED |
 | RAG 返回空 chunks | :8092、Milvus collection、embedding dim、灌库记录 | 确认维度 1024、集合存在、真语料已 upsert；reranker 可临时关闭定位 |
 | `/api/v1/rag/upsert` 返回 404 | FastAPI OpenAPI、`app/main.py` router 注册 | 当前主 app 未挂载 `rag_upsert.router`，不能当作运行能力 |
@@ -723,7 +733,7 @@ render deploys list srv-da9vk4e7bikc73f168o0 -o json
 
 ## PERF-500MS-20260916：部署与500ms验收（2026-09-16）
 
-前提：JDK17、现有 Render workspace/API凭证、演示账号只读授权。报告不得包含JWT、完整响应记录或原始 DEBUG 日志。使用 [bench-production-api.py](./scripts/bench-production-api.py) 顺序发送持久连接请求，外部完整响应耗时与 Server-Timing 分列，快速429/503不算通过。第一笔连接和休眠唤醒独立保留；热态统计取稳定样本并同时报告最大值，不能仅报告最佳值。
+前提：JDK21、现有 Render workspace/API凭证、演示账号只读授权。报告不得包含JWT、完整响应记录或原始 DEBUG 日志。使用 [bench-production-api.py](./scripts/bench-production-api.py) 顺序发送持久连接请求，外部完整响应耗时与 Server-Timing 分列，快速429/503不算通过。第一笔连接和休眠唤醒独立保留；热态统计取稳定样本并同时报告最大值，不能仅报告最佳值。
 
 ```bash
 cd backend
@@ -757,3 +767,15 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 2026-09-17 / PERF-500MS-20260916：分阶段日志证实首次登录还有Redis连接及JWT初始化成本，热密码校验为主要耗时。新增 auth AuthDependencyWarmupConfiguration，在已有预热开关开启时于readiness前PING Redis并初始化内存签名；不写会话、无业务用户/凭证日志，Redis失败不能就绪。无架构影响，auth仍依赖原Redis白名单。放弃密码缓存/降低bcrypt及依赖故障时假健康；验收需验证启动、热登录阶段和401/403。新增预热成功只读与故障阻止就绪测试；生产行为待验证。回滚此auth提交移除额外启动预热，保留强验证与原配置。
 
 2026-09-17 / PERF-500MS-20260916 维护记录：相关代码已逐批经PR/main CI部署既有生产服务，SSE前端实际产物已核对，Auth依赖预热的阶段日志已确认生效；完整验收记录见 docs/production-tests/2026-09-16/ 的 FINAL_REPORT.md 与 JSON 证据。无新增架构边界或收费资源。500ms全接口目标未通过：热密码验证、跨区域传输、休眠唤醒仍超预算，真实写入/推理最终产物/下载尚未完整生产验收，不得将应用序列化前计时视作端到端结果。后续须明确验收网络区域、负载和可用常驻预算，不能通过降低密码成本、权限豁免或快速失败充当达标。回滚沿用前述提交及原配置plan；这条最终验收记录随上述目录一并提交，证据已脱敏，不含凭证、令牌或完整运行时元数据。
+
+
+## SAFE-PUSH-20261005：提交前排除与核对（2026-10-05）
+
+1. 复现：`git ls-files -- docker/.env.audit` 可识别旧基线是否仍跟踪本地凭证文件。只检查路径，不输出文件内容。
+2. 排除：`git rm --cached -- docker/.env.audit` 保留本地副本并暂存取消跟踪；`.gitignore` 增加 `docker/.env.*`，模板放行规则保留在其后。
+3. 核对：`git ls-files -- 'docker/.env*'` 仅应包含 `docker/.env.example`；`git check-ignore -- docker/.env.audit` 应命中；`test -f docker/.env.audit` 应成功；`git diff --cached --check` 应无输出。
+4. 回滚：可回退代码提交，但不得恢复凭证文件的 Git 跟踪；本地副本持续保留。历史凭证的轮换需部署环境另行验证。
+
+验证状态：本次已核对凭证文件取消跟踪、模板保留、忽略命中及本地副本仍在；最终暂存时还须执行 staged diff 检查。
+
+本次 `bash scripts/test-preflight-prod.sh` 已通过；本工作区未独立重跑后端全量测试，共享的内部鉴权实现已随 heuristic 工作区的 249 例后端测试验证。线上直连和内部调用验收仍待部署后执行。

@@ -241,6 +241,13 @@
                                         <include>com.edu.user.controller.UserController</include>
                                         <include>com.edu.teacher.controller.TeacherController</include>
                                         <include>com.edu.mcp.student.security.McpTokenFilter</include>
+                                        <!-- INTERNAL-AUTH-20260914：服务入口准入 / 内部调用凭证 / 端点授权 / 字段上下文 / 网关剥头 -->
+                                        <include>com.edu.common.security.ServiceAuthFilter</include>
+                                        <include>com.edu.common.security.InternalCallCredential</include>
+                                        <include>com.edu.common.security.InternalCallFeignConfig</include>
+                                        <include>com.edu.common.security.AccessGuard</include>
+                                        <include>com.edu.common.security.RoleContextFilter</include>
+                                        <include>com.edu.gateway.filter.InternalHeaderStripFilter</include>
                                     </includes>
                                     <limits>
                                         <limit>

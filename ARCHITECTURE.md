@@ -1,6 +1,6 @@
 # Resource-Profile 架构说明
 
-> 最近更新：2026-09-16
+> 最近更新：2026-10-05
 > 状态：按当前仓库实现初始化；真实模型与生产全栈仍待 `docs/educare/EXECUTION_PLAN.md` 的 R-5/R-6 验收。
 
 本文说明项目级模块边界、核心调用链与数据流。EduCare 的历史计划与原子任务状态以 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) 为准；本文只描述当前仍在代码中的能力。
@@ -83,7 +83,7 @@ flowchart LR
 2. `auth-service` 校验 bcrypt 密码，生成 HS256 JWT，并把 access token 写入 Redis `token:{userId}`。
 3. 后续请求携带 `Authorization: Bearer <token>`；SSE 可使用 `?token=`。
 4. `gateway` 先校验签名和过期时间，再比对 Redis 中的当前会话；Redis 异常时 fail-closed 返回 503。
-5. 请求路由到领域服务。`AccessGuard` 做 self/role/内部调用判断，`FieldPermissionAdvice` 按角色过滤敏感字段。
+5. 请求路由到领域服务。服务入口 `ServiceAuthFilter` 先确认带合法 JWT 或内部凭证（下游在 Render 上公网可达，不能只靠网关）；`AccessGuard` 做 self/role/已验证内部调用判断，`FieldPermissionAdvice` 按角色过滤敏感字段。
 6. 登出或重新登录会删除/覆盖 Redis 会话，旧 token 立即失效。
 
 ### 2.2 默认 AgentLoop 风险画像链
@@ -199,7 +199,8 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 
 - 公网生产入口只允许 nginx 80/443；gateway、数据库、Redis、Nacos、Milvus、Agent 与 MCP 端口都绑定 `127.0.0.1` 或容器内网。
 - gateway 是第一道 JWT + 会话门；agent-service :8087 还有独立 `AgentSelfAuthFilter`，防本机直连绕过网关。
-- `AccessGuard` 负责对象级授权；字段权限默认开启。无 token 的内部 Feign 调用可保留完整字段，因此内部网络与 MCP token 是必要前提。
+- **网关不是唯一入口**：Render 部署下每个下游服务都是独立的公网 Web Service。user/teacher/student/mental/data 由 common 的 `ServiceAuthFilter` 在服务入口要求「合法 JWT」或「合法内部凭证 `X-Internal-Token`」，否则 401。内部凭证是共享密钥 `EDUCARE_INTERNAL_TOKEN`，只由 agent-service（student/mental/data 客户端）与 mcp-student-data（student/mental 客户端）的 Feign 附带，常量时间比较；网关 `InternalHeaderStripFilter` 剥掉客户端自带的同名头。未配置密钥即不承认任何内部调用（fail-closed）。
+- `AccessGuard` 负责对象级授权：带 token 按本人/角色判定，不带 token 只有出示合法内部凭证才放行。字段权限默认开启：仅已验证的内部调用不脱敏，匿名请求只留 PUBLIC 字段。详见 `docs/educare/FIELD_PERMISSION.md` §11（INTERNAL-AUTH-20260914）。
 - agent-service 与两个 MCP server 可通过同一 `EDUCARE_MCP_TOKEN`/`X-MCP-Token` 互验；生产 preflight 强制其与 Redis 密码均不少于 32 字符。
 - 进入 LLM 的画像经过 `DataMasker`/`PromptSanitizer`；敏感心理工具还受 ToolGuard 约束。
 - `/agent/**/_internal/**` 经 gateway 一律 403。任何新增内部端点必须保持该边界。
@@ -307,3 +308,8 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：Spring AI默认ToolCall
 2026-09-17 / PERF-500MS-20260916：分阶段日志证实首次登录还有Redis连接及JWT初始化成本，热密码校验为主要耗时。新增 auth AuthDependencyWarmupConfiguration，在已有预热开关开启时于readiness前PING Redis并初始化内存签名；不写会话、无业务用户/凭证日志，Redis失败不能就绪。无架构影响，auth仍依赖原Redis白名单。放弃密码缓存/降低bcrypt及依赖故障时假健康；验收需验证启动、热登录阶段和401/403。新增预热成功只读与故障阻止就绪测试；生产行为待验证。回滚此auth提交移除额外启动预热，保留强验证与原配置。
 
 2026-09-17 / PERF-500MS-20260916 维护记录：相关代码已逐批经PR/main CI部署既有生产服务，SSE前端实际产物已核对，Auth依赖预热的阶段日志已确认生效；完整验收记录见 docs/production-tests/2026-09-16/ 的 FINAL_REPORT.md 与 JSON 证据。无新增架构边界或收费资源。500ms全接口目标未通过：热密码验证、跨区域传输、休眠唤醒仍超预算，真实写入/推理最终产物/下载尚未完整生产验收，不得将应用序列化前计时视作端到端结果。后续须明确验收网络区域、负载和可用常驻预算，不能通过降低密码成本、权限豁免或快速失败充当达标。回滚沿用前述提交及原配置plan；这条最终验收记录随上述目录一并提交，证据已脱敏，不含凭证、令牌或完整运行时元数据。
+
+
+## 维护记录补充：SAFE-PUSH-20261005（2026-10-05）
+
+无架构影响；本次提交清理涉及版本控制与本地部署配置。含凭证的 `docker/.env.audit` 取消 Git 跟踪但保留本地文件，`.gitignore` 忽略 `docker/.env.*` 并继续放行 `docker/.env.example`。此处描述新提交快照的边界，不表示已清除历史提交中的值。

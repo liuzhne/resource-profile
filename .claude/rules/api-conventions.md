@@ -16,7 +16,8 @@
 ## 鉴权
 - JWT（HS256）：access 24h / refresh 7d；`Authorization: Bearer <token>`。
 - `/auth/**` 公开，其余需鉴权；前端 401 自动登出。
-- 字段级权限：`@SensitiveField` + `FieldPermissionAdvice`（参 `docs/educare/FIELD_PERMISSION.md`），默认关 `educare.field-permission.enabled`。
+- 网关不是唯一入口（Render 上下游服务各有公网 URL）：servlet 服务默认挂 `ServiceAuthFilter`，请求须带合法 JWT 或 `X-Internal-Token`（`EDUCARE_INTERNAL_TOKEN`）。服务间 Feign 用 `@FeignClient(configuration = InternalCallFeignConfig.class)` 附凭证；不要把「没带 token」当成内网。
+- 字段级权限：`@SensitiveField` + `FieldPermissionAdvice`（参 `docs/educare/FIELD_PERMISSION.md` §11），默认开 `educare.field-permission.enabled`；只有已验证的内部调用不脱敏。
 
 ## Nacos 配置
 - 每服务 import `{service}.yml` + `common.yml`（`optional:nacos:...`）。

@@ -247,6 +247,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-edu-portrait-dev-jwt-secret-change-in-prod-0123456789}
       # MCP 内部预共享 token（与 agent-service 同值才放行 /mcp）。空=仅网络隔离（A3）
       EDUCARE_MCP_TOKEN: ${EDUCARE_MCP_TOKEN:-}
+      # 服务间内部调用凭证：Feign 调 student/mental 时附 X-Internal-Token。必须与宿主进程运行的
+      # student/mental/data 同值（RUNBOOK §4.4），否则被 401。dev 默认仅本地，生产经 docker/.env 覆盖。
+      EDUCARE_INTERNAL_TOKEN: ${EDUCARE_INTERNAL_TOKEN:-edu-portrait-dev-internal-token-change-in-prod-0123456789}
     ports:
       - "127.0.0.1:8094:8094"   # 仅本机回环：student-data MCP 直吐学生画像，禁外网绕过网关
     depends_on:
@@ -322,6 +325,9 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # A5：JWT 密钥（≥32 字符 fail-fast）。dev 默认仅本地，生产经 env/Nacos 覆盖。
       JWT_SECRET: ${JWT_SECRET:-edu-portrait-dev-jwt-secret-change-in-prod-0123456789}
+      # 服务间内部调用凭证：Feign 调 student/mental/data 时附 X-Internal-Token。必须与宿主进程运行的
+      # 下游服务同值（RUNBOOK §4.4），否则被 401。dev 默认仅本地，生产经 docker/.env 覆盖。
+      EDUCARE_INTERNAL_TOKEN: ${EDUCARE_INTERNAL_TOKEN:-edu-portrait-dev-internal-token-change-in-prod-0123456789}
       # 宿主 llama.cpp（生成 LLM）
       SPRING_AI_OPENAI_BASE_URL: http://host.docker.internal:8091
       # 容器网络内的 MCP server

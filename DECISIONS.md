@@ -1,6 +1,6 @@
 # Resource-Profile 架构与工程决策
 
-> 最近更新：2026-09-26
+> 最近更新：2026-10-05
 > 记录范围：当前仍有效的项目级决策。历史阶段细节见 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) §6。
 
 每条记录包含背景、选择、放弃方案和后果。被替换的决策不得直接删除，应改为“已取代”并链接新决策。
@@ -365,6 +365,41 @@
   当前按 main 提交即部署；main 头提交 `bcb01c4` 的 check-runs 为空。本地 Schema 校验与路径覆盖自检见
   RUNBOOK 同名条目；Blueprint 同步与首次门控部署待验证。
 
+## ADR-029：下游服务入口要求 JWT 或内部凭证，「无 token」不再等于内网
+
+- 状态：已采纳（补全 ADR-008）
+- 日期/修复标识：2026-09-14 / INTERNAL-AUTH-20260914
+- 背景：Render Blueprint 中 student/mental/data/teacher/user/agent/mcp-student 都是 `type: web`，各有公网
+  `https://edu-portrait-<name>.onrender.com`；免费实例收不到私网流量，内部 Feign 也只能走公网 HTTPS。
+  `AccessGuard.allowSelfRoleOrInternal` 把「无 Authorization」当可信内网放行，`FieldPermissionAdvice` 对无 token
+  请求不脱敏，`MentalController`、`/student/ids` 等端点更没有任何端点级校验，于是任何人不带 token 直连下游
+  都能拿到完整数据（含未成年人心理数据、预警名单）。2026-09-14 只用聚合端点实测：直连
+  `edu-portrait-data.onrender.com/data/dashboard/statistics` 无 token 返回 200，经网关同路径返回 401。
+  ADR-008 的多层防线默认了下游不可公网直达，这个前提在 Render 上不成立。
+- 选择：① 新增共享密钥 `EDUCARE_INTERNAL_TOKEN`（Render env group `generateValue`）；agent-service 的
+  student/mental/data 与 mcp-student-data 的 student/mental Feign 客户端按客户端挂 `InternalCallFeignConfig`，
+  附 `X-Internal-Token`。② common 新增 `ServiceAuthFilter`（默认开）：服务入口要求合法 JWT（签名+过期）或
+  内部凭证（SHA-256 摘要 + `MessageDigest.isEqual`），否则 401，`/actuator/health` 豁免；auth-service、
+  agent-service、mcp-student-data 显式关闭，分别由「只公开 `/auth/**` + Spring Security」、`AgentSelfAuthFilter`、
+  `McpTokenFilter` 把守。③ `AccessGuard` 与 `RoleContextFilter`/`FieldPermissionAdvice` 只把「无 token 且凭证匹配」
+  视为内部调用，带 token 一律按端用户处理，匿名只留 PUBLIC 字段。④ 网关 `InternalHeaderStripFilter` 最先剥掉
+  客户端自带的同名头。⑤ 未配置密钥时所有 profile 一律不承认内部调用（fail-closed）；开发默认值只写在
+  compose 与 RUNBOOK，preflight 拒绝该默认值和不足 32 字符的值。
+- 原因：Render 免费层没有私网隔离，只能用正向凭证区分内部调用；入口统一拦截能覆盖所有端点（含没接
+  `AccessGuard` 的历史端点）；端点与字段两层保留作纵深防御，入口门被关掉时也不会退化为放行。
+- 放弃方案：只改 `AccessGuard`/字段权限 —— `MentalController` 等无校验端点仍可被匿名读写；Render 私有服务 ——
+  免费层不提供，需计费授权；Feign 改走网关 —— 网关要求用户 JWT，定时扫描等系统任务没有用户上下文；
+  按 profile 名决定未配置时是否信任无 token 请求 —— profile 名写错就回到漏洞状态；全局 Feign 拦截器 ——
+  会把凭证发给 ai-inference 等不需要它的目标。
+- 后果：部署后匿名直连下游返回 401。滚动部署期间若下游已升级而 agent/mcp 尚未升级，AI 取数会短暂 401
+  并走 fallback。残余风险：下游入口不查 Redis 会话，已登出但未过期的 token 仍可直连下游（≤24h）；单一共享
+  密钥，泄露需全服务轮换；`MentalController` 仍缺角色授权（任意登录用户可读预警名单、改问卷），需单独修复。
+- 证据：`ServiceAuthFilterTest`(9)、`AccessGuardTest`(17)、`FieldPermissionAdviceWalkTest`(9)、`RoleContextFilterTest`(5)、
+  `InternalCallCredentialTest`(4)、`InternalCallFeignConfigTest`(2)、`InternalHeaderStripFilterTest`(4)、两个 Feign
+  挂载测试，以及 student/mental/data/teacher/user/agent 各 controller 的匿名拒绝 / 内部凭证放行用例；JDK 17 全后端
+  `mvn -B -ntp clean test` 11 模块 222 例通过，JaCoCo 定向门（新增 6 个类）通过；`scripts/test-preflight-prod.sh`
+  通过。线上复验待部署后执行，只探聚合端点（RUNBOOK §6.1）。
+
 ## 新决策模板
 
 ```markdown
@@ -398,6 +433,7 @@
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 新增 ADR-025，Render GPT-OSS 改用 JSON Object Mode 与低推理预算 | 保留 ReAct 主路径；本地 OpenAI 兼容端点维持 TEXT 默认值 |
 | 2026-09-15 / RENDER-CD-20260915 | 新增 ADR-026，main 即生产、CI 通过后按服务增量部署 | 部署以被部署提交的 CI 为准；buildFilter 与 CI push 路径须同步维护 |
 | 2026-09-26 / JDK21-UTF8MB4-20260926 | 新增 ADR-028，后端统一 JDK 21，种子脚本显式 utf8mb4 | Enforcer 改为 `[21,22)`；ADR-001 的 Java 版本随之更新 |
+| 2026-09-14 / INTERNAL-AUTH-20260914 | 新增 ADR-029，下游服务入口要求 JWT 或内部凭证，`AccessGuard`/字段权限不再把无 token 当内网 | 补全 ADR-008：下游公网可达时仍 fail-closed；`EDUCARE_INTERNAL_TOKEN` 成为生产硬门 |
 
 ## ADR-027：生产诊断与待实施修复（PROD-AUDIT-20260916，2026-09-16）
 
@@ -453,3 +489,12 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 证据：JDK 21 下 `mvn -B -ntp clean test` 11 模块 198 例全绿、JaCoCo 门达标、`scripts/test-preflight-prod.sh`
   通过，JDK 17 validate 按提示失败；全新 `mysql:8.0` 容器以新脚本初始化后 `student_info.name` 为正确 UTF-8
   （`E8B5B5…`）。`eclipse-temurin:21-*-jammy` 镜像可拉取；完整镜像构建与 Render 部署待验证。
+
+## SAFE-PUSH-20261005：提交前排除本地凭证文件
+
+- 日期：2026-10-05。
+- 背景：发布本地待提交改动时，发现旧基线仍跟踪 `docker/.env.audit`；它包含非模板凭证，不适合进入新的分支快照。
+- 选择：保留本地文件，取消 Git 跟踪；以 `.gitignore` 的 `docker/.env.*` 规则阻止副本再次入库，并保留模板例外。源码中的明确测试夹具和开发默认账户可保留。
+- 原因：仅不暂存一个已跟踪文件，不能把它从新分支快照排除；必须提交取消跟踪。
+- 放弃方案：删除本地文件会破坏本地配置；只忽略已跟踪文件不能生效；本次不改写已发布 Git 历史。
+- 代价与约束：这些值仍存在于此前的历史提交，曾实际使用的凭证需由对应部署环境轮换；本次不声称已完成轮换。

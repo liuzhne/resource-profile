@@ -4,6 +4,7 @@ import com.edu.agent.dto.FeedbackRequest;
 import com.edu.agent.service.InterventionFeedbackService;
 import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
+import com.edu.common.security.InternalCallCredential;
 import com.edu.common.util.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,8 @@ class InterventionFeedbackControllerTest {
     void setUp() {
         feedbackService = mock(InterventionFeedbackService.class);
         jwtUtil = mock(JwtUtil.class);
-        controller = new InterventionFeedbackController(feedbackService, new AccessGuard(jwtUtil));
+        controller = new InterventionFeedbackController(feedbackService,
+                new AccessGuard(jwtUtil, new InternalCallCredential("internal-secret-at-least-32-chars-0001")));
     }
 
     @Test

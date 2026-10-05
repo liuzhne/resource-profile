@@ -95,6 +95,8 @@ venv/
 .env.local
 .env.*.local
 docker/.env
+# Local credential copies stay outside version control.
+docker/.env.*
 # 模板必须保留在版本库
 !.env.example
 !docker/.env.example
