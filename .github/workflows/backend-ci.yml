@@ -12,7 +12,8 @@ on:
     paths:
       - "backend/**"
       - "ai-inference-service/**"
-      - "docker/.env.example"
+      # 通配而非只写 .env.example：重新跟踪 docker/.env.* 的 PR 也要触发 preflight 回归并被拦下
+      - "docker/.env*"
       - "scripts/preflight-prod.sh"
       - "scripts/test-preflight-prod.sh"
       - ".github/workflows/backend-ci.yml"

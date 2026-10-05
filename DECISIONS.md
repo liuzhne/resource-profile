@@ -334,6 +334,32 @@
 - 证据：线上任务 7 单线程执行、无 429，却连续两轮 parse error；Groq 官方 API 文档与 GPT-OSS 模型页
   明确列出 JSON Object Mode。配置级测试覆盖 response format 与 reasoning effort；线上复验待部署后执行。
 
+## ADR-026：本地密钥文件不入库；已入库即轮换，不改写历史
+
+- 状态：已采纳（轮换待部署方执行）
+- 日期/修复标识：2026-09-14 / ENV-AUDIT-LEAK-20260914
+- 背景：`docker/.env.audit` 在 `122ab6d`（2026-08-26，U-2 preflight 实测当天）随一次无关的 e2e 修复被提交，
+  再经 #4（`51b8410`）squash 进入公开仓库的 main。文件第 22-35 行是按 `.env.example` 生成命令产出的 14 个
+  强随机值（MySQL/Nacos/MinIO/Redis/JWT/MCP/Langfuse/Grafana）。`.gitignore` 只忽略 `docker/.env`，不覆盖
+  改名副本；仓库内没有任何脚本、CI 或 compose 引用该文件。
+- 选择：`git rm --cached` 移出版本库（本地副本保留）；`.gitignore` 用 `docker/.env.*` 忽略所有变体，仅放行
+  `.env.example`；`preflight-prod.sh` 拒绝被 git 跟踪的 `ENV_FILE` 以及仓库内任何 `docker/.env.*`（模板除外），
+  CI 的 preflight 回归兜底；14 个泄露值不论能否确认在用，一律按 RUNBOOK 清单轮换。不改写 git 历史。
+- 原因：公开仓库的历史已推送到多个远端分支，可能已被克隆或缓存，改写历史撤不回已公开的内容，只有轮换
+  能让泄露值失效。preflight 检查补上 `.gitignore` 管不到的场景：旧分支（`origin/dev` 等）的合并基点早于
+  该文件，合并时会把已跟踪的文件重新带回。
+- 放弃方案：`git filter-repo`/BFG + force push——撤不回已公开数据，GitHub 仍可按 SHA/PR ref 访问旧提交，
+  还会打断所有协作分支，且未获授权；只补 `.gitignore`——对已跟踪文件和合并带回无效；只轮换"确认在用"
+  的值——本机没有 `docker/.env`、Docker 未运行、生产主机不可见，无法证明未被使用。
+- 后果：轮换 `JWT_SECRET` 使全部已签发 token 失效（全员重新登录）；MySQL/Postgres/Grafana 的密码只在数据卷
+  首次初始化时读取，已有实例须先在服务内改密再改 `.env`；轮换 `LANGFUSE_SALT` 会使既有 Langfuse API key
+  失效。`origin/dev`、`docs/progress-audit-20260826`、`feat/ui-glass-refactor` 的分支末端仍含该文件，合并前须先
+  在分支上删除，否则 CI preflight 回归变红。Render 的 `JWT_SECRET`/`EDUCARE_MCP_TOKEN` 由 `generateValue`
+  生成，Aiven 凭据独立，按设计不来自该文件；若曾在 Dashboard 手工覆盖成该文件中的值，同样须轮换。
+- 证据：`git log --all -- docker/.env.audit` 只有 `122ab6d` 与 `51b8410` 两个提交；`git grep env.audit` 无引用；
+  值的长度与字符集和 `openssl rand -hex 24` / `-base64 48` / `-base64 32` 一致（全程未输出值）；
+  `test-preflight-prod.sh` 新增"被跟踪 env 文件"反例。轮换本身待验证。
+
 ## 新决策模板
 
 ```markdown
@@ -365,3 +391,13 @@
 | 2026-09-04 / AIVEN-DNS-20260904 | 新增 ADR-023，以 Aiven 当前连接信息修复失效 DNS | 不猜测端点、不绕过健康检查，数据库凭据继续仅存 Render secret |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 新增 ADR-024，对 Groq TPM 429 使用有界退避 | 保留完整 AgentLoop 质量；401/403 继续 fail-fast |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 新增 ADR-025，Render GPT-OSS 改用 JSON Object Mode 与低推理预算 | 保留 ReAct 主路径；本地 OpenAI 兼容端点维持 TEXT 默认值 |
+| 2026-09-14 / ENV-AUDIT-LEAK-20260914 | 新增 ADR-026，误入库的 `docker/.env.audit` 移出版本库并全量轮换 | 不改写历史；`docker/.env.*` 统一忽略，preflight 拒绝被跟踪的 env 文件 |
+
+## SAFE-PUSH-20261005：提交前排除本地凭证文件
+
+- 日期：2026-10-05。
+- 背景：发布本地待提交改动时，发现旧基线仍跟踪 `docker/.env.audit`；它包含非模板凭证，不适合进入新的分支快照。
+- 选择：保留本地文件，取消 Git 跟踪；以 `.gitignore` 的 `docker/.env.*` 规则阻止副本再次入库，并保留模板例外。源码中的明确测试夹具和开发默认账户可保留。
+- 原因：仅不暂存一个已跟踪文件，不能把它从新分支快照排除；必须提交取消跟踪。
+- 放弃方案：删除本地文件会破坏本地配置；只忽略已跟踪文件不能生效；本次不改写已发布 Git 历史。
+- 代价与约束：这些值仍存在于此前的历史提交，曾实际使用的凭证需由对应部署环境轮换；本次不声称已完成轮换。

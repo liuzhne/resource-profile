@@ -321,6 +321,8 @@ cp docker/.env.example docker/.env
 bash scripts/preflight-prod.sh
 ```
 
+演练或审计用的临时 env 放在仓库外（如 `mktemp` 生成的路径），用 `ENV_FILE=/path bash scripts/preflight-prod.sh` 体检，不要在仓库里另存副本。`docker/.env.*`（模板除外）已被忽略；preflight 会拒绝被 git 跟踪的 env 文件，一旦入库，其中的值按泄露处理并全部轮换（见 `ENV-AUDIT-LEAK-20260914`）。
+
 把 `fullchain.pem` 和 `privkey.pem` 放入 `docker/certs/`。新库初始化后必须轮换 admin/teacher/student 默认密码。
 
 ### 8.3 生成与检查部署配置
@@ -605,6 +607,51 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 - 验证状态：2026-09-04 已在线复现任务 7 的单线程 PARSE_ERROR，并核对 Groq 官方 JSON Object Mode
   能力；配置和测试已更新，部署后线上复验待完成。
 
+### ENV-AUDIT-LEAK-20260914：docker/.env.audit 真实密钥进入公开仓库
+
+- 复现：`git log --all --format='%h %ad %s' -- docker/.env.audit` 显示 `122ab6d`（2026-08-26）引入、
+  `51b8410`（#4）带入 main；`gh repo view --json visibility` 为 PUBLIC。检查时只看键名和长度、不看值：
+  `awk -F= '{print NR": "$1" len="length(substr($0,index($0,"=")+1))}' docker/.env.audit`。
+- 修复步骤：① `git rm --cached docker/.env.audit`（本地副本保留），`.gitignore` 增加 `docker/.env.*`（必须排在
+  `!docker/.env.example` 之前）；② `preflight-prod.sh` 拒绝被跟踪的 `ENV_FILE` 以及仓库内任何 `docker/.env.*`
+  （模板除外），由 CI 的 `test-preflight-prod.sh` 覆盖；③ 按下表轮换全部 14 个值——文件虽已移出，历史提交中
+  仍然可见。不改写历史（见 ADR-026）。
+- 轮换清单（适用于任何用 docker compose 或宿主进程加载过这些值的环境；新值只写进未跟踪的 `docker/.env`
+  或平台秘密存储，生成方法见 `.env.example` 头部，禁止复用旧值）：
+
+| 变量 | 在哪里轮换 | 轮换后需重启/重登 |
+|---|---|---|
+| `MYSQL_ROOT_PASSWORD` | 已有数据卷：先在 MySQL 内对 root 执行 `ALTER USER`，再改 `.env`（该变量只在空卷首次初始化时生效） | 业务服务不用 root（Nacos 走 Derby，相关项已注释）；同步 `backup-mysql.sh`/`restore-mysql.sh` 的运行环境 |
+| `MYSQL_PASSWORD`（edu） | 同上，对 `edu` 账号 `ALTER USER` 后改 `.env` | 所有连库服务：compose 内 agent-service、mcp-student-data，宿主/外部部署的 auth/user/teacher/student/mental/data |
+| `NACOS_PASSWORD` | 先在 Nacos 控制台改 nacos 账号密码，再改 `.env` 与各 Java 服务环境 | 全部 Java 服务重启。当前 compose `NACOS_AUTH_ENABLE=false`（prod 覆盖层未开启），只有开启鉴权的环境才实际校验 |
+| `NACOS_AUTH_TOKEN` | `.env`（Base64，解码后 ≥32 字节） | 重启 nacos；已签发的 Nacos access token 与控制台会话失效，Java 服务随后重启 |
+| `NACOS_AUTH_IDENTITY_VALUE` | `.env` 与所有 Java 服务环境（必须同值） | nacos 与全部 Java 服务在同一窗口重启 |
+| `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | `.env` | 重建 minio；compose 目前没有把 MinIO 凭据传给 milvus-standalone，非默认凭据下须先补齐 Milvus 接线再验证 `/healthz` |
+| `REDIS_PASSWORD` | `.env`（≥32 字符） | redis（requirepass）与全部消费者同时重启：gateway、agent-service、ai-inference-service、knowledge-rag-mcp，以及宿主部署的 auth/user/data；切换窗口内会话校验失败 |
+| `JWT_SECRET` | `.env` 与所有 Java 服务环境（必须同值，≥32 字符） | 所有加载 `JwtUtil` 的 Java 服务同时重启；全部 access/refresh token 失效，全员重新登录 |
+| `EDUCARE_MCP_TOKEN` | `.env`（≥32 字符，三端同值） | agent-service、mcp-student-data、knowledge-rag-mcp 同时重启；进行中的 Agent 任务需重新触发 |
+| `LANGFUSE_DB_PASSWORD` | 已有卷：先在 langfuse-postgres 内 `ALTER USER`，再改 `.env` | 重启 langfuse-server |
+| `LANGFUSE_NEXTAUTH_SECRET` | `.env` | 重启 langfuse-server；Langfuse 控制台会话失效需重登 |
+| `LANGFUSE_SALT` | `.env` | 重启 langfuse-server；SALT 参与 API key 哈希，既有 project key 失效，须在控制台重建 `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` 并更新 agent-service、ai-inference-service 后重启，否则 trace 静默丢失 |
+| `GRAFANA_ADMIN_PASSWORD` | Grafana UI 或 `grafana cli admin reset-admin-password` 改密，再改 `.env`（该变量只在首次初始化生效） | 仅 Grafana 管理员重登 |
+
+- Render：`JWT_SECRET`/`EDUCARE_MCP_TOKEN` 由 `generateValue` 生成，MySQL 用 Aiven 凭据，Redis 用 Key Value
+  `connectionString`，按设计都不来自该文件；只有曾在 Dashboard 手工填入该文件中的值时才需轮换。
+- 修复后验证：`git ls-files | grep -E '(^|/)\.env'` 只剩两个 `.env.example`；`git check-ignore -v docker/.env.audit`
+  命中 `docker/.env.*`，`git check-ignore docker/.env.example` 无输出；`bash scripts/test-preflight-prod.sh`。
+  轮换后在各环境执行 `bash scripts/preflight-prod.sh`、`scripts/gateway_verify.sh`，并真跑一条 Agent 任务。
+- 通过判据：回归输出 `preflight-prod regression: PASS`；轮换后 preflight 全部通过，旧 JWT 访问业务接口返回 401、
+  重新登录后 200，Agent 任务经 MCP 互验完成，启用 Langfuse 时能收到新 trace。
+- 排错：改完 `.env` 服务起不来——先确认 MySQL/Postgres/Grafana/Nacos 已在服务内改密（这些变量只在首次初始化
+  时生效）；全面 401 查各 Java 服务 `JWT_SECRET` 是否一致；MCP 401/403 查三端 `EDUCARE_MCP_TOKEN`；Redis
+  `NOAUTH` 说明有消费者未重启；Milvus 不健康查 MinIO 凭据接线。合并 `origin/dev`、`docs/progress-audit-20260826`、
+  `feat/ui-glass-refactor` 会把该文件带回（它们与 main 的合并基点早于该文件入库），CI preflight 回归会报"仓库
+  跟踪了本地 env 文件"——先在源分支执行 `git rm --cached docker/.env.audit`。
+- 回滚：代码侧可直接 revert，但不得恢复对该文件的跟踪；轮换不回滚到旧值，新值有问题时逐项修正配置。
+- 验证状态：2026-09-14 本地已验证：移出版本库、忽略规则、preflight 回归（含"被跟踪 env 文件"反例）、临时
+  索引模拟重新跟踪被拦截、`origin/dev` 试合并确认会带回该文件。轮换待部署方执行——本机无 `docker/.env`、
+  Docker 未运行、生产主机不可见，按"可能在用"处理。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -636,3 +683,15 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-04 / AIVEN-DNS-20260904 | 增加 Aiven DNS 故障复现、凭据核验、验证与回滚步骤 | 原免费服务已恢复 Running；DNS、聚合 health、登录与数据库回读通过 |
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 增加 GPT-OSS JSON Object Mode、配额预算与复验步骤 | 线上 PARSE_ERROR 已复现；配置级测试和部署复验待完成 |
+| 2026-09-14 / ENV-AUDIT-LEAK-20260914 | 增加 `docker/.env.audit` 泄露的处置步骤、14 项轮换清单与旧分支合并带回的排错 | 本地移出版本库、忽略规则、preflight 回归与合并试算均通过；轮换待部署方执行 |
+
+## SAFE-PUSH-20261005：提交前排除与核对（2026-10-05）
+
+1. 复现：`git ls-files -- docker/.env.audit` 可识别旧基线是否仍跟踪本地凭证文件。只检查路径，不输出文件内容。
+2. 排除：`git rm --cached -- docker/.env.audit` 保留本地副本并暂存取消跟踪；`.gitignore` 增加 `docker/.env.*`，模板放行规则保留在其后。
+3. 核对：`git ls-files -- 'docker/.env*'` 仅应包含 `docker/.env.example`；`git check-ignore -- docker/.env.audit` 应命中；`test -f docker/.env.audit` 应成功；`git diff --cached --check` 应无输出。
+4. 回滚：可回退代码提交，但不得恢复凭证文件的 Git 跟踪；本地副本持续保留。历史凭证的轮换需部署环境另行验证。
+
+验证状态：本次已核对凭证文件取消跟踪、模板保留、忽略命中及本地副本仍在；最终暂存时还须执行 staged diff 检查。
+
+本次 `bash scripts/test-preflight-prod.sh` 已通过（`preflight-prod regression: PASS`）；实际平台凭证轮换仍待部署方验证。

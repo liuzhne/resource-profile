@@ -54,6 +54,17 @@ set +a
 
 echo "=== 体检 $ENV_FILE ==="
 
+# 密钥文件一旦入库即视为已泄露（仓库公开、历史不可撤回），见 RUNBOOK ENV-AUDIT-LEAK-20260914。
+# 仓库级检查同时拦住「旧分支合并把已跟踪的 env 文件带回来」——.gitignore 对已跟踪文件无效。
+# 非 git 工作树（如生产机上的发布包）里 git 调用静默失败，本检查自动跳过。
+if git -C "$(dirname "$ENV_FILE")" ls-files --error-unmatch -- "$(basename "$ENV_FILE")" >/dev/null 2>&1; then
+  err "$ENV_FILE 被 git 跟踪：其中的值视为已泄露，须移出版本库并全部轮换"
+fi
+tracked_env="$(git -C "$ROOT" ls-files -- 'docker/.env*' 2>/dev/null | grep -vx 'docker/.env.example' | tr '\n' ' ')"
+if [[ -n "${tracked_env// /}" ]]; then
+  err "仓库跟踪了本地 env 文件：${tracked_env% }（须 git rm --cached 并轮换其中全部值）"
+fi
+
 # 必须覆盖（留空 / 等于 dev 默认 / 仍含 change-me 即 fail）
 REQUIRED="MYSQL_ROOT_PASSWORD MYSQL_PASSWORD NACOS_PASSWORD NACOS_AUTH_TOKEN MINIO_ACCESS_KEY MINIO_SECRET_KEY JWT_SECRET REDIS_PASSWORD EDUCARE_MCP_TOKEN"
 
