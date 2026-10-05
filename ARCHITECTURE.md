@@ -205,6 +205,34 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 - 进入 LLM 的画像经过 `DataMasker`/`PromptSanitizer`；敏感心理工具还受 ToolGuard 约束。
 - `/agent/**/_internal/**` 经 gateway 一律 403。任何新增内部端点必须保持该边界。
 
+### 4.1 MENTAL-AUTHZ-20261005：心理问卷端点授权与作答视图
+
+2026-10-05 补齐既有 `MENTAL-AUTHZ-20260914` 实现的项目级文档。服务入口的 JWT/内部凭证验证只解决
+身份准入；心理管理端点在 [MentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java)
+继续执行角色授权，角色集合统一定义在 [Roles](./backend/common/src/main/java/com/edu/common/security/Roles.java)。
+
+| 边界 | 当前访问规则 | 数据流约束 |
+|---|---|---|
+| 心理概览、问卷/题目读取及完成情况 | `STAFF_VIEW`：admin、teacher、counselor、academic_advisor、psychologist | 学生 token 返回业务码 403；内部凭证不授予管理权限 |
+| 问卷、题目及等级规则增删改 | `MENTAL_WRITE`：admin、psychologist | 验证通过才进入领域 service；教师只能读取 |
+| `/mental/analysis` 聚合统计 | `STAFF_VIEW` 或已验证内部调用 | 管理侧唯一保留内部凭证放行的端点，供 Agent 取聚合数据；带学生 JWT 同时附内部头不会提权 |
+| 完成情况中的量表原始 `score` | `EXTREME_VIEW`：admin、psychologist | 返回行是 Map，控制器显式将其他教职工的 score 置 null；姓名、等级和完成状态仍保留 |
+| `/mental/student/questionnaires/{id}` 作答模板 | 必须有合法 JWT；任何已登录角色可取 | 内部凭证不能代替登录；状态为 0 或 null 时拒绝，已结束问卷仍可用于结果回显 |
+
+[QuestionServiceImpl.getForRespondent](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)
+在构造的响应中移除选项对象的 `score`、题目的 `scoringRules` 及问卷等级阈值（问卷 `levelRules=null`、DTO
+`levelRules=[]`）；非法或非数组的选项 JSON 不下发。教职工 `/mental/questionnaires/{id}/full` 保留完整设计视图。
+数据库计分规则仍由 [MentalAssessmentServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/MentalAssessmentServiceImpl.java)
+在提交测评时读取，学生响应的裁剪不更新持久数据。个人问卷列表、测评历史、详情和提交继续由
+[StudentMentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java)
+执行本人或已验证内部调用授权；本次不新增教师跨学生读取通道。
+
+前端问卷管理页以 Pinia `userStore.userRoles` 计算 `canWrite`，仅 admin/psychologist 显示写入口，
+角色尚未加载或为空时默认隐藏；这也补齐模板使用 `canWrite` 却未定义该变量的缺口。Axios 对业务码或
+HTTP 403 显示权限提示并保留登录态；后端承担最终授权。
+此变更不增加服务、数据库表或迁移，收紧心理管理与学生作答两个响应边界。验证与回滚见
+[`RUNBOOK.md`](./RUNBOOK.md) 的同名修复条目。
+
 ## 5. 部署形态与已知边界
 
 - `docker/docker-compose.yml` 当前声明 AI/数据基础设施、gateway、agent-service 和两个 MCP server；它**没有**声明 auth/user/teacher/student/mental/data 六个业务服务。
@@ -280,6 +308,7 @@ Legacy 是故障回退和真实模型对比基线，不是默认新功能入口�
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 为 Groq 免费层 TPM 429 增加有界重试退避 | 无架构影响；仅增强 agent-service 外部 LLM 调用韧性 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | Render GPT-OSS 启用 JSON Object Mode 并收紧推理/输出预算 | 无架构影响；仅强化 ReAct 输出契约并降低免费 TPM 压力 |
 | 2026-09-15 / RENDER-CD-20260915 | Render 固定跟随 main，CI 通过后按服务 buildFilter 增量部署 | 无运行时架构影响；发布链路受 CI 门控，构建范围与 Maven 模块依赖绑定 |
+| 2026-10-05 / MENTAL-AUTHZ-20261005 | 补齐心理问卷端点授权与作答视图文档，链接管理控制器、作答服务和角色集合 | 收紧 mental-service 的管理角色、原始分和学生计分信息响应边界；服务拓扑与数据所有权不变 |
 
 ## 生产诊断维护记录：PROD-AUDIT-20260916（2026-09-16）
 

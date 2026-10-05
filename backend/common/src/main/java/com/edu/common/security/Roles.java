@@ -20,4 +20,16 @@ public final class Roles {
 
     /** 可写学生主数据的角色（增删改等管理操作）。 */
     public static final String[] STUDENT_WRITE = {ADMIN, TEACHER};
+
+    /**
+     * 可见心理 EXTREME 字段（量表原始分等）的角色，与 FIELD_PERMISSION §4 EXTREME 列、
+     * {@link FieldPermissionAdvice} 的列级判定一致。供返回 {@code Map} 等 advice 管不到的端点手工置 null。
+     */
+    public static final String[] EXTREME_VIEW = {ADMIN, PSYCHOLOGIST};
+
+    /**
+     * 可增删改心理问卷 / 题目 / 等级规则的角色。计分规则决定 score / level，进而决定预警名单与 AI 风险链输入，
+     * 改规则等于改所有学生的风险判定，故只交给能看 EXTREME 的心理专业角色。
+     */
+    public static final String[] MENTAL_WRITE = {ADMIN, PSYCHOLOGIST};
 }

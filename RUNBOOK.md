@@ -677,6 +677,54 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
   依赖、14 类典型改动的重建/CI 预期）全部通过。`render blueprints validate` 因 CLI 未登录未执行；Blueprint
   同步与 main 上首次 CI 门控部署待合入后验证。
 
+### MENTAL-AUTHZ-20261005：心理问卷端点授权与作答视图
+
+- 适用代码：[MentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java)、
+  [StudentMentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java)、
+  [QuestionServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)、
+  [问卷管理页](./frontend/src/views/mental/questionnaire.vue)及 [Axios 响应处理](./frontend/src/utils/request.js)。
+- 启动前提：JDK 21、项目依赖、MySQL 与网关/mental/auth 服务可用；JWT、Redis 会话与内部凭证配置按
+  §4.4/§6.1 一致。使用本地合成学生及测试问卷，准备 student、teacher、admin/psychologist 角色账号，
+  同时有状态 0（未开始）、1（进行中）、2（已结束）问卷。凭据保存在环境/秘密存储，不输出到日志。
+- 复现：在修复前的隔离环境，学生合法 JWT 请求 `/mental/overview` 或问卷管理读写可返回成功；
+  `/mental/student/questionnaires/{id}` 可包含选项 score、scoringRules、levelRules。教师完成情况响应
+  可包含量表原始 score。只用合成数据复现，禁止在真实学生记录上演示未经授权读写。
+- 后端自动验证（从仓库根目录执行）：
+
+  ```bash
+  mvn -B -ntp -f backend/pom.xml -pl mental-service -am clean test
+  ```
+
+  [MentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/MentalControllerTest.java)
+  验证学生/匿名拒绝、教师可读但不可写、admin/psychologist 可写、内部凭证仅放行 analysis、学生 JWT
+  附内部头仍不提权及完成情况 score 分级；[StudentMentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/StudentMentalControllerTest.java)
+  验证本人授权与模板 JWT 要求；[QuestionServiceImplTest](./backend/mental-service/src/test/java/com/edu/mental/service/impl/QuestionServiceImplTest.java)
+  验证计分信息裁剪、问卷状态、非法选项 JSON 和完整设计视图保留。
+- 前端自动验证（从仓库根目录执行）：
+
+  ```bash
+  npm --prefix frontend run lint:check
+  npm --prefix frontend run build
+  ```
+
+- 运行验证：student 请求管理概览、问卷列表、完整设计视图和写操作均拒绝；teacher 可以读取管理端，写
+  请求拒绝且完成情况 score=null；admin/psychologist 可在合成问卷上完成增删改并保留 score。内部调用不带
+  JWT 时只能通过管理端 analysis；带学生 JWT 同时附内部头仍拒绝。学生模板请求必须有合法 JWT，问卷状态
+  0/null 返回拒绝，状态 1/2 不含选项 score 或 scoringRules，问卷 levelRules=null、DTO levelRules=[]。
+  非数组或非法选项 JSON 的 options=null。提交合成答案后核对服务端仍按数据库原始规则计分，结果页可回显。
+  浏览器中 teacher 的新建/编辑/删除入口隐藏，admin/psychologist 的入口可用；用户角色未加载时默认隐藏。
+  控制台不再出现未定义 `canWrite` 的 Vue 警告；403 显示权限提示且保持登录态。
+- 通过判据：后端测试和前端命令成功；拒绝请求不触达领域写入；上述角色矩阵和响应裁剪一致。控制器
+  返回 `Result.error(403, ...)` 是响应 JSON 的业务码，HTTP 可能仍为 200；入口缺失/非法凭证则由
+  `ServiceAuthFilter` 返回 HTTP 401，验证时同时查看 HTTP 状态与 JSON code。
+- 排错：先区分 401 身份/会话错误和 403 角色拒绝，再核对 JWT 的 roles 是否使用项目角色码；合法内部凭证
+  在管理端非 analysis 路径被拒是预期。管理员按钮不显示时核对问卷页的角色计算与用户信息加载；模板
+  没有选项时先在有权管理视图检查原始 options 是否数组 JSON；不要把剥掉分值的响应写回数据库。
+- 回滚：此修复不涉及 schema。可恢复上一应用版本，但会重新放开已关闭的越权与计分信息泄漏；如必须
+  紧急降级，先在网关/反向代理限制心理管理路由仅受控教职工可达，并暂停学生作答功能，再回退应用。
+  回滚后保留 INTERNAL-AUTH-20260914 的入口凭证门，恢复修复版本后重新跑角色矩阵与测评计分验收。
+- 验证状态：2026-10-05 原 heuristic 分支在 JDK 17 下全后端 11 模块、249 例测试通过（0 失败/错误/跳过），JaCoCo 门通过；前端构建与只读 lint 通过（0 errors，既有格式提示）。真实 HTTP 请求及浏览器角色验收待验证。
+
 ## 10. 修复方案的运行手册更新模板
 
 每个修复方案在本文件追加或修改可执行步骤，并在维护记录使用与 `ARCHITECTURE.md`、`DECISIONS.md` 相同标识：
@@ -709,6 +757,7 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 | 2026-09-04 / GROQ-429-RETRY-20260904 | 增加 Groq TPM 429 定向退避、验收和回滚步骤 | 根因已由真实任务日志确认；线上复验待完成 |
 | 2026-09-04 / GROQ-JSON-MODE-20260904 | 增加 GPT-OSS JSON Object Mode、配额预算与复验步骤 | 线上 PARSE_ERROR 已复现；配置级测试和部署复验待完成 |
 | 2026-09-15 / RENDER-CD-20260915 | 增加 main 即生产的发布流程、CI 门控部署验证、排错与回滚步骤 | 官方 Schema 与路径覆盖自检通过；Blueprint 同步与首次门控部署待合入后验证 |
+| 2026-10-05 / MENTAL-AUTHZ-20261005 | 增加心理问卷端点授权与作答视图的复现、角色矩阵、回归命令及回滚约束 | 全后端 249 例、JaCoCo 门及前端构建/lint 通过；真实请求与浏览器验收待验证 |
 
 ## 生产诊断复现与复验：PROD-AUDIT-20260916（2026-09-16）
 
@@ -778,4 +827,4 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 
 验证状态：本次已核对凭证文件取消跟踪、模板保留、忽略命中及本地副本仍在；最终暂存时还须执行 staged diff 检查。
 
-本次 `bash scripts/test-preflight-prod.sh` 已通过；本工作区未独立重跑后端全量测试，共享的内部鉴权实现已随 heuristic 工作区的 249 例后端测试验证。线上直连和内部调用验收仍待部署后执行。
+本次 `bash scripts/test-preflight-prod.sh` 已通过；原 heuristic 分支在 JDK 17 下全后端 11 模块、249 例测试通过，JaCoCo 门通过；最新前端构建通过，lint 为 0 errors（存在 Prettier 提示）。浏览器角色矩阵和实际部署验收仍待验证。

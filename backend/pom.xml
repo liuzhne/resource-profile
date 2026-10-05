@@ -248,6 +248,9 @@
                                         <include>com.edu.common.security.AccessGuard</include>
                                         <include>com.edu.common.security.RoleContextFilter</include>
                                         <include>com.edu.gateway.filter.InternalHeaderStripFilter</include>
+                                        <!-- MENTAL-AUTHZ-20261005：心理管理侧纵向授权 / 学生作答视图 -->
+                                        <include>com.edu.mental.controller.MentalController</include>
+                                        <include>com.edu.mental.controller.StudentMentalController</include>
                                     </includes>
                                     <limits>
                                         <limit>

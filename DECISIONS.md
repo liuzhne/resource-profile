@@ -393,12 +393,44 @@
   会把凭证发给 ai-inference 等不需要它的目标。
 - 后果：部署后匿名直连下游返回 401。滚动部署期间若下游已升级而 agent/mcp 尚未升级，AI 取数会短暂 401
   并走 fallback。残余风险：下游入口不查 Redis 会话，已登出但未过期的 token 仍可直连下游（≤24h）；单一共享
-  密钥，泄露需全服务轮换；`MentalController` 仍缺角色授权（任意登录用户可读预警名单、改问卷），需单独修复。
+  密钥，泄露需全服务轮换。原先 `MentalController` 缺少角色授权的问题现由 ADR-030 收口；其余残余风险仍有效。
 - 证据：`ServiceAuthFilterTest`(9)、`AccessGuardTest`(17)、`FieldPermissionAdviceWalkTest`(9)、`RoleContextFilterTest`(5)、
   `InternalCallCredentialTest`(4)、`InternalCallFeignConfigTest`(2)、`InternalHeaderStripFilterTest`(4)、两个 Feign
   挂载测试，以及 student/mental/data/teacher/user/agent 各 controller 的匿名拒绝 / 内部凭证放行用例；JDK 17 全后端
   `mvn -B -ntp clean test` 11 模块 222 例通过，JaCoCo 定向门（新增 6 个类）通过；`scripts/test-preflight-prod.sh`
   通过。线上复验待部署后执行，只探聚合端点（RUNBOOK §6.1）。
+
+
+## ADR-030：心理问卷端点授权与作答视图
+
+- 状态：已采纳（补全 ADR-008、ADR-029）
+- 日期/修复标识：2026-10-05 / MENTAL-AUTHZ-20261005
+- 背景：内部凭证入口门只能确认调用身份，无法阻止已登录学生读取预警名单、完成情况或增删改问卷。
+  学生侧复用完整问卷 DTO 会下发选项分值、计分规则和等级阈值，允许作答者按分挑选项；完成情况返回
+  Map 行，注解驱动的字段脱敏无法覆盖原始 score。本条补齐代码中既有 `MENTAL-AUTHZ-20260914` 的文档。
+- 选择：管理读取使用 `STAFF_VIEW`；写入问卷、题目及等级规则使用 `MENTAL_WRITE`（admin/psychologist）；
+  完成情况原始 score 只对 `EXTREME_VIEW`（admin/psychologist）保留，其余教职工返回 null。管理端仅
+  `/mental/analysis` 接受已验证内部凭证，其他端点只认可 JWT 角色。学生模板仅认可合法 JWT，使用
+  `getForRespondent` 去掉选项 score、scoringRules 和 levelRules，并拒绝未开始或状态为空的问卷；已结束
+  问卷保留去分值模板以支持本人结果回显。问卷页补齐缺失的 `canWrite` 计算，依据 Pinia 用户角色只显示
+  admin/psychologist 写入口；角色缺失时默认隐藏。403 提示不会注销有效会话。
+- 原因：计分规则影响心理等级、预警与后续 AI 输入，修改权限需要与心理专业角色绑定。控制器拒绝在领域
+  service 前完成，覆盖直接调用 API；作答响应裁剪与服务端按数据库原题计分保持分离，避免更改数据库结构。
+- 放弃方案：只隐藏按钮不能阻止直接 HTTP 调用；依赖统一字段注解无法处理 Map 行和嵌在选项 JSON 内的
+  分值；让所有教职工修改问卷会扩大对筛查规则的控制权；全部管理端接受共享内部凭证会扩大凭证泄露影响；
+  拒绝已结束问卷模板会破坏结果页回显；将学生模板也视为内部端点没有实际调用方支持，因而不放行内部凭证。
+- 后果：教师失去问卷修改权限但保留设计读取和完成情况查看；学生无法读取管理端；普通教职工完成情况
+  score 为 null，前端应展示空值。选项 JSON 非法时作答视图不下发选项，管理人员须修正题目；这里移除的是
+  已定义的 score 属性，新增计分属性须同步裁剪和测试。学生模板没有用户/问卷分配绑定，任何已登录用户
+  仍可取开放或已结束的去分值模板。当前不增加数据库迁移，不改变个人记录的本人/内部调用授权。
+- 证据：[MentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/MentalController.java)、
+  [StudentMentalController](./backend/mental-service/src/main/java/com/edu/mental/controller/StudentMentalController.java)、
+  [QuestionServiceImpl](./backend/mental-service/src/main/java/com/edu/mental/service/impl/QuestionServiceImpl.java)、
+  [Roles](./backend/common/src/main/java/com/edu/common/security/Roles.java)；回归用例见
+  [MentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/MentalControllerTest.java)、
+  [StudentMentalControllerTest](./backend/mental-service/src/test/java/com/edu/mental/controller/StudentMentalControllerTest.java)、
+  [QuestionServiceImplTest](./backend/mental-service/src/test/java/com/edu/mental/service/impl/QuestionServiceImplTest.java)。
+  2026-10-05 已核对代码与端点规则；全后端 249 例测试、JaCoCo 门和前端构建/lint 通过，真实 HTTP 请求与浏览器角色验收待验证，命令与判据见 RUNBOOK。
 
 ## 新决策模板
 
@@ -434,6 +466,7 @@
 | 2026-09-15 / RENDER-CD-20260915 | 新增 ADR-026，main 即生产、CI 通过后按服务增量部署 | 部署以被部署提交的 CI 为准；buildFilter 与 CI push 路径须同步维护 |
 | 2026-09-26 / JDK21-UTF8MB4-20260926 | 新增 ADR-028，后端统一 JDK 21，种子脚本显式 utf8mb4 | Enforcer 改为 `[21,22)`；ADR-001 的 Java 版本随之更新 |
 | 2026-09-14 / INTERNAL-AUTH-20260914 | 新增 ADR-029，下游服务入口要求 JWT 或内部凭证，`AccessGuard`/字段权限不再把无 token 当内网 | 补全 ADR-008：下游公网可达时仍 fail-closed；`EDUCARE_INTERNAL_TOKEN` 成为生产硬门 |
+| 2026-10-05 / MENTAL-AUTHZ-20261005 | 新增 ADR-030：心理问卷端点授权与作答视图 | 补全 ADR-029 的管理角色缺口；仅心理专业角色可改计分规则，学生模板移除计分信息 |
 
 ## ADR-027：生产诊断与待实施修复（PROD-AUDIT-20260916，2026-09-16）
 

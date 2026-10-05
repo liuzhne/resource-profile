@@ -4,6 +4,7 @@ import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
 import com.edu.common.security.InternalCallCredential;
 import com.edu.common.util.JwtUtil;
+import com.edu.mental.dto.QuestionnaireFullDto;
 import com.edu.mental.dto.SubmitAnswerRequest;
 import com.edu.mental.entity.MentalAssessment;
 import com.edu.mental.service.MentalAssessmentService;
@@ -20,6 +21,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -112,6 +114,16 @@ class StudentMentalControllerTest {
     }
 
     @Test
+    void myQuestionnaires_self_ok() {
+        when(jwtUtil.getSubject("tok")).thenReturn("7");
+
+        Result<?> r = controller.myQuestionnaires(7L, AUTH);
+
+        assertThat(r.getCode()).isEqualTo(200);
+        verify(assessmentService).listForStudent(7L);
+    }
+
+    @Test
     void myDetail_otherUser_forbidden() {
         when(jwtUtil.getSubject("tok")).thenReturn("9");
 
@@ -119,6 +131,16 @@ class StudentMentalControllerTest {
 
         assertThat(r.getCode()).isEqualTo(403);
         verifyNoInteractions(assessmentService);
+    }
+
+    @Test
+    void myDetail_self_ok() {
+        when(jwtUtil.getSubject("tok")).thenReturn("7");
+
+        Result<?> r = controller.myDetail(7L, 100L, AUTH);
+
+        assertThat(r.getCode()).isEqualTo(200);
+        verify(assessmentService).getMyAssessmentDetail(7L, 100L);
     }
 
     @Test
@@ -144,5 +166,50 @@ class StudentMentalControllerTest {
 
         assertThat(r.getCode()).isEqualTo(200);
         verify(assessmentService).submit(req);
+    }
+
+    /* ---------- 作答视图（MENTAL-AUTHZ-20260914） ---------- */
+
+    @Test
+    void getForTaking_loggedIn_getsRespondentViewOnly() {
+        when(jwtUtil.getSubject("tok")).thenReturn("7");
+        QuestionnaireFullDto view = new QuestionnaireFullDto();
+        when(questionService.getForRespondent(3L)).thenReturn(view);
+
+        Result<QuestionnaireFullDto> r = controller.getForTaking(3L, AUTH);
+
+        assertThat(r.getCode()).isEqualTo(200);
+        assertThat(r.getData()).isSameAs(view);
+        // 不得回落到带计分答案的完整版
+        verify(questionService, never()).getFull(any());
+    }
+
+    @Test
+    void getForTaking_anonymous_forbidden() {
+        Result<QuestionnaireFullDto> r = controller.getForTaking(3L, null);
+
+        assertThat(r.getCode()).isEqualTo(403);
+        verifyNoInteractions(questionService);
+    }
+
+    @Test
+    void getForTaking_internalCredentialOnly_forbidden() {
+        // 作答视图没有内部调用方：内部凭证不能代替登录
+        asInternalCall();
+
+        Result<QuestionnaireFullDto> r = controller.getForTaking(3L, null);
+
+        assertThat(r.getCode()).isEqualTo(403);
+        verifyNoInteractions(questionService);
+    }
+
+    @Test
+    void getForTaking_invalidToken_forbidden() {
+        when(jwtUtil.getSubject("tok")).thenThrow(new IllegalArgumentException("bad signature"));
+
+        Result<QuestionnaireFullDto> r = controller.getForTaking(3L, AUTH);
+
+        assertThat(r.getCode()).isEqualTo(403);
+        verifyNoInteractions(questionService);
     }
 }
