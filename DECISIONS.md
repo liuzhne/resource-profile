@@ -590,5 +590,5 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 选择：新增 [`AgentRunner`](./backend/agent-service/src/main/java/com/edu/agent/core/AgentRunner.java)（`run(req)` / `run(req, validator)`），`AgentLoop` 作为首个实现，`AgentTaskServiceImpl` 只注入接口。纯重构，行为不变。
 - 命名：不用 `AgentOrchestrator`，避免与 orchestrator-workers 模式混淆，该名留给未来的多 Agent 实现。
 - 放弃方案：直接迁 Spring AI Alibaba Graph（当前无流程类需求，收益不足）。
-- 约束：容器内只能有一个 `AgentRunner` bean；新增实现时需用 `@Primary`/`@Qualifier` 或配置开关选择。`SubAgentToolCallback` 暂仍直接用 `AgentLoop`，不在本次范围。
+- 约束：容器内只能有一个 `AgentRunner` bean；新增实现时需用 `@Primary`/`@Qualifier` 或配置开关选择。`SubAgentToolCallback` / `SubAgentRegistry` 也改为依赖 `AgentRunner`；`run(req)` 只保留接口默认方法。
 - 验证：`mvn -q -pl agent-service -am test`（JDK 21）通过，agent-service 96 例 0 失败。

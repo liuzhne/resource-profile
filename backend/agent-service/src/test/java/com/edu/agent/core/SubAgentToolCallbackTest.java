@@ -32,7 +32,7 @@ class SubAgentToolCallbackTest {
 
     @Test
     void toolDefinitionReflectsSpec() {
-        SubAgentToolCallback cb = new SubAgentToolCallback(spec(List.of()), mock(AgentLoop.class), List::of);
+        SubAgentToolCallback cb = new SubAgentToolCallback(spec(List.of()), mock(AgentRunner.class), List::of);
         assertThat(cb.getToolDefinition().name()).isEqualTo("consult_psychologist");
         assertThat(cb.getToolDefinition().description()).contains("心理咨询师");
         assertThat(cb.getToolDefinition().inputSchema()).contains("query");
@@ -40,7 +40,7 @@ class SubAgentToolCallbackTest {
 
     @Test
     void callRunsSubLoopAndReturnsFinalAnswer() {
-        AgentLoop loop = mock(AgentLoop.class);
+        AgentRunner loop = mock(AgentRunner.class);
         when(loop.run(any(AgentLoopRequest.class)))
                 .thenReturn(new AgentLoopResult(AgentLoopStatus.COMPLETED, "专家结论：低风险", List.of(), 1));
         SubAgentToolCallback cb = new SubAgentToolCallback(spec(List.of()), loop, List::of);
@@ -51,7 +51,7 @@ class SubAgentToolCallbackTest {
 
     @Test
     void filtersToolsByNameAndPassesQuery() {
-        AgentLoop loop = mock(AgentLoop.class);
+        AgentRunner loop = mock(AgentRunner.class);
         when(loop.run(any(AgentLoopRequest.class)))
                 .thenReturn(new AgentLoopResult(AgentLoopStatus.COMPLETED, "ok", List.of(), 1));
         ToolCallback a = namedTool("get_mental_indicators");
@@ -72,7 +72,7 @@ class SubAgentToolCallbackTest {
 
     @Test
     void nullFinalAnswerReturnsFallback() {
-        AgentLoop loop = mock(AgentLoop.class);
+        AgentRunner loop = mock(AgentRunner.class);
         when(loop.run(any(AgentLoopRequest.class)))
                 .thenReturn(new AgentLoopResult(AgentLoopStatus.MAX_ITERATIONS, null, List.of(), 4));
         SubAgentToolCallback cb = new SubAgentToolCallback(spec(List.of()), loop, List::of);
@@ -81,7 +81,7 @@ class SubAgentToolCallbackTest {
 
     @Test
     void nonJsonInputUsedAsQuery() {
-        AgentLoop loop = mock(AgentLoop.class);
+        AgentRunner loop = mock(AgentRunner.class);
         when(loop.run(any(AgentLoopRequest.class)))
                 .thenReturn(new AgentLoopResult(AgentLoopStatus.COMPLETED, "ok", List.of(), 1));
         SubAgentToolCallback cb = new SubAgentToolCallback(spec(List.of()), loop, List::of);

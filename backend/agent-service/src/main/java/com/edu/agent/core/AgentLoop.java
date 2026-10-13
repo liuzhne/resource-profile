@@ -82,11 +82,6 @@ public class AgentLoop implements AgentRunner {
         }
     }
 
-    @Override
-    public AgentLoopResult run(AgentLoopRequest rawReq) {
-        return run(rawReq, null);
-    }
-
     /**
      * J-1.3：带 final_answer 校验的 run。validator 非空时，final_answer 不合格会喂纠错 observation
      * 触发最多 {@link #MAX_FINAL_ANSWER_REPAIRS} 次修复轮；修复预算耗尽则接受当前答案返回（由调用方裁决）。
