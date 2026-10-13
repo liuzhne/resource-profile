@@ -119,4 +119,20 @@ class TeacherControllerTest {
         assertThat(controller.delete(9L, AUTH).getCode()).isEqualTo(200);
         verify(teacherService).delete(9L);
     }
+
+    // AUTHZ-MCP-20261013：/teacher/by-user/{userId} 只允许本人或内部调用
+    @Test
+    void byUser_selfAllowed_otherStaffDenied_internalAllowed() {
+        Teacher t = new Teacher();
+        when(teacherService.getByUserId(7L)).thenReturn(t);
+        assertThat(controller.getByUserId(7L, AUTH).getData()).isSameAs(t);
+        asRole("admin");
+        assertThat(controller.getByUserId(8L, AUTH).getCode()).isEqualTo(403);
+        verify(teacherService, never()).getByUserId(8L);
+        asInternalCall();
+        when(teacherService.getByUserId(8L)).thenReturn(t);
+        assertThat(controller.getByUserId(8L, null).getData()).isSameAs(t);
+        RequestContextHolder.resetRequestAttributes();
+        assertThat(controller.getByUserId(8L, null).getCode()).isEqualTo(403);
+    }
 }

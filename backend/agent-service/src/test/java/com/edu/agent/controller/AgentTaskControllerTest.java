@@ -16,7 +16,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -59,12 +62,15 @@ class AgentTaskControllerTest {
     void trigger_staff_ok() {
         when(jwtUtil.getSubject("tok")).thenReturn("9");
         when(jwtUtil.parseRoles("tok")).thenReturn(Set.of("counselor"));
-        when(agentTaskService.triggerTask(5L)).thenReturn(100L);
+        when(agentTaskService.triggerTask(eq(5L), any())).thenReturn(100L);
 
         Result<Long> r = controller.trigger(5L, AUTH);
 
         assertThat(r.getCode()).isEqualTo(200);
         assertThat(r.getData()).isEqualTo(100L);
+        // AUTHZ-MCP-20261013：用户触发 → 转发其 JWT，发起者记为其 userId
+        verify(agentTaskService).triggerTask(eq(5L), argThat(c ->
+                c.isUser() && AUTH.equals(c.userAuthorizationHeader()) && "9".equals(c.initiator())));
     }
 
     @Test
@@ -75,7 +81,7 @@ class AgentTaskControllerTest {
         Result<Long> r = controller.trigger(5L, AUTH);
 
         assertThat(r.getCode()).isEqualTo(403);
-        verify(agentTaskService, never()).triggerTask(anyLong());
+        verify(agentTaskService, never()).triggerTask(anyLong(), any());
     }
 
     @Test
@@ -92,12 +98,12 @@ class AgentTaskControllerTest {
     @Test
     void trigger_internalCredential_ok() {
         asInternalCall();
-        when(agentTaskService.triggerTask(5L)).thenReturn(100L);
+        when(agentTaskService.triggerTask(eq(5L), any())).thenReturn(100L);
 
         Result<Long> r = controller.trigger(5L, null);
 
         assertThat(r.getCode()).isEqualTo(200);
-        verify(agentTaskService).triggerTask(5L);
+        verify(agentTaskService).triggerTask(eq(5L), argThat(c -> !c.isUser() && "internal".equals(c.initiator())));
     }
 
     @Test
@@ -106,6 +112,6 @@ class AgentTaskControllerTest {
         Result<Long> r = controller.trigger(5L, null);
 
         assertThat(r.getCode()).isEqualTo(403);
-        verify(agentTaskService, never()).triggerTask(anyLong());
+        verify(agentTaskService, never()).triggerTask(anyLong(), any());
     }
 }

@@ -21,6 +21,7 @@ class DeferredMcpConfigurationTest {
                 .withConfiguration(AutoConfigurations.of(ToolCallingAutoConfiguration.class))
                 .withUserConfiguration(DeferredMcpConfiguration.class)
                 .withBean(McpSyncHttpClientRequestCustomizer.class, () -> mock(McpSyncHttpClientRequestCustomizer.class))
+                .withBean(com.edu.agent.security.McpCallerTokenResolver.class, () -> mock(com.edu.agent.security.McpCallerTokenResolver.class))
                 .withPropertyValues("educare.mcp.deferred-enabled=true", "spring.ai.mcp.client.enabled=false")
                 .run(context -> {
                     assertNull(context.getStartupFailure());

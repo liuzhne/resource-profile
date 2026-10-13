@@ -111,4 +111,53 @@ class JwtUtilTest {
         JwtUtil other = utilWithSecret(SECRET.substring(0, 32) + "-other-secret-padding!");
         assertThat(other.validateToken(token)).isFalse();
     }
+
+    // ---------------- AUTHZ-MCP-20261013：aud 与系统身份 ----------------
+
+    @Test
+    void accessToken_carriesConfiguredAudiences_refreshTokenDoesNot() {
+        String access = jwtUtil.generateAccessToken("1", Map.of());
+        assertThat(jwtUtil.parseToken(access).getAudience())
+                .containsExactlyInAnyOrder(JwtProperties.AUDIENCE_API, JwtProperties.AUDIENCE_MCP_STUDENT_DATA);
+        assertThat(jwtUtil.parseToken(jwtUtil.generateRefreshToken("1")).getAudience()).isNullOrEmpty();
+    }
+
+    @Test
+    void emptyAudienceList_issuesLegacyTokenWithoutAud() {
+        JwtProperties p = new JwtProperties();
+        p.setSecret(SECRET);
+        p.setAudiences(java.util.List.of());
+        JwtUtil util = new JwtUtil(p);
+        util.init();
+        assertThat(util.parseToken(util.generateAccessToken("1", null)).getAudience()).isNullOrEmpty();
+    }
+
+    @Test
+    void parseTokenForAudience_acceptsMatching_rejectsWrongAndMissing() {
+        String access = jwtUtil.generateAccessToken("1", null);
+        assertThat(jwtUtil.parseTokenForAudience(access, JwtProperties.AUDIENCE_MCP_STUDENT_DATA, false)
+                .getSubject()).isEqualTo("1");
+        assertThatThrownBy(() -> jwtUtil.parseTokenForAudience(access, "other", true))
+                .isInstanceOf(io.jsonwebtoken.JwtException.class);
+        String refresh = jwtUtil.generateRefreshToken("1");
+        assertThatThrownBy(() -> jwtUtil.parseTokenForAudience(refresh, "x", false))
+                .isInstanceOf(io.jsonwebtoken.JwtException.class);
+        assertThat(jwtUtil.parseTokenForAudience(refresh, "x", true).getSubject()).isEqualTo("1");
+    }
+
+    @Test
+    void systemToken_hasTypeScopeBindingInitiatorAndSingleAudience() {
+        String sys = jwtUtil.generateSystemToken("agent-task", "mcp-student-data",
+                java.util.List.of("student-data:read"), 11L, "7");
+        var c = jwtUtil.parseToken(sys);
+        assertThat(c.getSubject()).isEqualTo("system:agent-task");
+        assertThat(c.get(JwtUtil.CLAIM_TYPE)).isEqualTo(JwtUtil.TYPE_SYSTEM);
+        assertThat(c.get(JwtUtil.CLAIM_SCOPE).toString()).isEqualTo("[student-data:read]");
+        assertThat(((Number) c.get(JwtUtil.CLAIM_STUDENT_ID)).longValue()).isEqualTo(11L);
+        assertThat(c.get(JwtUtil.CLAIM_INITIATOR)).isEqualTo("7");
+        assertThat(c.getAudience()).containsExactly("mcp-student-data");
+        assertThat(jwtUtil.parseRoles(sys)).isEmpty();
+        String noBinding = jwtUtil.generateSystemToken("x", "a", null, null, null);
+        assertThat(jwtUtil.parseToken(noBinding).get(JwtUtil.CLAIM_INITIATOR)).isEqualTo("unknown");
+    }
 }

@@ -17,7 +17,7 @@ class StudentDataToolsContractTest {
 
     @Test
     void exposesCanonicalSnakeCaseToolNames() {
-        StudentDataTools tools = new StudentDataTools(null, null);
+        StudentDataTools tools = new StudentDataTools(null, null, null);
 
         ToolCallback[] callbacks = MethodToolCallbackProvider.builder()
                 .toolObjects(tools)
