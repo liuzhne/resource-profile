@@ -934,3 +934,9 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
   自动配置清单完整性/无重复断言通过。忽略的本地 docker/.env.audit 副本已恢复，不参与 Git 跟踪。
   真实 Docker 全栈、GPU、HTTP/浏览器角色及生产验收未执行；原 heuristic 分支的 JDK 17 后端 249 例与
   前端验证保留为历史证据，平台凭证轮换仍待部署方执行。
+
+## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
+
+- 验证：`cd backend && mvn -q -pl agent-service -am test`（JDK 21），通过判据为 0 失败，含 `AgentRunnerContractTest`。
+- 排错：启动报 `expected single matching bean of type AgentRunner` 说明出现了第二个实现，需指定 `@Primary` 或 `@Qualifier`。
+- 回滚：回退本提交即可，无配置或数据变更。

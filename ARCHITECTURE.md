@@ -360,3 +360,7 @@ common 自动配置清单中的原有性能配置与新增服务入口鉴权同�
 该脚本不改变生产服务拓扑或权限。合并后 JDK 21 后端 11 模块/54 套测试/267 例与 10 个代码模块的
 JaCoCo 门通过；前端、preflight 和 Bash 5/macOS Bash 3.2 的脚本回归通过，详见 RUNBOOK 同名记录。
 真实起栈、R-5/R-6 与历史凭证轮换仍须取得独立环境证据。
+
+## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
+
+agent-service 内部新增抽象层：`AgentTaskServiceImpl → AgentRunner（接口）→ AgentLoop（实现）`。服务边界、外部调用链与数据流不变。详见 DECISIONS.md 同标识条目。
