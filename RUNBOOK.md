@@ -619,6 +619,8 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 
 ### RENDER-CD-20260915：合入 main 即部署生产（CI 通过后按服务增量部署）
 
+> 已废弃（2026-10-13）：生产已迁至 Kamatera，见 KAMATERA-DEPLOY-20261013。本节仅作历史参考。
+
 - 复现（修复前）：`gh api repos/liuzhne/resource-profile/commits/bcb01c4/check-runs` 返回空——CI 只在
   `pull_request` 上运行，被部署的 main 提交从未验证；Render 使用 `autoDeploy: true`（每个提交立即部署），
   main 的 ruleset 又不要求 PR 检查通过，CI 红的 PR 合入后照样上线。10 个 Docker 服务没有 `buildFilter`，
@@ -946,3 +948,10 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 - 验证：`cd backend && mvn -q -pl agent-service -am test`（JDK 21），通过判据为 0 失败，含 `AgentRunnerContractTest`。
 - 排错：启动报 `expected single matching bean of type AgentRunner` 说明出现了第二个实现，需指定 `@Primary` 或 `@Qualifier`。
 - 回滚：回退本提交即可，无配置或数据变更。
+
+## 维护记录：KAMATERA-DEPLOY-20261013（2026-10-13）
+
+- 部署：在生产服务器 `docker/` 目录先运行 `../scripts/preflight-prod.sh`（必须全绿），再执行 `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`。
+- 验证：`curl -s -o /dev/null -w '%{http_code}\n' https://resource-profile.45-130-165-168.nip.io/login` 返回 200；Nacos（8848/9848）与网关 8080 从公网不可达。
+- 待办：在 Render 控制台停用旧 Blueprint 服务。
+- 回滚：回退本提交即可，无运行时影响。
