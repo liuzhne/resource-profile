@@ -15,7 +15,7 @@ def test_cache_key_differs_for_rerank_on_off():
     assert on == _pipeline_cache_key("case", "  焦虑 ", 5, True)
 
 
-def _run(enable_rerank, reranker_enabled, store):
+def _run(enable_rerank, reranker_enabled, store, rerank_scores=None):
     async def fake_get(key):
         return store.get(key)
 
@@ -29,7 +29,7 @@ def _run(enable_rerank, reranker_enabled, store):
         {"chunk_id": "b", "title": "B", "content": "bbb", "score": 0.8},
     ]
     reranker = MagicMock()
-    reranker.rerank = AsyncMock(return_value=[
+    reranker.rerank = AsyncMock(return_value=rerank_scores if rerank_scores is not None else [
         {"index": 1, "relevance_score": 0.95},
         {"index": 0, "relevance_score": 0.5},
     ])
@@ -61,3 +61,20 @@ def test_per_request_enable_rerank_separates_cache():
     _run(False, True, store)
     r, calls = _run(True, True, store)
     assert calls == 1 and r["reranked"] is True
+
+
+def test_rerank_fallback_is_not_cached_and_next_call_retries():
+    store = {}
+    zero = [{"index": 0, "relevance_score": 0.0}, {"index": 1, "relevance_score": 0.0}]
+    r1, calls1 = _run(True, True, store, rerank_scores=zero)
+    assert r1["reranked"] is False and calls1 == 1
+    assert store == {}, "rerank 回退结果不应写入缓存"
+    r2, calls2 = _run(True, True, store)
+    assert calls2 == 1 and r2["reranked"] is True
+    assert len(store) == 1
+
+
+def test_reranker_error_empty_result_not_cached():
+    store = {}
+    _run(True, True, store, rerank_scores=[])
+    assert store == {}

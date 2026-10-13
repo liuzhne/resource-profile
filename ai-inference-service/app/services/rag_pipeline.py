@@ -112,6 +112,7 @@ async def retrieve_from_collection(
         }
 
     reranked = False
+    rerank_fell_back = False
     if do_rerank and len(hits) > 1:
         documents = [(h.get("content") or h.get("title") or "") for h in hits]
         rerank_results = await get_reranker_client().rerank(
@@ -131,6 +132,7 @@ async def retrieve_from_collection(
             hits = ordered
             reranked = True
         else:
+            rerank_fell_back = True
             logger.warning("rag_pipeline reranker 返回零分，回退 milvus 排序")
 
     final = hits[:top_k]
@@ -154,6 +156,10 @@ async def retrieve_from_collection(
         "fallback": False,
         "chunks": chunks,
     }
+    if rerank_fell_back:
+        # 请求了 rerank 但精排失败：不写入 rerank=1 的缓存键，下次请求重新尝试精排
+        logger.info("rag_pipeline rerank 回退结果不缓存 key=%s collection=%s", cache_key, collection_key)
+        return payload
     await cache_setex(cache_key, settings.RAG_CACHE_TTL, json.dumps(payload, ensure_ascii=False))
     logger.info(
         "rag_pipeline X-Cache: MISS key=%s collection=%s top_k=%s reranked=%s",

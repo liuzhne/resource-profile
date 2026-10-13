@@ -588,6 +588,7 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 
 - 背景：`retrieve_from_collection` 的缓存键只含集合、query、top_k，不含是否 rerank。切换 `RERANKER_ENABLED` 或按请求传 `enable_rerank` 后，在 `RAG_CACHE_TTL` 内会返回另一种排序的旧结果。
 - 选择：在计算缓存键前确定 `do_rerank`（显式参数优先，否则取配置），并写入 [`_pipeline_cache_key`](./ai-inference-service/app/services/rag_pipeline.py)；同时在 requirements 中固定 `setuptools<81`（pymilvus 2.4 运行时依赖 `pkg_resources`）。
+- 补充（评审）：请求了 rerank 但精排失败或全零分、回退为 Milvus 排序时，结果不写入缓存，下次请求重试精排；`setuptools<81` 为临时规避，升级到不再 import `pkg_resources` 的 pymilvus 后删除。
 - 放弃方案：切换配置时清空 Redis（运维易漏，且无法覆盖按请求开关）；缩短 TTL（只缩小窗口）。
 - 代价与约束：上线后旧格式的键不再命中，首轮请求全部回源一次；旧键按 TTL 自然过期。
-- 验证：[单测](./ai-inference-service/tests/test_rag_pipeline_cache_key.py) 在修复前 3 例失败、修复后通过；全量 31 例通过（Python 3.11，外部服务均 mock）。真实 Milvus/Redis/reranker 联调待验证。
+- 验证：[单测](./ai-inference-service/tests/test_rag_pipeline_cache_key.py) 在修复前 3 例失败、修复后通过；全量 33 例在 Python 3.11 与 3.10（Dockerfile 版本）下通过（外部服务均 mock）。真实 Milvus/Redis/reranker 联调待验证。

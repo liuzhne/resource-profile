@@ -938,5 +938,5 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 ## 维护记录：RAG-CACHE-RERANK-20261013（2026-10-13）
 
 - 验证：`cd ai-inference-service && uv venv -p 3.11 .venv && . .venv/bin/activate && uv pip install -r requirements.txt -r tests/requirements.txt pytest pytest-asyncio && python -m pytest -q`，通过判据为全部通过（含 `tests/test_rag_pipeline_cache_key.py`）。
-- 线上排查：切换 `RERANKER_ENABLED` 后，同一 query 的 `reranked` 字段应立即随配置变化，不再等待 `RAG_CACHE_TTL`。待验证（需真实 Redis/Milvus）。
+- 线上排查：切换 `RERANKER_ENABLED` 后，同一 query 的 `reranked` 字段应立即随配置变化，不再等待 `RAG_CACHE_TTL`；reranker 故障期间回退结果不缓存，日志出现 `rerank 回退结果不缓存`，恢复后下一次请求即重新精排。待验证（需真实 Redis/Milvus）。
 - 回滚：回退本提交即可；旧键按 TTL 过期，无需手工清理缓存。
