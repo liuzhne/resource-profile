@@ -23,13 +23,14 @@ from app.services.reranker_client import get_reranker_client
 logger = logging.getLogger(__name__)
 
 
-def _pipeline_cache_key(collection_key: str, query: str, top_k: int) -> str:
+def _pipeline_cache_key(collection_key: str, query: str, top_k: int, rerank: bool) -> str:
     h = hashlib.sha256()
     h.update(collection_key.encode("utf-8"))
     h.update(b"|")
     h.update(query.strip().lower().encode("utf-8"))
     h.update(b"|")
     h.update(str(top_k).encode())
+    h.update(b"|rerank=1" if rerank else b"|rerank=0")
     return "edu:rag:pipe:" + h.hexdigest()[:32]
 
 
@@ -72,7 +73,8 @@ async def retrieve_from_collection(
             "error": f"unknown collection_key: {collection_key}",
         }
 
-    cache_key = _pipeline_cache_key(collection_key, query, top_k)
+    do_rerank = settings.RERANKER_ENABLED if enable_rerank is None else enable_rerank
+    cache_key = _pipeline_cache_key(collection_key, query, top_k, do_rerank)
     cached = await cache_get(cache_key)
     if cached:
         try:
@@ -110,7 +112,7 @@ async def retrieve_from_collection(
         }
 
     reranked = False
-    do_rerank = settings.RERANKER_ENABLED if enable_rerank is None else enable_rerank
+    rerank_fell_back = False
     if do_rerank and len(hits) > 1:
         documents = [(h.get("content") or h.get("title") or "") for h in hits]
         rerank_results = await get_reranker_client().rerank(
@@ -130,6 +132,7 @@ async def retrieve_from_collection(
             hits = ordered
             reranked = True
         else:
+            rerank_fell_back = True
             logger.warning("rag_pipeline reranker 返回零分，回退 milvus 排序")
 
     final = hits[:top_k]
@@ -153,6 +156,10 @@ async def retrieve_from_collection(
         "fallback": False,
         "chunks": chunks,
     }
+    if rerank_fell_back:
+        # 请求了 rerank 但精排失败：不写入 rerank=1 的缓存键，下次请求重新尝试精排
+        logger.info("rag_pipeline rerank 回退结果不缓存 key=%s collection=%s", cache_key, collection_key)
+        return payload
     await cache_setex(cache_key, settings.RAG_CACHE_TTL, json.dumps(payload, ensure_ascii=False))
     logger.info(
         "rag_pipeline X-Cache: MISS key=%s collection=%s top_k=%s reranked=%s",

@@ -934,3 +934,9 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
   自动配置清单完整性/无重复断言通过。忽略的本地 docker/.env.audit 副本已恢复，不参与 Git 跟踪。
   真实 Docker 全栈、GPU、HTTP/浏览器角色及生产验收未执行；原 heuristic 分支的 JDK 17 后端 249 例与
   前端验证保留为历史证据，平台凭证轮换仍待部署方执行。
+
+## 维护记录：RAG-CACHE-RERANK-20261013（2026-10-13）
+
+- 验证：`cd ai-inference-service && uv venv -p 3.11 .venv && . .venv/bin/activate && uv pip install -r requirements.txt -r tests/requirements.txt pytest pytest-asyncio && python -m pytest -q`，通过判据为全部通过（含 `tests/test_rag_pipeline_cache_key.py`）。
+- 线上排查：切换 `RERANKER_ENABLED` 后，同一 query 的 `reranked` 字段应立即随配置变化，不再等待 `RAG_CACHE_TTL`；reranker 故障期间回退结果不缓存，日志出现 `rerank 回退结果不缓存`，恢复后下一次请求即重新精排。待验证（需真实 Redis/Milvus）。
+- 回滚：回退本提交。注意：若本版本运行期间切换过 `RERANKER_ENABLED`，回退后旧格式键（不含 rerank 标记）可能被重新读到，返回切换前的结果；此时需清理 `edu:rag:pipe:*` 缓存（如 `redis-cli --scan --pattern 'edu:rag:pipe:*' | xargs -r redis-cli del`），或等待 `RAG_CACHE_TTL` 过期后再视为结果最新。未切换过配置则无需处理。
