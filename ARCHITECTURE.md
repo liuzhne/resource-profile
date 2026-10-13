@@ -368,3 +368,14 @@ JaCoCo 门通过；前端、preflight 和 Bash 5/macOS Bash 3.2 的脚本回归�
 ## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
 
 agent-service 内部新增抽象层：`AgentTaskServiceImpl → AgentRunner（接口）→ AgentLoop（实现）`。服务边界、外部调用链与数据流不变。详见 DECISIONS.md 同标识条目。
+
+## 维护记录：JAVA-AUDIT-20261013（2026-10-13）
+
+agent-service 新增 `com.edu.agent.audit` 包。默认（`educare.ai.audit.impl=python`）调用链不变。
+
+- `AgentTaskServiceImpl.executeComplianceAudit →`
+  - python（默认）：`AiInferenceClient.complianceAudit`（原样）
+  - java：`ComplianceAuditService → JavaComplianceAuditor →` 本地 `@Primary` ChatClient（数据不出本地）
+  - parallel：`ComplianceAuditService →` 并发 `PythonComplianceAuditor`（Feign）+ `JavaComplianceAuditor`，任一侧不通过即不通过
+- 新增线程池 `complianceAuditExecutor`（固定 8 线程，队列 256，满则该侧按不通过处理）。
+- 安全边界：java / parallel 模式下审核为 fail-closed；`compliance_audit` 存库 JSON 结构不变，新增 `audit_source`、`audit_failure`、`audit_note`、`parallel` 可选字段。

@@ -182,6 +182,12 @@ educare:
   # enabled=true（默认）→ AgentTaskServiceImpl.doExecute 走 AgentLoop（一次性 think→tool→observe 完成
   #   "风险识别 + 计划生成"，RAG 检索由 knowledge-rag MCP tool 自然完成；合规审核 P4 仍走原 audit 端点）。
   # enabled=false → 回落旧 4 阶段流水线（risk → rag → plan → audit）作 fallback。
+  # JAVA-AUDIT-20261013：合规审核实现。python（默认，原链路不变）| java | parallel（两侧并发，任一侧不通过即不通过）。
+  # java / parallel 下任何错误（超时、模型异常、输出无法解析）都按不通过处理。timeout 为单侧超时。
+  ai:
+    audit:
+      impl: ${EDUCARE_AI_AUDIT_IMPL:python}
+      timeout: ${EDUCARE_AI_AUDIT_TIMEOUT:60s}
   agent:
     loop:
       enabled: ${EDUCARE_AGENT_LOOP_ENABLED:true}
