@@ -124,3 +124,23 @@ workflow：`.github/workflows/eval-gate.yml`，PR 触发（paths 命中 `eval/` 
 - **本 eval（G-6）**：离线回归，prompt/模型/RAG 改动后的 gate；防"在线看着没问题，但 ground truth 全错"
 
 两者互补不重复；CI 阻塞合并的是后者。
+
+## 9. 评测 Java 风险识别（JAVA-RISK-PLAN-20261013）
+
+agent-service 提供一个与 Python `/api/v1/agent/risk` 契约相同的离线评测端点，`run_eval.py` 和 CI workflow 都不用改：
+
+```bash
+# 1) 起 agent-service，打开评测端点（默认关闭；仅 127.0.0.1 可达，网关对 /_internal/ 返回 403）
+EDUCARE_AI_EVAL_ENDPOINT_ENABLED=true LLM_TEMPERATURE=0 mvn -pl agent-service spring-boot:run
+
+# 2) 把 base-url 指向评测端点前缀（run_eval.py 会自动追加 /api/v1/agent/risk）
+python eval/run_eval.py --base-url http://127.0.0.1:8087/agent/_internal/eval \
+  --out eval/run_results_java.json --md eval/run_results_java.md
+
+# 3) 用同一数据集跑一次 Python 版作为对照
+python eval/run_eval.py --base-url http://localhost:8090 --out eval/run_results_python.json
+```
+
+- 端点固定调用 Java 实现（不受 `educare.ai.risk.impl` 影响），失败返回 502，计为错误用例，不会返回默认"中风险"。
+- 验收：Java 的 `level_accuracy_exact` ≥ 0.85，且不低于 Python 版在同一数据集上的分数（见迁移方案第 2 步）。
+- CI 的 `eval-gate` 目前只指向 `EVAL_LLM_BASE_URL`；要在 CI 里评测 Java 版，需要把该变量换成可达的 agent-service 评测端点前缀（改仓库变量即可，不改 workflow）。

@@ -601,3 +601,18 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 放弃方案：直接迁 Spring AI Alibaba Graph（当前无流程类需求，收益不足）。
 - 约束：容器内只能有一个 `AgentRunner` bean；新增实现时需用 `@Primary`/`@Qualifier` 或配置开关选择。`SubAgentToolCallback` / `SubAgentRegistry` 也改为依赖 `AgentRunner`；`run(req)` 只保留接口默认方法。
 - 验证：`mvn -q -pl agent-service -am test`（JDK 21）通过，agent-service 96 例 0 失败。
+
+## JAVA-RISK-PLAN-20261013：风险识别与方案生成迁到 Java（Spring AI 结构化输出，默认不切换）（2026-10-13）
+
+- 背景：迁移计划第 2 步，把 Python `ai-inference-service` 的 `/api/v1/agent/risk`、`/api/v1/agent/plan` 搬进 agent-service。现状：AgentLoop 主路径（默认）不调用这两个端点；只有 legacy 流水线（`educare.agent.loop.enabled=false`）用到——风险识别走 Java [`RiskAnalyzeService`](./backend/agent-service/src/main/java/com/edu/agent/service/RiskAnalyzeService.java)（不经 Python），方案生成走 Feign → Python。Python `/agent/risk` 实际只被 `eval/run_eval.py` 使用。
+- 选择：
+  - prompt 原样移植到 [`prompts/risk.system.md`](./backend/agent-service/src/main/resources/prompts/risk.system.md)、[`prompts/plan.system.md`](./backend/agent-service/src/main/resources/prompts/plan.system.md)（单测锁定与 Python 文件逐字节一致）；user 消息拼装与 Python 相同（安全前言 + 清洗后的 `<tag>JSON</tag>`，见 [`PromptPayloads`](./backend/agent-service/src/main/java/com/edu/agent/ai/PromptPayloads.java)）。
+  - 输出映射为 Java record [`RiskAssessment`](./backend/agent-service/src/main/java/com/edu/agent/ai/model/RiskAssessment.java)、[`InterventionPlan`](./backend/agent-service/src/main/java/com/edu/agent/ai/model/InterventionPlan.java)，字段名与 Python JSON 契约一致，存库格式不变。
+  - [`StructuredLlmClient`](./backend/agent-service/src/main/java/com/edu/agent/ai/StructuredLlmClient.java)：Spring AI `BeanOutputConverter` 生成格式指令并解析，再做业务校验（等级合法、分数 0..100、必填非空、`deadline_days` 1..7）。格式错误最多尝试 `educare.ai.structured.max-attempts`（默认 3）次，之后抛 `AiStructuredOutputException(MALFORMED_OUTPUT)`；模型调用异常不在这层重试（Spring AI RetryTemplate 已处理 429），直接抛 `MODEL_ERROR`。legacy 流水线收到异常后任务标为 FAILED，**不**像 Python 那样返回默认"中风险"或占位方案。
+  - 开关（[`RiskPlanDispatcher`](./backend/agent-service/src/main/java/com/edu/agent/ai/RiskPlanDispatcher.java)）：`educare.ai.risk.impl=legacy|python|java`（默认 `legacy`）、`educare.ai.plan.impl=python|java`（默认 `python`）。非法值启动即失败。
+  - `PromptSanitizer` 合并 `prompt_guard.py`：逐条对比后补齐 4 处 Java 与 Python 不一致的规则（Unicode 空白、只把 `\n` 当行首、按码点截断、空标签退回 `data`），原有规则一条未删。仓库里原本没有 prompt_guard 的 Python 单测，先补了 [`tests/test_prompt_guard.py`](./ai-inference-service/tests/test_prompt_guard.py) 固定 Python 行为，再逐条翻译成 [`PromptSanitizerParityTest`](./backend/common/src/test/java/com/edu/common/util/PromptSanitizerParityTest.java)。
+  - eval：新增默认关闭的 [`RiskEvalController`](./backend/agent-service/src/main/java/com/edu/agent/ai/RiskEvalController.java)，路径 `/agent/_internal/eval/api/v1/agent/risk`，契约与 Python 相同，`run_eval.py --base-url http://127.0.0.1:8087/agent/_internal/eval` 即可评测，不改脚本和 workflow（见 [eval/README.md §9](./eval/README.md)）。
+- 为什么风险识别默认是 `legacy` 而不是 `python`：main 上 legacy 流水线的风险识别本来就不调 Python；默认 `python` 会改变现有行为，违背"开关打开前行为不变"的原则。
+- 放弃方案：直接用 `ChatClient...entity(Class)`（解析失败直接抛错，无法控制重试次数和校验）；改造 `RiskAnalyzeService`（它用另一份 prompt、失败返回默认值，保留作 legacy 便于对比）；修改 `run_eval.py` 增加 `--endpoint` 参数（没有必要，base-url 前缀即可）。
+- 代价与约束：Java 实现的 user 消息末尾多一段 Spring AI 格式指令，与 Python prompt 不完全相同，评测时要以同一数据集分别跑两版对比；`PromptSanitizer` 规则对齐后，含全角空格前导角色行、U+2028、emoji 超长截断的输入，Java 输出会与之前略有不同（与 Python 一致）。
+- 验证：[`JavaRiskPlanTest`](./backend/agent-service/src/test/java/com/edu/agent/ai/JavaRiskPlanTest.java)（解析、重试成功、重试耗尽、校验失败、模型错误不重试、方案三段顺序、开关默认值/各模式/非法值、eval 端点、prompt 一致性）、`PromptSanitizerParityTest`、`tests/test_prompt_guard.py`。真实模型下的准确率（≥0.85 且不低于 Python 版）待测试环境评测。

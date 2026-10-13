@@ -182,6 +182,19 @@ educare:
   # enabled=true（默认）→ AgentTaskServiceImpl.doExecute 走 AgentLoop（一次性 think→tool→observe 完成
   #   "风险识别 + 计划生成"，RAG 检索由 knowledge-rag MCP tool 自然完成；合规审核 P4 仍走原 audit 端点）。
   # enabled=false → 回落旧 4 阶段流水线（risk → rag → plan → audit）作 fallback。
+  # JAVA-RISK-PLAN-20261013：legacy 流水线（agent.loop.enabled=false）中风险识别 / 方案生成的实现选择。
+  # 默认保持 main 现状：risk=legacy（RiskAnalyzeService，Java ChatClient）、plan=python（Feign → ai-inference-service）。
+  # 切 java 即走 Spring AI 结构化输出（prompts/risk.system.md、prompts/plan.system.md），格式错误重试
+  # structured.max-attempts 次后任务显式 FAILED。eval-endpoint 仅供 eval/run_eval.py 离线评测，生产保持 false。
+  ai:
+    risk:
+      impl: ${EDUCARE_AI_RISK_IMPL:legacy}
+    plan:
+      impl: ${EDUCARE_AI_PLAN_IMPL:python}
+    structured:
+      max-attempts: ${EDUCARE_AI_STRUCTURED_MAX_ATTEMPTS:3}
+    eval-endpoint:
+      enabled: ${EDUCARE_AI_EVAL_ENDPOINT_ENABLED:false}
   agent:
     loop:
       enabled: ${EDUCARE_AGENT_LOOP_ENABLED:true}
