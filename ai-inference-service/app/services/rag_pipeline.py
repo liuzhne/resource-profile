@@ -23,13 +23,14 @@ from app.services.reranker_client import get_reranker_client
 logger = logging.getLogger(__name__)
 
 
-def _pipeline_cache_key(collection_key: str, query: str, top_k: int) -> str:
+def _pipeline_cache_key(collection_key: str, query: str, top_k: int, rerank: bool) -> str:
     h = hashlib.sha256()
     h.update(collection_key.encode("utf-8"))
     h.update(b"|")
     h.update(query.strip().lower().encode("utf-8"))
     h.update(b"|")
     h.update(str(top_k).encode())
+    h.update(b"|rerank=1" if rerank else b"|rerank=0")
     return "edu:rag:pipe:" + h.hexdigest()[:32]
 
 
@@ -72,7 +73,8 @@ async def retrieve_from_collection(
             "error": f"unknown collection_key: {collection_key}",
         }
 
-    cache_key = _pipeline_cache_key(collection_key, query, top_k)
+    do_rerank = settings.RERANKER_ENABLED if enable_rerank is None else enable_rerank
+    cache_key = _pipeline_cache_key(collection_key, query, top_k, do_rerank)
     cached = await cache_get(cache_key)
     if cached:
         try:
@@ -110,7 +112,6 @@ async def retrieve_from_collection(
         }
 
     reranked = False
-    do_rerank = settings.RERANKER_ENABLED if enable_rerank is None else enable_rerank
     if do_rerank and len(hits) > 1:
         documents = [(h.get("content") or h.get("title") or "") for h in hits]
         rerank_results = await get_reranker_client().rerank(

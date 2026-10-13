@@ -583,3 +583,11 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
   stub 验证通过，覆盖非默认共享凭证与特殊字符、无凭证输出/临时配置残留、PID 归属/陈旧记录与无关进程安全。
   npm 生产依赖 audit 0 vulnerabilities；Render/Compose/backend-CI YAML 解析与 JDK 21/POM/自动配置清单联合断言通过。
   未执行真实全栈、GPU 或生产验收。
+
+## RAG-CACHE-RERANK-20261013：RAG 管线缓存键纳入 rerank 开关（2026-10-13）
+
+- 背景：`retrieve_from_collection` 的缓存键只含集合、query、top_k，不含是否 rerank。切换 `RERANKER_ENABLED` 或按请求传 `enable_rerank` 后，在 `RAG_CACHE_TTL` 内会返回另一种排序的旧结果。
+- 选择：在计算缓存键前确定 `do_rerank`（显式参数优先，否则取配置），并写入 [`_pipeline_cache_key`](./ai-inference-service/app/services/rag_pipeline.py)；同时在 requirements 中固定 `setuptools<81`（pymilvus 2.4 运行时依赖 `pkg_resources`）。
+- 放弃方案：切换配置时清空 Redis（运维易漏，且无法覆盖按请求开关）；缩短 TTL（只缩小窗口）。
+- 代价与约束：上线后旧格式的键不再命中，首轮请求全部回源一次；旧键按 TTL 自然过期。
+- 验证：[单测](./ai-inference-service/tests/test_rag_pipeline_cache_key.py) 在修复前 3 例失败、修复后通过；全量 31 例通过（Python 3.11，外部服务均 mock）。真实 Milvus/Redis/reranker 联调待验证。
