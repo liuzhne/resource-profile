@@ -368,3 +368,7 @@ JaCoCo 门通过；前端、preflight 和 Bash 5/macOS Bash 3.2 的脚本回归�
 ## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
 
 agent-service 内部新增抽象层：`AgentTaskServiceImpl → AgentRunner（接口）→ AgentLoop（实现）`。服务边界、外部调用链与数据流不变。详见 DECISIONS.md 同标识条目。
+
+## 维护记录：RAG-JAVA-CORE-20261013（2026-10-13）
+
+agent-service 新增 `com.edu.agent.rag`，组成为 `KnowledgeRetrievalService → EmbeddingClient(接口) + VectorStore(接口) + RerankClient(HttpRerankClient) + RagCache(RedisRagCache)`。只有 `educare.ai.rag.impl=java` 时才装配。默认 `python`，阶段 2 仍调 ai-inference-service `/api/v1/rag/retrieve`。向量库与 embedding 暂无 Java 实现（TODO）。详见 DECISIONS.md 同标识条目。

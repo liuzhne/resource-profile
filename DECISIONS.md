@@ -601,3 +601,16 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 放弃方案：直接迁 Spring AI Alibaba Graph（当前无流程类需求，收益不足）。
 - 约束：容器内只能有一个 `AgentRunner` bean；新增实现时需用 `@Primary`/`@Qualifier` 或配置开关选择。`SubAgentToolCallback` / `SubAgentRegistry` 也改为依赖 `AgentRunner`；`run(req)` 只保留接口默认方法。
 - 验证：`mvn -q -pl agent-service -am test`（JDK 21）通过，agent-service 96 例 0 失败。
+
+## RAG-JAVA-CORE-20261013：RAG 检索中不依赖 Milvus 的部分迁到 Java（2026-10-13）
+
+- 背景：Python `reranker_client.py` 失败时返回全零分占位，调用方只能靠"全零"猜测失败；单集合管线缓存键不含索引版本。
+- 选择：agent-service 新增 `com.edu.agent.rag`：
+  - `RerankClient`/`HttpRerankClient`：Cohere `/rerank` 同协议，失败一律返回 `RerankResult.failed(原因)`，不抛异常，也不返回占位分。网络错误、非 2xx、非 JSON、缺 results、空结果、index 越界或重复、字段缺失、全部分数 ≤ 0 都算失败。全零判为失败是为了与 Python 回退判定保持一致。
+  - `KnowledgeRetrievalService`：精排失败时保留向量原顺序，不写缓存，打 warn 日志，结果带 `rerank_failure`；空召回时 `fallback=true`，也不缓存。
+  - `RagCacheKey`：在 Python 键的基础上加入索引版本（`VectorStore.indexVersion`），前缀改为 `edu:rag:pipe:java:`，与 Python 缓存隔离。
+  - `VectorStore`/`EmbeddingClient` 只是接口，**未实现**。embedding 模型与 Milvus 字段映射留给用户决定（TODO RAG-JAVA-CORE-20261013）。
+  - 开关 `educare.ai.rag.impl`：默认 `python`，行为不变。设为 `java` 时若缺少上述实现会在启动期显式失败，避免静默返回空知识。
+  - java 模式下任务链路用 `retrieveMulti`：多路 query × 多集合，按 `source_db:chunk_id` 去重，排序用精排分（没有时用向量分），返回与 Python `/rag/retrieve` 同形的 JSON。
+- 已知差异：多集合合并时精排分与向量分混排，各集合之间尚未做全局精排（Python 是全局 rerank）。接入 Milvus 后再评估。
+- 验证：`KnowledgeRetrievalServiceTest`（翻译自 `test_rag_pipeline_cache_key.py` 并补充用例）、`HttpRerankClientTest`（本地 HttpServer）。

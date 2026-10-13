@@ -139,6 +139,18 @@ logging:
     com.edu.agent.mapper: debug
 
 educare:
+  # RAG-JAVA-CORE-20261013：知识检索实现开关。python（默认，行为不变）| java（需要 EmbeddingClient/VectorStore 实现，当前未提供→启动失败）
+  ai:
+    rag:
+      impl: ${EDUCARE_AI_RAG_IMPL:python}
+      collections: case,psychology,policy,success
+      recall-expand: 3
+      cache-ttl: 1h
+      reranker:
+        enabled: ${EDUCARE_AI_RAG_RERANK_ENABLED:true}
+        base-url: ${RERANKER_BASE_URL:http://localhost:8093}
+        model: ${RERANKER_MODEL:bge-reranker-base}
+        timeout: 30s
   # MCP 内部预共享 token（纵深防御，A3）。空=仅靠 127.0.0.1 网络隔离（默认）；
   # 与两个 MCP server 配同一值即开启 X-MCP-Token 互验（McpClientConfig 给出站请求附头）。
   mcp:

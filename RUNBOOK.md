@@ -946,3 +946,11 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 - 验证：`cd backend && mvn -q -pl agent-service -am test`（JDK 21），通过判据为 0 失败，含 `AgentRunnerContractTest`。
 - 排错：启动报 `expected single matching bean of type AgentRunner` 说明出现了第二个实现，需指定 `@Primary` 或 `@Qualifier`。
 - 回滚：回退本提交即可，无配置或数据变更。
+
+## 维护记录：RAG-JAVA-CORE-20261013（2026-10-13）
+
+- 开关：`EDUCARE_AI_RAG_IMPL=python`（默认）或 `java`。当前设为 `java` 会在启动时报 `需要 EmbeddingClient/VectorStore 实现`，这是预期行为，改回 `python` 即可。
+- 其他配置：`RERANKER_BASE_URL`、`RERANKER_MODEL`、`EDUCARE_AI_RAG_RERANK_ENABLED`，以及 `educare.ai.rag.recall-expand`、`cache-ttl`、`collections`。
+- 排错：日志中的 `rag-java 精排失败（原因）` 表示本次回退为向量顺序且没有缓存，下次请求会重试精排。Redis 键前缀为 `edu:rag:pipe:java:`。
+- 验证：`cd backend && mvn -q -pl agent-service -am test -Dtest='KnowledgeRetrievalServiceTest,HttpRerankClientTest' -Dsurefire.failIfNoSpecifiedTests=false`。
+- 回滚：回退本提交即可，默认配置下无行为变更。
