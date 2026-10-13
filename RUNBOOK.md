@@ -940,3 +940,9 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 - 验证：`cd ai-inference-service && uv venv -p 3.11 .venv && . .venv/bin/activate && uv pip install -r requirements.txt -r tests/requirements.txt pytest pytest-asyncio && python -m pytest -q`，通过判据为全部通过（含 `tests/test_rag_pipeline_cache_key.py`）。
 - 线上排查：切换 `RERANKER_ENABLED` 后，同一 query 的 `reranked` 字段应立即随配置变化，不再等待 `RAG_CACHE_TTL`；reranker 故障期间回退结果不缓存，日志出现 `rerank 回退结果不缓存`，恢复后下一次请求即重新精排。待验证（需真实 Redis/Milvus）。
 - 回滚：回退本提交。注意：若本版本运行期间切换过 `RERANKER_ENABLED`，回退后旧格式键（不含 rerank 标记）可能被重新读到，返回切换前的结果；此时需清理 `edu:rag:pipe:*` 缓存（如 `redis-cli --scan --pattern 'edu:rag:pipe:*' | xargs -r redis-cli del`），或等待 `RAG_CACHE_TTL` 过期后再视为结果最新。未切换过配置则无需处理。
+
+## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
+
+- 验证：`cd backend && mvn -q -pl agent-service -am test`（JDK 21），通过判据为 0 失败，含 `AgentRunnerContractTest`。
+- 排错：启动报 `expected single matching bean of type AgentRunner` 说明出现了第二个实现，需指定 `@Primary` 或 `@Qualifier`。
+- 回滚：回退本提交即可，无配置或数据变更。

@@ -37,7 +37,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class AgentLoop {
+public class AgentLoop implements AgentRunner {
 
     private static final int TOOL_RESULT_MAX_LEN = 4096;
     private static final int CONSECUTIVE_PARSE_ERROR_LIMIT = 2;
@@ -82,14 +82,11 @@ public class AgentLoop {
         }
     }
 
-    public AgentLoopResult run(AgentLoopRequest rawReq) {
-        return run(rawReq, null);
-    }
-
     /**
      * J-1.3：带 final_answer 校验的 run。validator 非空时，final_answer 不合格会喂纠错 observation
      * 触发最多 {@link #MAX_FINAL_ANSWER_REPAIRS} 次修复轮；修复预算耗尽则接受当前答案返回（由调用方裁决）。
      */
+    @Override
     public AgentLoopResult run(AgentLoopRequest rawReq, FinalAnswerValidator validator) {
         AgentLoopRequest req = rawReq.normalized();
         Instant runStart = Instant.now();
