@@ -361,6 +361,10 @@ common 自动配置清单中的原有性能配置与新增服务入口鉴权同�
 JaCoCo 门通过；前端、preflight 和 Bash 5/macOS Bash 3.2 的脚本回归通过，详见 RUNBOOK 同名记录。
 真实起栈、R-5/R-6 与历史凭证轮换仍须取得独立环境证据。
 
+## 维护记录：RAG-CACHE-RERANK-20261013（2026-10-13）
+
+无架构影响。仅修正 [ai-inference-service RAG 管线](./ai-inference-service/app/services/rag_pipeline.py) 的缓存键组成（新增 rerank 维度），调用链与数据流不变。详见 DECISIONS.md 同标识条目。
+
 ## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
 
 agent-service 内部新增抽象层：`AgentTaskServiceImpl → AgentRunner（接口）→ AgentLoop（实现）`。服务边界、外部调用链与数据流不变。详见 DECISIONS.md 同标识条目。
