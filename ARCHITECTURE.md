@@ -368,3 +368,7 @@ JaCoCo 门通过；前端、preflight 和 Bash 5/macOS Bash 3.2 的脚本回归�
 ## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
 
 agent-service 内部新增抽象层：`AgentTaskServiceImpl → AgentRunner（接口）→ AgentLoop（实现）`。服务边界、外部调用链与数据流不变。详见 DECISIONS.md 同标识条目。
+
+## 维护记录：KAMATERA-DEPLOY-20261013（2026-10-13）
+
+部署拓扑以 `docker/docker-compose.yml` + `docker-compose.prod.yml`（Kamatera 单机）为准，Render 相关描述（含 RENDER-CD-20260915）已废弃。运行时架构不变。详见 DECISIONS.md 同标识条目。

@@ -31,7 +31,7 @@ ROLE_PATHS = {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--base', default='https://edu-portrait-frontend.onrender.com/api')
+    parser.add_argument('--base', default='https://resource-profile.45-130-165-168.nip.io/api')
     parser.add_argument('--role', choices=['admin', 'teacher', 'student'], default='admin')
     parser.add_argument('--rounds', type=int, default=5)
     parser.add_argument('--timeout', type=float, default=60)

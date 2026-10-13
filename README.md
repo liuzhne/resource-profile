@@ -68,7 +68,6 @@ sql/                     初始化与生产改密脚本
 eval/                    风险识别离线评测（CI eval-gate）
 scripts/                 冒烟、压测、备份、模型服务启动脚本
 docs/                    部署、EduCare 设计与验收文档
-render.yaml              Render Blueprint（云端演示部署）
 ```
 
 ## 快速开始（本地开发）
@@ -101,9 +100,8 @@ docker compose -f docker/docker-compose.yml exec ai-inference-service python -m 
 
 | 场景 | 入口 |
 |---|---|
-| 生产（自建服务器） | `docker/docker-compose.prod.yml` + nginx TLS，见 [`docs/DEPLOY.md`](docs/DEPLOY.md) |
+| 生产（Kamatera 自建服务器） | `docker/docker-compose.prod.yml` + nginx TLS，见 [`docs/DEPLOY.md`](docs/DEPLOY.md) |
 | 监控 | `docker/docker-compose.monitoring.yml`（Prometheus + Grafana） |
-| 云端演示 | [`render.yaml`](render.yaml)：Render + Aiven MySQL + GroqCloud LLM，见 `RUNBOOK.md` 的 RENDER / GROQ 章节 |
 
 ## 测试
 
