@@ -601,3 +601,11 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 放弃方案：直接迁 Spring AI Alibaba Graph（当前无流程类需求，收益不足）。
 - 约束：容器内只能有一个 `AgentRunner` bean；新增实现时需用 `@Primary`/`@Qualifier` 或配置开关选择。`SubAgentToolCallback` / `SubAgentRegistry` 也改为依赖 `AgentRunner`；`run(req)` 只保留接口默认方法。
 - 验证：`mvn -q -pl agent-service -am test`（JDK 21）通过，agent-service 96 例 0 失败。
+
+## BOOT-35-UPGRADE-20261013：Spring Boot 升至 3.5，Spring AI 对齐到官方支持组合（2026-10-13）
+
+- 背景：Spring Boot 3.2.5 + Spring AI 1.1.6 不在 Spring AI 1.1 官方支持范围内；Spring Cloud 2023.0.x、Spring Cloud Alibaba 2023.0.1.0 也随之偏旧。这是 Python 迁移的第 0 步，必须先让基础依赖处于官方支持组合。
+- 选择：Spring Boot 3.5.16、Spring Cloud 2025.0.3、Spring Cloud Alibaba 2025.0.0.0（随附 nacos-client 3.0.3）、Spring AI 1.1.8；删除父 pom 中已不存在于 1.1 的 `spring-ai-core` 托管条目。MyBatis-Plus 3.5.11 保持不变。
+- 未选：直接升 Spring Boot 4 + Spring AI 2.0。Spring Cloud Alibaba 2025.1.0.0 官方只列 Boot 4.0.0，而 Spring AI 2.0 需要 4.1，且与迁移叠加难以定位问题；放到迁移完成后的第 6 步单独做。
+- 约束：nacos-client 3.0.3 连接现有 v2.3.0 服务端的兼容性未验证；按方案须先完成第 0a 步（Nacos 服务端升 3.x 并在测试环境验收），本变更才能合入。
+- 验证：`cd backend && mvn clean test`（JDK 21）11 个模块全部通过，269 例 0 失败 0 错误；仅修改 1 处测试桩（Spring Framework 6.2 的 `HttpRequest` 新增 `getAttributes()`）。未做启动与真实环境验证（需 Nacos、MySQL、Redis）。
