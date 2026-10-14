@@ -186,6 +186,9 @@ educare:
   # 默认保持 main 现状：risk=legacy（RiskAnalyzeService，Java ChatClient）、plan=python（Feign → ai-inference-service）。
   # 切 java 即走 Spring AI 结构化输出（prompts/risk.system.md、prompts/plan.system.md），格式错误重试
   # structured.max-attempts 次后任务显式 FAILED。eval-endpoint 仅供 eval/run_eval.py 离线评测，生产保持 false。
+  # JAVA-AUDIT-20261013：audit = 合规审核实现。python（默认，原链路不变）| java | parallel（两侧并发，任一侧不通过即不通过）。
+  # java / parallel 下任何错误（超时、模型异常、输出无法解析）都按不通过处理。timeout 为单侧超时。
+  # 注意：educare.ai 只能有这一个块，新增子项请加在下面（ApplicationYamlDuplicateKeyTest 会拦截重复键）。
   ai:
     risk:
       impl: ${EDUCARE_AI_RISK_IMPL:legacy}
@@ -195,6 +198,9 @@ educare:
       max-attempts: ${EDUCARE_AI_STRUCTURED_MAX_ATTEMPTS:3}
     eval-endpoint:
       enabled: ${EDUCARE_AI_EVAL_ENDPOINT_ENABLED:false}
+    audit:
+      impl: ${EDUCARE_AI_AUDIT_IMPL:python}
+      timeout: ${EDUCARE_AI_AUDIT_TIMEOUT:60s}
   agent:
     loop:
       enabled: ${EDUCARE_AGENT_LOOP_ENABLED:true}

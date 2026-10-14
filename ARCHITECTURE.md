@@ -394,3 +394,14 @@ agent-service 新增 `com.edu.agent.ai` 包（Java 版风险识别 / 方案生�
 - AgentLoop 主路径（默认）不受影响。
 - 新增仅评测用端点 `/agent/_internal/eval/api/v1/agent/risk`（默认不注册）。
 - `common` 的 `PromptSanitizer` 规则与 Python `prompt_guard.py` 完全对齐。
+
+## 维护记录：JAVA-AUDIT-20261013（2026-10-13）
+
+agent-service 新增 `com.edu.agent.audit` 包。默认（`educare.ai.audit.impl=python`）调用链不变。
+
+- `AgentTaskServiceImpl.executeComplianceAudit →`
+  - python（默认）：`AiInferenceClient.complianceAudit`（原样）
+  - java：`ComplianceAuditService → JavaComplianceAuditor →` 本地 `@Primary` ChatClient（数据不出本地）
+  - parallel：`ComplianceAuditService →` 并发 `PythonComplianceAuditor`（Feign）+ `JavaComplianceAuditor`，任一侧不通过即不通过
+- 新增线程池 `complianceAuditExecutor`（固定 8 线程，队列 256，满则该侧按不通过处理）。
+- 安全边界：java / parallel 模式下审核为 fail-closed；`compliance_audit` 存库 JSON 结构不变，新增 `audit_source`、`audit_failure`、`audit_note`、`parallel` 可选字段。

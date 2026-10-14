@@ -54,7 +54,7 @@ class AsyncSubmissionTest {
         ValueOperations<String, String> values = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(values);
         when(values.setIfAbsent(anyString(), anyString(), anyLong(), eq(TimeUnit.SECONDS))).thenReturn(true);
-        return spy(new AgentTaskServiceImpl(mapper, null, null, null, redis, null, null, null, null, null, executor));
+        return spy(new AgentTaskServiceImpl(mapper, null, null, null, redis, null, null, null, null, null, null, executor));
     }
 
     @Test

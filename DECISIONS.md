@@ -639,3 +639,17 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 放弃方案：直接用 `ChatClient...entity(Class)`（解析失败直接抛错，无法控制重试次数和校验）；改造 `RiskAnalyzeService`（它用另一份 prompt、失败返回默认值，保留作 legacy 便于对比）；修改 `run_eval.py` 增加 `--endpoint` 参数（没有必要，base-url 前缀即可）。
 - 代价与约束：Java 实现的 user 消息末尾多一段 Spring AI 格式指令，与 Python prompt 不完全相同，评测时要以同一数据集分别跑两版对比；`PromptSanitizer` 规则对齐后，含全角空格前导角色行、U+2028、emoji 超长截断的输入，Java 输出会与之前略有不同（与 Python 一致）。
 - 验证：[`JavaRiskPlanTest`](./backend/agent-service/src/test/java/com/edu/agent/ai/JavaRiskPlanTest.java)（解析、重试成功、重试耗尽、校验失败、模型错误不重试、方案三段顺序、开关默认值/各模式/非法值、eval 端点、prompt 一致性）、`PromptSanitizerParityTest`、`tests/test_prompt_guard.py`。真实模型下的准确率（≥0.85 且不低于 Python 版）待测试环境评测。
+
+## JAVA-AUDIT-20261013：合规审核迁到 Java，任何错误都按不通过处理（2026-10-13）
+
+- 背景：迁移计划第 4 步。合规审核是 AI 方案对外前的最后一道门；Python `/api/v1/agent/audit` 在 LLM 失败时返回不通过，但字段类型宽松（如字符串 `"true"` 会被 fastjson `getBoolean` 当成通过），也没有超时控制。
+- 选择（[`com.edu.agent.audit`](./backend/agent-service/src/main/java/com/edu/agent/audit/)）：
+  - 开关 `educare.ai.audit.impl=python|java|parallel`，默认 `python`（原代码路径一行未改）。
+  - [`JavaComplianceAuditor`](./backend/agent-service/src/main/java/com/edu/agent/audit/JavaComplianceAuditor.java)：prompt 从 Python 原样移植（[`prompts/audit.system.md`](./backend/agent-service/src/main/resources/prompts/audit.system.md)），user 消息与 Python 相同（只带 studentId/grade/major + 方案，先清洗）。单侧超时 `educare.ai.audit.timeout`（默认 60s）。
+  - 严格判定（[`AuditOutcome.fromModelJson`](./backend/agent-service/src/main/java/com/edu/agent/audit/AuditOutcome.java)）：只有 `audit_passed` 是 JSON 布尔 `true`、所有 `audit_items[].passed` 都是布尔 `true`、且 `manual_review_required` 不为 `true` 时才算通过。超时、模型异常、线程池拒绝、输出不是 JSON 对象、字段类型不对 → 一律不通过，结果 JSON 与原 `fallbackAudit` 同形（含 `audit_failure` 原因）。模型说"通过"但有未通过项或要求人工复核 → 不通过（附 `audit_note`）。
+  - 不重试：审核失败只会转人工；重试可能"刷"出一次通过。
+  - parallel：Python 与 Java 并发执行（各自带超时，不嵌套占线程），**任一侧不通过或出错即不通过**；两侧的 audit_items / 整改建议合并，`parallel` 字段记录两侧结论与是否一致，便于对比。parallel 下 Python 一侧也用严格判定。
+  - 返回 JSON 里的 `audit_passed` 就是最终结论，所以 `AgentTaskServiceImpl.parseAuditPassed` 和前端/PDF 读取的字段都不用改。
+- 放弃方案：parallel 以 Python 为准、Java 只记录差异（不满足"任一侧拒绝即拒绝"）；对审核做结构化输出重试（同上，重试会提高误放行概率）；python 模式也换成严格判定（会改变默认行为，留到切换 java 时自然生效）。
+- 代价与约束：parallel 模式审核耗时取两侧较慢者、LLM 调用量翻倍；严格判定下 Java 的通过率可能低于 Python（例如模型输出 `"true"` 字符串），这是有意为之。与 JAVA-RISK-PLAN-20261013 同时合并时，`application.yml` 中两段 `educare.ai` 配置需要合成一个 `ai:` 块。
+- 验证：[`ComplianceAuditFailClosedTest`](./backend/agent-service/src/test/java/com/edu/agent/audit/ComplianceAuditFailClosedTest.java) 17 例，覆盖 Java 通过 / 模型拒绝 / 超时 / 模型异常 / 9 种解析失败 / 围栏 JSON / 自相矛盾 / 线程池拒绝；Python 侧连接失败 / 超时 / 非 JSON / 空 / 字符串 true；parallel 两侧通过 / 任一侧拒绝 / 任一侧出错 / 并发执行；编排异常；开关解析；prompt 一致性。真实模型下的通过率对比待测试环境验证。

@@ -69,6 +69,8 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final SkillLoader skillLoader;                        // H-3.5：技能加载器（按需注入 classpath skills 到 system prompt）
     private final com.edu.agent.core.SubAgentRegistry subAgentRegistry;  // J-2.1：子代理 agent-as-tool（默认关）
 
+    private final com.edu.agent.audit.ComplianceAuditService complianceAuditService; // JAVA-AUDIT-20261013
+
     @Qualifier("agentExecutor")
     private final Executor agentExecutor;
 
@@ -617,6 +619,12 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             req.put("student_profile", JSON.parseObject(maskedProfile));
             req.put("intervention_plan", JSON.parseObject(task.getInterventionPlan()));
 
+            // JAVA-AUDIT-20261013：java / parallel 模式由 ComplianceAuditService 审核（fail-closed，
+            // 返回 JSON 的 audit_passed 即最终结论）；python（默认）保持原调用不变。
+            if (complianceAuditService != null
+                    && complianceAuditService.mode() != com.edu.agent.audit.AuditMode.PYTHON) {
+                return complianceAuditService.audit(req);
+            }
             String response = aiInferenceClient.complianceAudit(req);
             log.info("任务 {} 合规审核完成", task.getId());
             return response != null ? response : fallbackAudit();

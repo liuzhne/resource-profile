@@ -987,3 +987,12 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
   - `MODEL_ERROR` → 模型端点不可用，与原 RiskAnalyzeService 不同，Java 版不会返回默认中风险，任务会显式失败。
   - 启动报 `未知的 AI 实现选择` → 开关值拼写错误。
 - 回滚：把两个开关改回默认（`legacy` / `python`）并重启，无数据变更。
+
+## 维护记录：JAVA-AUDIT-20261013（2026-10-13）
+
+- 开关：`EDUCARE_AI_AUDIT_IMPL=python|java|parallel`（默认 python）、`EDUCARE_AI_AUDIT_TIMEOUT`（单侧超时，默认 60s）。AgentLoop 路径和 legacy 路径的合规审核都受它控制。
+- 单测：`cd backend && mvn -B -q -pl agent-service -am test`，通过判据 0 失败（含 `ComplianceAuditFailClosedTest`）。
+- 灰度建议（待验证）：先在测试环境设 `parallel` 跑一段时间，统计 `compliance_audit.parallel.agree=false` 的任务人工抽查；确认 Java 侧可靠后再切 `java`。
+- 观测：每次审核打一条 `[audit] mode=... approved=... failure=...`；`failure=TIMEOUT` 偏多 → 调大超时或检查模型端点；`PARSE_ERROR` 偏多 → 模型不遵守格式。
+- 排错：任务大量变为 REJECTED → 查 `compliance_audit.audit_failure` 与 `audit_note`，区分是出错（fail-closed）还是模型真实拒绝。
+- 回滚：`EDUCARE_AI_AUDIT_IMPL=python` 并重启，无数据变更；已存的 parallel/java 结果 JSON 向后兼容（只多了可选字段）。
