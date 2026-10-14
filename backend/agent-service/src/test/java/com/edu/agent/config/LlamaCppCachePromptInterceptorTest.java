@@ -45,6 +45,11 @@ class LlamaCppCachePromptInterceptorTest {
             public HttpHeaders getHeaders() {
                 return HttpHeaders.EMPTY;
             }
+
+            @Override
+            public java.util.Map<String, Object> getAttributes() {
+                return java.util.Map.of();
+            }
         };
         AtomicReference<byte[]> captured = new AtomicReference<>();
         ClientHttpRequestExecution execution = (req, body) -> {

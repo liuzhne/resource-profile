@@ -666,3 +666,11 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
   - java 模式下任务链路用 `retrieveMulti`：多路 query × 多集合，按 `source_db:chunk_id` 去重，排序用精排分（没有时用向量分），返回与 Python `/rag/retrieve` 同形的 JSON。
 - 已知差异：多集合合并时精排分与向量分混排，各集合之间尚未做全局精排（Python 是全局 rerank）。接入 Milvus 后再评估。
 - 验证：`KnowledgeRetrievalServiceTest`（翻译自 `test_rag_pipeline_cache_key.py` 并补充用例）、`HttpRerankClientTest`（本地 HttpServer）。
+
+## BOOT-35-UPGRADE-20261013：Spring Boot 升至 3.5，Spring AI 对齐到官方支持组合（2026-10-13）
+
+- 背景：Spring Boot 3.2.5 + Spring AI 1.1.6 不在 Spring AI 1.1 官方支持范围内；Spring Cloud 2023.0.x、Spring Cloud Alibaba 2023.0.1.0 也随之偏旧。这是 Python 迁移的第 0 步，必须先让基础依赖处于官方支持组合。
+- 选择：Spring Boot 3.5.16、Spring Cloud 2025.0.3、Spring Cloud Alibaba 2025.0.0.0（随附 nacos-client 3.0.3）、Spring AI 1.1.8；删除父 pom 中已不存在于 1.1 的 `spring-ai-core` 托管条目。MyBatis-Plus 3.5.11 保持不变。
+- 未选：直接升 Spring Boot 4 + Spring AI 2.0。Spring Cloud Alibaba 2025.1.0.0 官方只列 Boot 4.0.0，而 Spring AI 2.0 需要 4.1，且与迁移叠加难以定位问题；放到迁移完成后的第 6 步单独做。
+- 约束：nacos-client 3.0.3 连接现有 v2.3.0 服务端的兼容性未验证；按方案须先完成第 0a 步（Nacos 服务端升 3.x 并在测试环境验收），本变更才能合入。
+- 验证：`cd backend && mvn clean test`（JDK 21）11 个模块全部通过，269 例 0 失败 0 错误；仅修改 1 处测试桩（Spring Framework 6.2 的 `HttpRequest` 新增 `getAttributes()`）。未做启动与真实环境验证（需 Nacos、MySQL、Redis）。
