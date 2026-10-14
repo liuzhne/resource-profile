@@ -975,3 +975,15 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
   - `reason=无法确认教师归属` → teacher-service 不可达，或该账号没有 `teacher_info` 记录（教师账号需要有教师档案）。
   - `reason=缺少调用者身份` → agent-service 版本过旧，或调用来自没有设置 `McpCaller` 的新代码路径。
 - 回滚：回退本提交并同时重新发布 agent-service、mcp-student-data、auth-service、teacher-service。回滚后新签发的令牌不再带 aud，对旧代码没有影响。
+
+## 维护记录：JAVA-RISK-PLAN-20261013（2026-10-13）
+
+- 开关：`EDUCARE_AI_RISK_IMPL=legacy|python|java`（默认 legacy）、`EDUCARE_AI_PLAN_IMPL=python|java`（默认 python）、`EDUCARE_AI_STRUCTURED_MAX_ATTEMPTS`（默认 3）。只在 `EDUCARE_AGENT_LOOP_ENABLED=false`（legacy 流水线）时生效。启动日志打印 `JAVA-RISK-PLAN：risk.impl=... plan.impl=...`。
+- 单测：`cd backend && mvn -B -q -pl agent-service -am test`；`cd ai-inference-service && .venv/bin/python -m pytest -q tests/test_prompt_guard.py`。通过判据 0 失败。
+- 评测（待验证，需真实 LLM）：按 [eval/README.md §9](./eval/README.md) 分别跑 Java 和 Python 两版，温度设为 0；通过判据为 Java `level_accuracy_exact` ≥ 0.85 且不低于 Python 版。
+- 灰度：先在测试环境设 `EDUCARE_AI_RISK_IMPL=java` 跑基线对比，再切 `EDUCARE_AI_PLAN_IMPL=java`。
+- 排错：
+  - 日志 `[risk] 结构化输出不合格（第 n/3 次）` 偶发属正常；任务频繁 FAILED 且日志为 `MALFORMED_OUTPUT` → 模型不遵守格式，检查模型/温度，或临时调高 max-attempts。
+  - `MODEL_ERROR` → 模型端点不可用，与原 RiskAnalyzeService 不同，Java 版不会返回默认中风险，任务会显式失败。
+  - 启动报 `未知的 AI 实现选择` → 开关值拼写错误。
+- 回滚：把两个开关改回默认（`legacy` / `python`）并重启，无数据变更。

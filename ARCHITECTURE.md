@@ -382,3 +382,15 @@ agent-service 内部新增抽象层：`AgentTaskServiceImpl → AgentRunner（�
 - 新依赖：mcp-student-data → teacher-service `GET /teacher/by-user/{userId}`（附 `X-Internal-Token`），用于判定教师院系。
 - 令牌：访问令牌新增 `aud=[educare-api, mcp-student-data]`；mcp-student-data 要求 `aud` 含 `mcp-student-data`（兼容开关 `educare.mcp.auth.allow-missing-audience`）。
 - knowledge-rag MCP（Python）也会收到同一个 `Authorization` 头，但目前不校验；它不返回学生个人数据。
+
+## 维护记录：JAVA-RISK-PLAN-20261013（2026-10-13）
+
+agent-service 新增 `com.edu.agent.ai` 包（Java 版风险识别 / 方案生成）。默认配置下调用链不变。
+
+- legacy 流水线：`AgentTaskServiceImpl.executeRiskAnalyze / executePlanGenerate → RiskPlanDispatcher →`
+  - risk：`legacy`（默认）→ `RiskAnalyzeService`；`python` → `AiInferenceClient.riskAnalyze`；`java` → `JavaRiskAssessmentService`
+  - plan：`python`（默认）→ `AiInferenceClient.generatePlan`；`java` → `JavaPlanGenerationService`
+- Java 实现：`PromptPayloads`（清洗 + XML 包裹）→ `StructuredLlmClient`（Spring AI `BeanOutputConverter` + 有界重试）→ `LlmTextCaller`（本地 `@Primary` ChatClient，数据不出本地）。
+- AgentLoop 主路径（默认）不受影响。
+- 新增仅评测用端点 `/agent/_internal/eval/api/v1/agent/risk`（默认不注册）。
+- `common` 的 `PromptSanitizer` 规则与 Python `prompt_guard.py` 完全对齐。
