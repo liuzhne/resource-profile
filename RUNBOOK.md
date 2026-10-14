@@ -619,6 +619,8 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 
 ### RENDER-CD-20260915：合入 main 即部署生产（CI 通过后按服务增量部署）
 
+> 已废弃（2026-10-13）：生产已迁至 Kamatera，见 KAMATERA-DEPLOY-20261013。本节仅作历史参考。
+
 - 复现（修复前）：`gh api repos/liuzhne/resource-profile/commits/bcb01c4/check-runs` 返回空——CI 只在
   `pull_request` 上运行，被部署的 main 提交从未验证；Render 使用 `autoDeploy: true`（每个提交立即部署），
   main 的 ruleset 又不要求 PR 检查通过，CI 红的 PR 合入后照样上线。10 个 Docker 服务没有 `buildFilter`，
@@ -946,3 +948,59 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 - 验证：`cd backend && mvn -q -pl agent-service -am test`（JDK 21），通过判据为 0 失败，含 `AgentRunnerContractTest`。
 - 排错：启动报 `expected single matching bean of type AgentRunner` 说明出现了第二个实现，需指定 `@Primary` 或 `@Qualifier`。
 - 回滚：回退本提交即可，无配置或数据变更。
+
+## 维护记录：KAMATERA-DEPLOY-20261013（2026-10-13）
+
+- 部署：在生产服务器 `docker/` 目录先运行 `../scripts/preflight-prod.sh`（必须全绿），再执行 `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`。
+- 验证：`curl -s -o /dev/null -w '%{http_code}\n' https://resource-profile.45-130-165-168.nip.io/login` 返回 200；Nacos（8848/9848）与网关 8080 从公网不可达。
+- 待办：在 Render 控制台停用旧 Blueprint 服务。
+- 回滚：回退本提交即可，无运行时影响。
+
+## 维护记录：AUTHZ-MCP-20261013（2026-10-13）
+
+- 启动前提：agent-service、mcp-student-data、auth-service 使用同一个 `JWT_SECRET`；mcp-student-data 能通过 Nacos（或 `TEACHER_SERVICE_URL`）访问 teacher-service，并配置 `EDUCARE_INTERNAL_TOKEN`。agent-service 与 mcp-student-data **必须同批发布**，否则 MCP tool 调用会因缺少身份全部被拒。
+- 升级窗口：auth-service 升级前签发的令牌不带 `aud`，如需在发布后 24h 内继续使用旧令牌，给 mcp-student-data 临时设置 `EDUCARE_MCP_AUTH_ALLOW_MISSING_AUDIENCE=true`，24h 后删除该变量并重启。
+- 发布窗口（必须执行）：
+  1. agent-service、mcp-student-data、auth-service 三个服务**同批发布**，不得单独发布其中任何一个。
+  2. 旧令牌不带 `aud`，有效期最长 24 小时。发布前给 mcp-student-data 设置 `EDUCARE_MCP_AUTH_ALLOW_MISSING_AUDIENCE=true`，否则旧令牌会被 MCP 拒绝。
+  3. 发布完成满 24 小时后，把 `EDUCARE_MCP_AUTH_ALLOW_MISSING_AUDIENCE` 改回 `false`（或删除该变量），重启 mcp-student-data。
+  4. 验证：改回 false 后日志不再出现 `MCP 调用者令牌校验失败`。
+- 验证命令：`cd backend && mvn -B -q -pl mcp-student-data,agent-service,teacher-service -am test`，通过判据 0 失败（含 `StudentDataToolsAuthorizationTest`、`McpCallerIdentityPropagationTest`）。
+- 联调验证（待验证，需真实环境）：
+  1. 用教师账号登录，触发本院系学生分析，任务完成；mcp-student-data 日志出现 `[MCP-AUTHZ] allow ... kind=USER`。
+  2. 触发其它院系学生，任务中的 student-data 工具返回错误，日志出现 `[MCP-AUTHZ] deny ... reason=该学生不属于当前教师所在院系`。
+  3. 开启定时扫描后，日志出现 `kind=SYSTEM initiator=scheduler`。
+- 排错：
+  - 日志 `MCP 调用者令牌校验失败: JwtException` 且大量出现 → 多为旧令牌缺 aud，按上面的升级窗口处理；或三端 `JWT_SECRET` 不一致。
+  - `reason=无法确认教师归属` → teacher-service 不可达，或该账号没有 `teacher_info` 记录（教师账号需要有教师档案）。
+  - `reason=缺少调用者身份` → agent-service 版本过旧，或调用来自没有设置 `McpCaller` 的新代码路径。
+- 回滚：回退本提交并同时重新发布 agent-service、mcp-student-data、auth-service、teacher-service。回滚后新签发的令牌不再带 aud，对旧代码没有影响。
+
+## 维护记录：JAVA-RISK-PLAN-20261013（2026-10-13）
+
+- 开关：`EDUCARE_AI_RISK_IMPL=legacy|python|java`（默认 legacy）、`EDUCARE_AI_PLAN_IMPL=python|java`（默认 python）、`EDUCARE_AI_STRUCTURED_MAX_ATTEMPTS`（默认 3）。只在 `EDUCARE_AGENT_LOOP_ENABLED=false`（legacy 流水线）时生效。启动日志打印 `JAVA-RISK-PLAN：risk.impl=... plan.impl=...`。
+- 单测：`cd backend && mvn -B -q -pl agent-service -am test`；`cd ai-inference-service && .venv/bin/python -m pytest -q tests/test_prompt_guard.py`。通过判据 0 失败。
+- 评测（待验证，需真实 LLM）：按 [eval/README.md §9](./eval/README.md) 分别跑 Java 和 Python 两版，温度设为 0；通过判据为 Java `level_accuracy_exact` ≥ 0.85 且不低于 Python 版。
+- 灰度：先在测试环境设 `EDUCARE_AI_RISK_IMPL=java` 跑基线对比，再切 `EDUCARE_AI_PLAN_IMPL=java`。
+- 排错：
+  - 日志 `[risk] 结构化输出不合格（第 n/3 次）` 偶发属正常；任务频繁 FAILED 且日志为 `MALFORMED_OUTPUT` → 模型不遵守格式，检查模型/温度，或临时调高 max-attempts。
+  - `MODEL_ERROR` → 模型端点不可用，与原 RiskAnalyzeService 不同，Java 版不会返回默认中风险，任务会显式失败。
+  - 启动报 `未知的 AI 实现选择` → 开关值拼写错误。
+- 回滚：把两个开关改回默认（`legacy` / `python`）并重启，无数据变更。
+
+## 维护记录：JAVA-AUDIT-20261013（2026-10-13）
+
+- 开关：`EDUCARE_AI_AUDIT_IMPL=python|java|parallel`（默认 python）、`EDUCARE_AI_AUDIT_TIMEOUT`（单侧超时，默认 60s）。AgentLoop 路径和 legacy 路径的合规审核都受它控制。
+- 单测：`cd backend && mvn -B -q -pl agent-service -am test`，通过判据 0 失败（含 `ComplianceAuditFailClosedTest`）。
+- 灰度建议（待验证）：先在测试环境设 `parallel` 跑一段时间，统计 `compliance_audit.parallel.agree=false` 的任务人工抽查；确认 Java 侧可靠后再切 `java`。
+- 观测：每次审核打一条 `[audit] mode=... approved=... failure=...`；`failure=TIMEOUT` 偏多 → 调大超时或检查模型端点；`PARSE_ERROR` 偏多 → 模型不遵守格式。
+- 排错：任务大量变为 REJECTED → 查 `compliance_audit.audit_failure` 与 `audit_note`，区分是出错（fail-closed）还是模型真实拒绝。
+- 回滚：`EDUCARE_AI_AUDIT_IMPL=python` 并重启，无数据变更；已存的 parallel/java 结果 JSON 向后兼容（只多了可选字段）。
+
+## 维护记录：RAG-JAVA-CORE-20261013（2026-10-13）
+
+- 开关：`EDUCARE_AI_RAG_IMPL=python`（默认）或 `java`。当前设为 `java` 会在启动时报 `需要 EmbeddingClient/VectorStore 实现`，这是预期行为，改回 `python` 即可。
+- 其他配置：`RERANKER_BASE_URL`、`RERANKER_MODEL`、`EDUCARE_AI_RAG_RERANK_ENABLED`，以及 `educare.ai.rag.recall-expand`、`cache-ttl`、`collections`。
+- 排错：日志中的 `rag-java 精排失败（原因）` 表示本次回退为向量顺序且没有缓存，下次请求会重试精排。Redis 键前缀为 `edu:rag:pipe:java:`。
+- 验证：`cd backend && mvn -q -pl agent-service -am test -Dtest='KnowledgeRetrievalServiceTest,HttpRerankClientTest' -Dsurefire.failIfNoSpecifiedTests=false`。
+- 回滚：回退本提交即可，默认配置下无行为变更。

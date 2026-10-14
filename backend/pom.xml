@@ -235,6 +235,9 @@
                                         <include>com.edu.user.controller.UserController</include>
                                         <include>com.edu.teacher.controller.TeacherController</include>
                                         <include>com.edu.mcp.student.security.McpTokenFilter</include>
+                                        <!-- AUTHZ-MCP-20261013：MCP 调用者身份与 tool 级水平授权 -->
+                                        <include>com.edu.mcp.student.security.McpCallerAuthenticator</include>
+                                        <include>com.edu.mcp.student.security.StudentAccessPolicy</include>
                                         <!-- INTERNAL-AUTH-20260914：服务入口准入 / 内部调用凭证 / 端点授权 / 字段上下文 / 网关剥头 -->
                                         <include>com.edu.common.security.ServiceAuthFilter</include>
                                         <include>com.edu.common.security.InternalCallCredential</include>

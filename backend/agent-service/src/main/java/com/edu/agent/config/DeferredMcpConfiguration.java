@@ -41,7 +41,8 @@ public class DeferredMcpConfiguration {
             @Value("${MCP_KNOWLEDGE_RAG_URL:http://localhost:8095}") String ragUrl,
             @Value("${MCP_KNOWLEDGE_RAG_ENDPOINT:/mcp}") String ragEndpoint,
             @Value("${MCP_CLIENT_REQUEST_TIMEOUT:120s}") String timeoutValue,
-            McpSyncHttpClientRequestCustomizer customizer) {
+            McpSyncHttpClientRequestCustomizer customizer,
+            com.edu.agent.security.McpCallerTokenResolver callerTokenResolver) {
         if (bootClientEnabled) {
             throw new IllegalStateException("Deferred MCP requires spring.ai.mcp.client.enabled=false to avoid startup initialize");
         }
@@ -53,6 +54,8 @@ public class DeferredMcpConfiguration {
                     .connectTimeout(Duration.ofSeconds(5))
                     .httpRequestCustomizer(customizer).build();
             return McpClient.sync(transport).requestTimeout(timeout)
+                    // AUTHZ-MCP-20261013：在调用线程捕获调用者身份，经 transport context 交给 customizer
+                    .transportContextProvider(callerTokenResolver::currentTransportContext)
                     .clientInfo(new McpSchema.Implementation("educare-" + name, "1.0.0"))
                     .build();
         });
