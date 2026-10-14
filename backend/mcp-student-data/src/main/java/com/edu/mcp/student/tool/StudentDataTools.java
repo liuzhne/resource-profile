@@ -7,8 +7,10 @@ import com.edu.mcp.student.dto.MentalIndicatorDto;
 import com.edu.mcp.student.dto.StudentProfileDto;
 import com.edu.mcp.student.feign.MentalServiceClient;
 import com.edu.mcp.student.feign.StudentServiceClient;
+import com.edu.mcp.student.security.StudentAccessPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -28,6 +30,10 @@ import java.util.Map;
  * Spring AI 1.1.6 GA 的 @Tool 注解由 McpStudentDataApplication 里的
  * MethodToolCallbackProvider 显式登记，启动后 MCP server 通过 Streamable HTTP
  * （单端点 /mcp，H-1.1.6 切换）暴露这些 tool。
+ *
+ * <p>AUTHZ-MCP-20261013：每个 tool 第一行先过 {@link StudentAccessPolicy#authorize}（调用者 JWT + aud +
+ * 水平授权），失败直接抛异常、不触达任何下游。{@link ToolContext} 由 Spring AI 注入（携带 MCP exchange），
+ * 不会出现在 tool 的 JSON schema 中，模型无法伪造。
  */
 @Slf4j
 @Component
@@ -38,6 +44,7 @@ public class StudentDataTools {
 
     private final StudentServiceClient studentClient;
     private final MentalServiceClient mentalClient;
+    private final StudentAccessPolicy accessPolicy;
 
     // -----------------------------------------------------------------------
     // Tool 1：学生基础档案
@@ -46,7 +53,9 @@ public class StudentDataTools {
             "用于 Agent Loop 拿到学生身份后做后续画像分析。" +
             "入参 studentId 来自 student_info.id（不是学号）。")
     public StudentProfileDto getStudentProfile(
-            @ToolParam(description = "学生主键 student_info.id（数据库自增主键，非学号）") Long studentId) {
+            @ToolParam(description = "学生主键 student_info.id（数据库自增主键，非学号）") Long studentId,
+            ToolContext toolContext) {
+        accessPolicy.authorize(toolContext, studentId, "get_student_profile");
 
         Result<Map<String, Object>> resp = studentClient.getStudentById(studentId);
         Map<String, Object> data = resp == null ? null : resp.getData();
@@ -75,7 +84,9 @@ public class StudentDataTools {
             "用于 LLM 评估学业表现、识别挂科或下滑趋势。")
     public AcademicHistoryDto getAcademicHistory(
             @ToolParam(description = "学生主键 student_info.id") Long studentId,
-            @ToolParam(description = "学期，如 '2025-2026-1'；可空表示全部", required = false) String term) {
+            @ToolParam(description = "学期，如 '2025-2026-1'；可空表示全部", required = false) String term,
+            ToolContext toolContext) {
+        accessPolicy.authorize(toolContext, studentId, "get_academic_history");
 
         Result<List<Map<String, Object>>> resp = studentClient.listAcademic(studentId, term);
         List<Map<String, Object>> rows = resp == null || resp.getData() == null
@@ -126,7 +137,9 @@ public class StudentDataTools {
             "返回 found=false 表示该学生未做过任何评估（不报错）。" +
             "用于 LLM 判断心理风险及是否需要介入。")
     public MentalIndicatorDto getMentalIndicators(
-            @ToolParam(description = "学生主键 student_info.id") Long studentId) {
+            @ToolParam(description = "学生主键 student_info.id") Long studentId,
+            ToolContext toolContext) {
+        accessPolicy.authorize(toolContext, studentId, "get_mental_indicators");
 
         // mental-service 的查询以 sys_user.userId 为参，需要先取 Student.userId
         Result<Map<String, Object>> stuResp = studentClient.getStudentById(studentId);
@@ -168,7 +181,9 @@ public class StudentDataTools {
     public AttendanceDto getAttendance(
             @ToolParam(description = "学生主键 student_info.id") Long studentId,
             @ToolParam(description = "起始日 yyyy-MM-dd；可空（默认 today-30d）", required = false) String from,
-            @ToolParam(description = "结束日 yyyy-MM-dd；可空（默认 today）", required = false) String to) {
+            @ToolParam(description = "结束日 yyyy-MM-dd；可空（默认 today）", required = false) String to,
+            ToolContext toolContext) {
+        accessPolicy.authorize(toolContext, studentId, "get_attendance");
 
         LocalDate toDate = parseDateOrDefault(to, LocalDate.now());
         LocalDate fromDate = parseDateOrDefault(from, toDate.minusDays(30));

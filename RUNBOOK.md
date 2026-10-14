@@ -619,6 +619,8 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 
 ### RENDER-CD-20260915：合入 main 即部署生产（CI 通过后按服务增量部署）
 
+> 已废弃（2026-10-13）：生产已迁至 Kamatera，见 KAMATERA-DEPLOY-20261013。本节仅作历史参考。
+
 - 复现（修复前）：`gh api repos/liuzhne/resource-profile/commits/bcb01c4/check-runs` 返回空——CI 只在
   `pull_request` 上运行，被部署的 main 提交从未验证；Render 使用 `autoDeploy: true`（每个提交立即部署），
   main 的 ruleset 又不要求 PR 检查通过，CI 红的 PR 合入后照样上线。10 个 Docker 服务没有 `buildFilter`，
@@ -946,6 +948,33 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 - 验证：`cd backend && mvn -q -pl agent-service -am test`（JDK 21），通过判据为 0 失败，含 `AgentRunnerContractTest`。
 - 排错：启动报 `expected single matching bean of type AgentRunner` 说明出现了第二个实现，需指定 `@Primary` 或 `@Qualifier`。
 - 回滚：回退本提交即可，无配置或数据变更。
+
+## 维护记录：KAMATERA-DEPLOY-20261013（2026-10-13）
+
+- 部署：在生产服务器 `docker/` 目录先运行 `../scripts/preflight-prod.sh`（必须全绿），再执行 `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`。
+- 验证：`curl -s -o /dev/null -w '%{http_code}\n' https://resource-profile.45-130-165-168.nip.io/login` 返回 200；Nacos（8848/9848）与网关 8080 从公网不可达。
+- 待办：在 Render 控制台停用旧 Blueprint 服务。
+- 回滚：回退本提交即可，无运行时影响。
+
+## 维护记录：AUTHZ-MCP-20261013（2026-10-13）
+
+- 启动前提：agent-service、mcp-student-data、auth-service 使用同一个 `JWT_SECRET`；mcp-student-data 能通过 Nacos（或 `TEACHER_SERVICE_URL`）访问 teacher-service，并配置 `EDUCARE_INTERNAL_TOKEN`。agent-service 与 mcp-student-data **必须同批发布**，否则 MCP tool 调用会因缺少身份全部被拒。
+- 升级窗口：auth-service 升级前签发的令牌不带 `aud`，如需在发布后 24h 内继续使用旧令牌，给 mcp-student-data 临时设置 `EDUCARE_MCP_AUTH_ALLOW_MISSING_AUDIENCE=true`，24h 后删除该变量并重启。
+- 发布窗口（必须执行）：
+  1. agent-service、mcp-student-data、auth-service 三个服务**同批发布**，不得单独发布其中任何一个。
+  2. 旧令牌不带 `aud`，有效期最长 24 小时。发布前给 mcp-student-data 设置 `EDUCARE_MCP_AUTH_ALLOW_MISSING_AUDIENCE=true`，否则旧令牌会被 MCP 拒绝。
+  3. 发布完成满 24 小时后，把 `EDUCARE_MCP_AUTH_ALLOW_MISSING_AUDIENCE` 改回 `false`（或删除该变量），重启 mcp-student-data。
+  4. 验证：改回 false 后日志不再出现 `MCP 调用者令牌校验失败`。
+- 验证命令：`cd backend && mvn -B -q -pl mcp-student-data,agent-service,teacher-service -am test`，通过判据 0 失败（含 `StudentDataToolsAuthorizationTest`、`McpCallerIdentityPropagationTest`）。
+- 联调验证（待验证，需真实环境）：
+  1. 用教师账号登录，触发本院系学生分析，任务完成；mcp-student-data 日志出现 `[MCP-AUTHZ] allow ... kind=USER`。
+  2. 触发其它院系学生，任务中的 student-data 工具返回错误，日志出现 `[MCP-AUTHZ] deny ... reason=该学生不属于当前教师所在院系`。
+  3. 开启定时扫描后，日志出现 `kind=SYSTEM initiator=scheduler`。
+- 排错：
+  - 日志 `MCP 调用者令牌校验失败: JwtException` 且大量出现 → 多为旧令牌缺 aud，按上面的升级窗口处理；或三端 `JWT_SECRET` 不一致。
+  - `reason=无法确认教师归属` → teacher-service 不可达，或该账号没有 `teacher_info` 记录（教师账号需要有教师档案）。
+  - `reason=缺少调用者身份` → agent-service 版本过旧，或调用来自没有设置 `McpCaller` 的新代码路径。
+- 回滚：回退本提交并同时重新发布 agent-service、mcp-student-data、auth-service、teacher-service。回滚后新签发的令牌不再带 aud，对旧代码没有影响。
 
 ## 维护记录：JAVA-RISK-PLAN-20261013（2026-10-13）
 

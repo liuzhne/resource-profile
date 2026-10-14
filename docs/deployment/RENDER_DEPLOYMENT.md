@@ -1,5 +1,7 @@
 # Render.com 部署指南（预览与生产）
 
+> **已废弃（2026-10-13）**：生产已迁至 Kamatera，`render.yaml` 已删除，见 DECISIONS.md 的 KAMATERA-DEPLOY-20261013。本文仅作历史参考。
+
 本文档提供**师生资源画像系统（EduCare Portrait System）**在 [Render.com](https://render.com) 云平台上的部署流程、架构说明与运维排错规范。
 
 > **当前部署模式（2026-09-01）**：核心业务使用外部 Aiven Free MySQL（公网 TLS）与 Render Free

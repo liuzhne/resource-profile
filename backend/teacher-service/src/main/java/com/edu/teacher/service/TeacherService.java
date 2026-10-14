@@ -9,6 +9,9 @@ public interface TeacherService {
 
     Teacher getById(Long id);
 
+    /** AUTHZ-MCP-20261013：按 sys_user.id 查教师档案（MCP 判定"教师只能看本院系学生"用）。 */
+    Teacher getByUserId(Long userId);
+
     void save(Teacher teacher);
 
     void update(Teacher teacher);

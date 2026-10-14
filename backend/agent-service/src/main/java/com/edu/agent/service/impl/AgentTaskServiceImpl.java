@@ -35,6 +35,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scheduling.annotation.Async;
+import com.edu.agent.security.McpCaller;
+import com.edu.agent.security.McpCallerContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -134,6 +136,12 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
      */
     @Override
     public Long triggerTask(Long studentId) {
+        return triggerTask(studentId, McpCaller.system(studentId, "scheduler"));
+    }
+
+    @Override
+    public Long triggerTask(Long studentId, McpCaller caller) {
+        final McpCaller effective = caller != null ? caller : McpCaller.system(studentId, "unknown");
         String idemKey = TRIGGER_IDEM_PREFIX + studentId;
         Boolean acquired = redisTemplate.opsForValue()
                 .setIfAbsent(idemKey, "1", triggerIdempotencyWindowSeconds, TimeUnit.SECONDS);
@@ -150,7 +158,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         Long taskId = createTask(studentId);
         try {
             // Self-invocation bypasses @Async: explicitly enqueue instead of running the loop in HTTP.
-            agentExecutor.execute(() -> asyncExecute(taskId));
+            agentExecutor.execute(() -> asyncExecute(taskId, effective));
         } catch (RejectedExecutionException e) {
             failTask(taskId);
             redisTemplate.delete(idemKey);
@@ -186,6 +194,18 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     @Override
     @Async("agentExecutor")
     public void asyncExecute(Long taskId) {
+        AgentTask task = agentTaskMapper.selectById(taskId);
+        Long studentId = task == null ? null : task.getStudentId();
+        asyncExecute(taskId, McpCaller.system(studentId, "system"));
+    }
+
+    @Override
+    public void asyncExecute(Long taskId, McpCaller caller) {
+        log.info("任务 {} 以 MCP 身份 {} 执行", taskId, caller);
+        McpCallerContext.runAs(caller, () -> executeLocked(taskId));
+    }
+
+    private void executeLocked(Long taskId) {
         String lockKey = LOCK_PREFIX + taskId;
         String lockValue = UUID.randomUUID().toString();
 
