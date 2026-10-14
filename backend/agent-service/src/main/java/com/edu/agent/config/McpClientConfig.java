@@ -1,6 +1,8 @@
 package com.edu.agent.config;
 
+import com.edu.agent.security.McpCallerTokenResolver;
 import io.modelcontextprotocol.client.transport.customizer.McpSyncHttpClientRequestCustomizer;
+import org.springframework.ai.mcp.customizer.McpSyncClientCustomizer;
 import io.modelcontextprotocol.common.McpTransportContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +22,11 @@ import java.net.http.HttpRequest;
  *
  * <p>{@code educare.mcp.token} 为空（默认）→ 不附头，仅靠网络隔离，demo 默认链路字节零改动；
  * 三个进程（agent + 两个 server）配同一 token 即开启互验。
+ *
+ * <p>AUTHZ-MCP-20261013：同时给每个 MCP 请求附 {@code Authorization: Bearer}（用户 JWT 或系统令牌，见
+ * {@link McpCallerTokenResolver}）。MCP SDK 可能在 Reactor 线程上发 HTTP 请求，所以身份经
+ * {@link McpSyncClientCustomizer#customize} 注册的 {@code transportContextProvider} 在调用线程上捕获，
+ * 再由本 customizer 从 {@link McpTransportContext} 读出；context 为空时回退到当前线程直接解析。
  */
 @Configuration
 public class McpClientConfig {
@@ -28,7 +35,12 @@ public class McpClientConfig {
     private String mcpToken;
 
     @Bean
-    public McpSyncHttpClientRequestCustomizer mcpTokenRequestCustomizer() {
+    public McpSyncClientCustomizer mcpCallerIdentityClientCustomizer(McpCallerTokenResolver resolver) {
+        return (name, spec) -> spec.transportContextProvider(resolver::currentTransportContext);
+    }
+
+    @Bean
+    public McpSyncHttpClientRequestCustomizer mcpTokenRequestCustomizer(McpCallerTokenResolver resolver) {
         final String token = mcpToken == null ? "" : mcpToken.strip();
         return new McpSyncHttpClientRequestCustomizer() {
             @Override
@@ -41,6 +53,11 @@ public class McpClientConfig {
                 builder.version(HttpClient.Version.HTTP_1_1);
                 if (!token.isEmpty()) {
                     builder.header("X-MCP-Token", token);
+                }
+                Object auth = context == null ? null : context.get(McpCallerTokenResolver.CONTEXT_KEY);
+                String authorization = auth != null ? auth.toString() : resolver.currentAuthorization();
+                if (authorization != null) {
+                    builder.setHeader("Authorization", authorization);
                 }
             }
         };

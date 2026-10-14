@@ -6,6 +6,11 @@ server:
 educare:
   mcp:
     token: ${EDUCARE_MCP_TOKEN:}
+    # AUTHZ-MCP-20261013：每个 tool 调用都要求调用者 JWT（agent-service 转发的用户令牌或系统令牌），
+    # 且 aud 必须含 mcp-student-data。allow-missing-audience=true 仅用于升级窗口：接受不带 aud 的旧令牌
+    # （auth-service 升级前签发，最长 24h），窗口结束务必改回 false。带错误 aud 的令牌任何时候都拒绝。
+    auth:
+      allow-missing-audience: ${EDUCARE_MCP_AUTH_ALLOW_MISSING_AUDIENCE:false}
   # common 的服务入口鉴权门（ServiceAuthFilter）在本服务关闭：没有业务 controller，/mcp 由 McpTokenFilter 把守。
   # 出站调 student/mental 附 X-Internal-Token（EDUCARE_INTERNAL_TOKEN，见 InternalCallFeignConfig）。
   service-auth:

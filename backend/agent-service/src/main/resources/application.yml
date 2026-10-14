@@ -139,18 +139,6 @@ logging:
     com.edu.agent.mapper: debug
 
 educare:
-  # RAG-JAVA-CORE-20261013：知识检索实现开关。python（默认，行为不变）| java（需要 EmbeddingClient/VectorStore 实现，当前未提供→启动失败）
-  ai:
-    rag:
-      impl: ${EDUCARE_AI_RAG_IMPL:python}
-      collections: case,psychology,policy,success
-      recall-expand: 3
-      cache-ttl: 1h
-      reranker:
-        enabled: ${EDUCARE_AI_RAG_RERANK_ENABLED:true}
-        base-url: ${RERANKER_BASE_URL:http://localhost:8093}
-        model: ${RERANKER_MODEL:bge-reranker-base}
-        timeout: 30s
   # MCP 内部预共享 token（纵深防御，A3）。空=仅靠 127.0.0.1 网络隔离（默认）；
   # 与两个 MCP server 配同一值即开启 X-MCP-Token 互验（McpClientConfig 给出站请求附头）。
   mcp:
@@ -194,6 +182,36 @@ educare:
   # enabled=true（默认）→ AgentTaskServiceImpl.doExecute 走 AgentLoop（一次性 think→tool→observe 完成
   #   "风险识别 + 计划生成"，RAG 检索由 knowledge-rag MCP tool 自然完成；合规审核 P4 仍走原 audit 端点）。
   # enabled=false → 回落旧 4 阶段流水线（risk → rag → plan → audit）作 fallback。
+  # JAVA-RISK-PLAN-20261013：legacy 流水线（agent.loop.enabled=false）中风险识别 / 方案生成的实现选择。
+  # 默认保持 main 现状：risk=legacy（RiskAnalyzeService，Java ChatClient）、plan=python（Feign → ai-inference-service）。
+  # 切 java 即走 Spring AI 结构化输出（prompts/risk.system.md、prompts/plan.system.md），格式错误重试
+  # structured.max-attempts 次后任务显式 FAILED。eval-endpoint 仅供 eval/run_eval.py 离线评测，生产保持 false。
+  # JAVA-AUDIT-20261013：audit = 合规审核实现。python（默认，原链路不变）| java | parallel（两侧并发，任一侧不通过即不通过）。
+  # java / parallel 下任何错误（超时、模型异常、输出无法解析）都按不通过处理。timeout 为单侧超时。
+  # RAG-JAVA-CORE-20261013：知识检索实现开关。python（默认，行为不变）| java（需要 EmbeddingClient/VectorStore 实现，当前未提供→启动失败）
+  # 注意：educare.ai 只能有这一个块，新增子项请加在下面（ApplicationYamlDuplicateKeyTest 会拦截重复键）。
+  ai:
+    risk:
+      impl: ${EDUCARE_AI_RISK_IMPL:legacy}
+    plan:
+      impl: ${EDUCARE_AI_PLAN_IMPL:python}
+    structured:
+      max-attempts: ${EDUCARE_AI_STRUCTURED_MAX_ATTEMPTS:3}
+    eval-endpoint:
+      enabled: ${EDUCARE_AI_EVAL_ENDPOINT_ENABLED:false}
+    audit:
+      impl: ${EDUCARE_AI_AUDIT_IMPL:python}
+      timeout: ${EDUCARE_AI_AUDIT_TIMEOUT:60s}
+    rag:
+      impl: ${EDUCARE_AI_RAG_IMPL:python}
+      collections: case,psychology,policy,success
+      recall-expand: 3
+      cache-ttl: 1h
+      reranker:
+        enabled: ${EDUCARE_AI_RAG_RERANK_ENABLED:true}
+        base-url: ${RERANKER_BASE_URL:http://localhost:8093}
+        model: ${RERANKER_MODEL:bge-reranker-base}
+        timeout: 30s
   agent:
     loop:
       enabled: ${EDUCARE_AGENT_LOOP_ENABLED:true}

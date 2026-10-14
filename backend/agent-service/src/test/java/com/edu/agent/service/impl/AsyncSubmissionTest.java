@@ -28,12 +28,14 @@ class AsyncSubmissionTest {
         List<Runnable> queue = new ArrayList<>();
         AgentTaskServiceImpl service = triggerService(queue::add, mock(AgentTaskMapper.class));
         doReturn(42L).when(service).createTask(7L);
-        doNothing().when(service).asyncExecute(42L);
+        doNothing().when(service).asyncExecute(eq(42L), any(com.edu.agent.security.McpCaller.class));
         assertEquals(42L, service.triggerTask(7L));
-        verify(service, never()).asyncExecute(anyLong());
+        verify(service, never()).asyncExecute(anyLong(), any());
         assertEquals(1, queue.size());
         queue.get(0).run();
-        verify(service).asyncExecute(42L);
+        // AUTHZ-MCP-20261013：无用户上下文的触发（定时扫描）以绑定该学生的系统身份执行
+        verify(service).asyncExecute(eq(42L), argThat((com.edu.agent.security.McpCaller c) ->
+                !c.isUser() && c.studentId() == 7L && "scheduler".equals(c.initiator())));
     }
 
     @Test
@@ -43,7 +45,7 @@ class AsyncSubmissionTest {
         doReturn(42L).when(service).createTask(7L);
         assertThrows(BusinessException.class, () -> service.triggerTask(7L));
         verify(mapper).updateById(argThat((AgentTask task) -> task.getId() == 42L && task.getStatus() == TaskStatus.FAILED));
-        verify(service, never()).asyncExecute(anyLong());
+        verify(service, never()).asyncExecute(anyLong(), any());
     }
 
     @SuppressWarnings("unchecked")
@@ -52,7 +54,7 @@ class AsyncSubmissionTest {
         ValueOperations<String, String> values = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(values);
         when(values.setIfAbsent(anyString(), anyString(), anyLong(), eq(TimeUnit.SECONDS))).thenReturn(true);
-        return spy(new AgentTaskServiceImpl(mapper, null, null, null, redis, null, null, null, null, null, executor));
+        return spy(new AgentTaskServiceImpl(mapper, null, null, null, redis, null, null, null, null, null, null, executor));
     }
 
     @Test

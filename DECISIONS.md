@@ -336,7 +336,7 @@
 
 ## ADR-026：main 即生产，Render 在 CI 通过后按服务增量部署
 
-- 状态：已采纳
+- 状态：已废弃（2026-10-13，被 KAMATERA-DEPLOY-20261013 取代）
 - 日期/修复标识：2026-09-15 / RENDER-CD-20260915
 - 背景：Render 服务未声明 `branch`（隐式跟随仓库默认分支 `main`），并使用已废弃的 `autoDeploy: true`
   （每个提交立即部署）。CI 只在 `pull_request` 上运行，main 的 ruleset 只要求走 PR、不要求检查通过，
@@ -601,6 +601,58 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 放弃方案：直接迁 Spring AI Alibaba Graph（当前无流程类需求，收益不足）。
 - 约束：容器内只能有一个 `AgentRunner` bean；新增实现时需用 `@Primary`/`@Qualifier` 或配置开关选择。`SubAgentToolCallback` / `SubAgentRegistry` 也改为依赖 `AgentRunner`；`run(req)` 只保留接口默认方法。
 - 验证：`mvn -q -pl agent-service -am test`（JDK 21）通过，agent-service 96 例 0 失败。
+
+## KAMATERA-DEPLOY-20261013：生产迁至 Kamatera，移除 Render 配置（2026-10-13）
+
+- 背景：生产已改为在 Kamatera 服务器上以 `docker compose -f docker-compose.yml -f docker-compose.prod.yml` 部署（先过 `scripts/preflight-prod.sh`），入口 `https://resource-profile.45-130-165-168.nip.io`。仓库中的 `render.yaml` 已不再使用，且其中「生产禁用 Nacos」等描述会误导后续方案。
+- 选择：删除 `render.yaml` 与只服务于它的 `scripts/sync-render-performance.py`；CI 工作流中残留的 `render.yaml` 路径与注释暂未清理（推送凭证缺少 workflow 权限），另行跟进，对 CI 无影响；`bench-production-api.py` 默认地址改为 Kamatera 入口；ADR-026 标记为已废弃。
+- 未改动：`docs/production-tests/2026-09-16/` 下的历史测试记录保留原样；前端针对 Render 休眠的预热与 429 重试逻辑（`frontend/tests/prewarm.test.mjs`、`retry.test.mjs` 对应实现）暂不动，另行评估是否在自托管环境下移除。
+- 运维：Render 控制台中的 Blueprint 服务需手工停用，否则仍会跟随 `main`。
+- 验证：CI YAML 解析通过；无运行时代码改动。
+
+## AUTHZ-MCP-20261013：MCP 调用携带用户身份，student-data 工具逐个做水平授权（2026-10-13）
+
+- 背景：`mcp-student-data` 的 4 个 tool 只靠 `127.0.0.1` 网络隔离和可选的 `X-MCP-Token`，不认识调用者是谁；模型填的 `studentId` 不受任何约束，教师（甚至被注入的 prompt）可以让 Agent 读任意学生的心理/成绩数据。
+- 选择：
+  - agent-service 每次 MCP 请求都附 `Authorization: Bearer`：用户在请求里触发的任务转发**该用户原始 JWT**；没有用户上下文的异步/预警任务（定时扫描、内部凭证触发）现签**系统令牌**。见 [`McpCallerTokenResolver`](./backend/agent-service/src/main/java/com/edu/agent/security/McpCallerTokenResolver.java)、[`McpClientConfig`](./backend/agent-service/src/main/java/com/edu/agent/config/McpClientConfig.java)。身份经 MCP SDK 的 `transportContextProvider` 在调用线程捕获，避免 Reactor 线程切换丢失 ThreadLocal。
+  - 系统令牌（[`JwtUtil.generateSystemToken`](./backend/common/src/main/java/com/edu/common/util/JwtUtil.java)）：`sub=system:agent-task`、`typ=system`、`scope=[student-data:read]`、`student_id` 绑定本任务学生、`initiator` 记录发起者（用户 id / `scheduler` / `internal`）、`aud=[mcp-student-data]`、有效期 15 分钟。无角色，所以拿到它也过不了其它服务的 `AccessGuard`；网关的 Redis 会话白名单也不认它。
+  - mcp-student-data 用自定义 transport `contextExtractor`（[`McpServerTransportConfig`](./backend/mcp-student-data/src/main/java/com/edu/mcp/student/config/McpServerTransportConfig.java)）把 `Authorization` 放进 MCP transport context；每个 tool 第一行调用 [`StudentAccessPolicy.authorize`](./backend/mcp-student-data/src/main/java/com/edu/mcp/student/security/StudentAccessPolicy.java)，先用 common `JwtUtil` 校验签名、过期和 `aud`（[`McpCallerAuthenticator`](./backend/mcp-student-data/src/main/java/com/edu/mcp/student/security/McpCallerAuthenticator.java)），再做水平授权；任何失败都抛异常，不触达下游（fail-closed）。
+  - 授权规则：学生只能读 `student_info.user_id` 等于自己的记录；admin / psychologist 全校；teacher / counselor / academic_advisor 只能读**本院系**（`teacher_info.dept_id == student_info.dept_id`）学生；系统身份必须有 `student-data:read` 且只能读绑定学生。新增 teacher-service `GET /teacher/by-user/{userId}`（仅本人或内部凭证）供 MCP 取教师院系。
+  - `aud`：auth-service 签发的访问令牌默认带 `aud=[educare-api, mcp-student-data]`（`jwt.audiences`，置空列表即回到旧形态）；刷新令牌不带 aud，因此不能被当访问令牌转发给 MCP。
+- 兼容开关：`educare.mcp.auth.allow-missing-audience`（env `EDUCARE_MCP_AUTH_ALLOW_MISSING_AUDIENCE`，默认 `false`）。升级窗口内若要继续接受升级前签发、不带 aud 的旧令牌（最长 24h），临时设为 `true`，窗口结束改回。带了 aud 但不含 `mcp-student-data` 的令牌在任何模式下都拒绝。
+- "教师的学生"如何定义：仓库没有班主任/任课-学生关系表，院系是现有数据里唯一的归属关系，先按院系判定；以后有了班级/导师关系表，只需改 `StudentAccessPolicy` 里这一处。
+- 放弃方案：只在 HTTP filter 层拒绝无 token 请求（initialize / tools/list 本身不需要用户身份，且挡不住"有 token 但读别人"）；把用户 id 放进 MCP `_meta` 或工具参数（模型可见、可伪造）；异步任务一律用系统身份（教师触发时会绕过教师院系限制，所以用户触发的任务转发用户本人 JWT）。
+- 代价与约束：mcp-student-data 每次 tool 调用多 1 次 student-service（教师角色再多 1 次 teacher-service）Feign 调用；用户 JWT 若在任务排队期间过期，任务里的 MCP 调用会被拒（fail-closed，任务失败可重触发）；没有身份的 MCP tool 调用一律失败，所以 agent-service 和 mcp-student-data 必须一起发布。
+- 验证：[`StudentDataToolsAuthorizationTest`](./backend/mcp-student-data/src/test/java/com/edu/mcp/student/security/StudentDataToolsAuthorizationTest.java) 覆盖学生读他人、教师读非本院系学生、伪造令牌、过期令牌、错误 aud、缺少令牌、缺少 aud（默认拒绝 / 兼容模式接受）、刷新令牌、系统身份越出绑定学生、无 scope、下游异常、经 `MethodToolCallback` 传入模型参数；[`McpCallerIdentityPropagationTest`](./backend/agent-service/src/test/java/com/edu/agent/security/McpCallerIdentityPropagationTest.java) 覆盖出站头注入；`JwtUtilTest`、`TeacherControllerTest` 补充用例。`cd backend && mvn -B clean test` 共 297 例 0 失败。真实 MCP 链路联调待验证。
+
+## JAVA-RISK-PLAN-20261013：风险识别与方案生成迁到 Java（Spring AI 结构化输出，默认不切换）（2026-10-13）
+
+- 背景：迁移计划第 2 步，把 Python `ai-inference-service` 的 `/api/v1/agent/risk`、`/api/v1/agent/plan` 搬进 agent-service。现状：AgentLoop 主路径（默认）不调用这两个端点；只有 legacy 流水线（`educare.agent.loop.enabled=false`）用到——风险识别走 Java [`RiskAnalyzeService`](./backend/agent-service/src/main/java/com/edu/agent/service/RiskAnalyzeService.java)（不经 Python），方案生成走 Feign → Python。Python `/agent/risk` 实际只被 `eval/run_eval.py` 使用。
+- 选择：
+  - prompt 原样移植到 [`prompts/risk.system.md`](./backend/agent-service/src/main/resources/prompts/risk.system.md)、[`prompts/plan.system.md`](./backend/agent-service/src/main/resources/prompts/plan.system.md)（单测锁定与 Python 文件逐字节一致）；user 消息拼装与 Python 相同（安全前言 + 清洗后的 `<tag>JSON</tag>`，见 [`PromptPayloads`](./backend/agent-service/src/main/java/com/edu/agent/ai/PromptPayloads.java)）。
+  - 输出映射为 Java record [`RiskAssessment`](./backend/agent-service/src/main/java/com/edu/agent/ai/model/RiskAssessment.java)、[`InterventionPlan`](./backend/agent-service/src/main/java/com/edu/agent/ai/model/InterventionPlan.java)，字段名与 Python JSON 契约一致，存库格式不变。
+  - [`StructuredLlmClient`](./backend/agent-service/src/main/java/com/edu/agent/ai/StructuredLlmClient.java)：Spring AI `BeanOutputConverter` 生成格式指令并解析，再做业务校验（等级合法、分数 0..100、必填非空、`deadline_days` 1..7）。格式错误最多尝试 `educare.ai.structured.max-attempts`（默认 3）次，之后抛 `AiStructuredOutputException(MALFORMED_OUTPUT)`；模型调用异常不在这层重试（Spring AI RetryTemplate 已处理 429），直接抛 `MODEL_ERROR`。legacy 流水线收到异常后任务标为 FAILED，**不**像 Python 那样返回默认"中风险"或占位方案。
+  - 开关（[`RiskPlanDispatcher`](./backend/agent-service/src/main/java/com/edu/agent/ai/RiskPlanDispatcher.java)）：`educare.ai.risk.impl=legacy|python|java`（默认 `legacy`）、`educare.ai.plan.impl=python|java`（默认 `python`）。非法值启动即失败。
+  - `PromptSanitizer` 合并 `prompt_guard.py`：逐条对比后补齐 4 处 Java 与 Python 不一致的规则（Unicode 空白、只把 `\n` 当行首、按码点截断、空标签退回 `data`），原有规则一条未删。仓库里原本没有 prompt_guard 的 Python 单测，先补了 [`tests/test_prompt_guard.py`](./ai-inference-service/tests/test_prompt_guard.py) 固定 Python 行为，再逐条翻译成 [`PromptSanitizerParityTest`](./backend/common/src/test/java/com/edu/common/util/PromptSanitizerParityTest.java)。
+  - eval：新增默认关闭的 [`RiskEvalController`](./backend/agent-service/src/main/java/com/edu/agent/ai/RiskEvalController.java)，路径 `/agent/_internal/eval/api/v1/agent/risk`，契约与 Python 相同，`run_eval.py --base-url http://127.0.0.1:8087/agent/_internal/eval` 即可评测，不改脚本和 workflow（见 [eval/README.md §9](./eval/README.md)）。
+- 为什么风险识别默认是 `legacy` 而不是 `python`：main 上 legacy 流水线的风险识别本来就不调 Python；默认 `python` 会改变现有行为，违背"开关打开前行为不变"的原则。
+- 放弃方案：直接用 `ChatClient...entity(Class)`（解析失败直接抛错，无法控制重试次数和校验）；改造 `RiskAnalyzeService`（它用另一份 prompt、失败返回默认值，保留作 legacy 便于对比）；修改 `run_eval.py` 增加 `--endpoint` 参数（没有必要，base-url 前缀即可）。
+- 代价与约束：Java 实现的 user 消息末尾多一段 Spring AI 格式指令，与 Python prompt 不完全相同，评测时要以同一数据集分别跑两版对比；`PromptSanitizer` 规则对齐后，含全角空格前导角色行、U+2028、emoji 超长截断的输入，Java 输出会与之前略有不同（与 Python 一致）。
+- 验证：[`JavaRiskPlanTest`](./backend/agent-service/src/test/java/com/edu/agent/ai/JavaRiskPlanTest.java)（解析、重试成功、重试耗尽、校验失败、模型错误不重试、方案三段顺序、开关默认值/各模式/非法值、eval 端点、prompt 一致性）、`PromptSanitizerParityTest`、`tests/test_prompt_guard.py`。真实模型下的准确率（≥0.85 且不低于 Python 版）待测试环境评测。
+
+## JAVA-AUDIT-20261013：合规审核迁到 Java，任何错误都按不通过处理（2026-10-13）
+
+- 背景：迁移计划第 4 步。合规审核是 AI 方案对外前的最后一道门；Python `/api/v1/agent/audit` 在 LLM 失败时返回不通过，但字段类型宽松（如字符串 `"true"` 会被 fastjson `getBoolean` 当成通过），也没有超时控制。
+- 选择（[`com.edu.agent.audit`](./backend/agent-service/src/main/java/com/edu/agent/audit/)）：
+  - 开关 `educare.ai.audit.impl=python|java|parallel`，默认 `python`（原代码路径一行未改）。
+  - [`JavaComplianceAuditor`](./backend/agent-service/src/main/java/com/edu/agent/audit/JavaComplianceAuditor.java)：prompt 从 Python 原样移植（[`prompts/audit.system.md`](./backend/agent-service/src/main/resources/prompts/audit.system.md)），user 消息与 Python 相同（只带 studentId/grade/major + 方案，先清洗）。单侧超时 `educare.ai.audit.timeout`（默认 60s）。
+  - 严格判定（[`AuditOutcome.fromModelJson`](./backend/agent-service/src/main/java/com/edu/agent/audit/AuditOutcome.java)）：只有 `audit_passed` 是 JSON 布尔 `true`、所有 `audit_items[].passed` 都是布尔 `true`、且 `manual_review_required` 不为 `true` 时才算通过。超时、模型异常、线程池拒绝、输出不是 JSON 对象、字段类型不对 → 一律不通过，结果 JSON 与原 `fallbackAudit` 同形（含 `audit_failure` 原因）。模型说"通过"但有未通过项或要求人工复核 → 不通过（附 `audit_note`）。
+  - 不重试：审核失败只会转人工；重试可能"刷"出一次通过。
+  - parallel：Python 与 Java 并发执行（各自带超时，不嵌套占线程），**任一侧不通过或出错即不通过**；两侧的 audit_items / 整改建议合并，`parallel` 字段记录两侧结论与是否一致，便于对比。parallel 下 Python 一侧也用严格判定。
+  - 返回 JSON 里的 `audit_passed` 就是最终结论，所以 `AgentTaskServiceImpl.parseAuditPassed` 和前端/PDF 读取的字段都不用改。
+- 放弃方案：parallel 以 Python 为准、Java 只记录差异（不满足"任一侧拒绝即拒绝"）；对审核做结构化输出重试（同上，重试会提高误放行概率）；python 模式也换成严格判定（会改变默认行为，留到切换 java 时自然生效）。
+- 代价与约束：parallel 模式审核耗时取两侧较慢者、LLM 调用量翻倍；严格判定下 Java 的通过率可能低于 Python（例如模型输出 `"true"` 字符串），这是有意为之。与 JAVA-RISK-PLAN-20261013 同时合并时，`application.yml` 中两段 `educare.ai` 配置需要合成一个 `ai:` 块。
+- 验证：[`ComplianceAuditFailClosedTest`](./backend/agent-service/src/test/java/com/edu/agent/audit/ComplianceAuditFailClosedTest.java) 17 例，覆盖 Java 通过 / 模型拒绝 / 超时 / 模型异常 / 9 种解析失败 / 围栏 JSON / 自相矛盾 / 线程池拒绝；Python 侧连接失败 / 超时 / 非 JSON / 空 / 字符串 true；parallel 两侧通过 / 任一侧拒绝 / 任一侧出错 / 并发执行；编排异常；开关解析；prompt 一致性。真实模型下的通过率对比待测试环境验证。
 
 ## RAG-JAVA-CORE-20261013：RAG 检索中不依赖 Milvus 的部分迁到 Java（2026-10-13）
 

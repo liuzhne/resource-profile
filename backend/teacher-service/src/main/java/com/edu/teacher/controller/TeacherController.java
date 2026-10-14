@@ -42,6 +42,19 @@ public class TeacherController {
         return Result.success(teacher);
     }
 
+    /**
+     * AUTHZ-MCP-20261013：按 sys_user.id 查教师档案。只允许本人或已验证的内部调用（mcp-student-data 用它取
+     * 教师院系，判定"教师只能看本院系学生"）；其他人（含其他教职工）一律 403。
+     */
+    @GetMapping("/by-user/{userId}")
+    public Result<Teacher> getByUserId(@PathVariable Long userId,
+                                       @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        if (!accessGuard.allowSelfRoleOrInternal(authHeader, userId)) {
+            return Result.error(403, "无权访问教师档案");
+        }
+        return Result.success(teacherService.getByUserId(userId));
+    }
+
     @PostMapping
     public Result<Void> save(@RequestBody Teacher teacher,
                              @RequestHeader(value = "Authorization", required = false) String authHeader) {
