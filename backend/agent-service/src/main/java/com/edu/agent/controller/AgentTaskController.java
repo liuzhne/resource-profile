@@ -4,6 +4,7 @@ import com.alibaba.csp.sentinel.annotation.SentinelResource;
 import com.alibaba.csp.sentinel.slots.block.BlockException;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.edu.agent.entity.AgentTask;
+import com.edu.agent.security.McpCaller;
 import com.edu.agent.service.AgentTaskService;
 import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
@@ -41,7 +42,12 @@ public class AgentTaskController {
         if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.STAFF_VIEW)) {
             return Result.error(403, "无权触发风险分析");
         }
-        Long taskId = agentTaskService.triggerTask(studentId);
+        // AUTHZ-MCP-20261013：任务以触发者本人身份调用 MCP（转发其 JWT），发起者记为其 userId
+        Long initiator = accessGuard.currentUserId(authHeader);
+        McpCaller caller = initiator == null
+                ? McpCaller.system(studentId, "internal")
+                : McpCaller.user(authHeader, studentId, String.valueOf(initiator));
+        Long taskId = agentTaskService.triggerTask(studentId, caller);
         return Result.success(taskId);
     }
 

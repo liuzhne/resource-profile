@@ -369,6 +369,32 @@ JaCoCo 门通过；前端、preflight 和 Bash 5/macOS Bash 3.2 的脚本回归�
 
 agent-service 内部新增抽象层：`AgentTaskServiceImpl → AgentRunner（接口）→ AgentLoop（实现）`。服务边界、外部调用链与数据流不变。详见 DECISIONS.md 同标识条目。
 
+## 维护记录：KAMATERA-DEPLOY-20261013（2026-10-13）
+
+部署拓扑以 `docker/docker-compose.yml` + `docker-compose.prod.yml`（Kamatera 单机）为准，Render 相关描述（含 RENDER-CD-20260915）已废弃。运行时架构不变。详见 DECISIONS.md 同标识条目。
+
+## 维护记录：AUTHZ-MCP-20261013（2026-10-13）
+
+安全边界变化：agent-service → mcp-student-data 的每个 MCP 请求都带调用者身份（`Authorization: Bearer`）。
+
+- 调用链：`AgentTaskController.trigger`（取用户 JWT）→ `AgentTaskServiceImpl.asyncExecute(taskId, McpCaller)`（`McpCallerContext` 线程上下文）→ AgentLoop 调 MCP tool → `McpSyncClient.transportContextProvider` 捕获身份 → `McpClientConfig` 的 HTTP customizer 写 `Authorization` 头 → mcp-student-data `McpServerTransportConfig.contextExtractor` 放进 transport context → `StudentDataTools` 每个 tool 调 `StudentAccessPolicy.authorize` → 通过后才 Feign 调 student/mental-service。
+- 身份种类：用户触发的任务转发用户 JWT；定时扫描等无用户上下文的任务使用系统令牌（`system:agent-task`，`scope=student-data:read`，绑定单个学生，记录 `initiator`，15 分钟）。
+- 新依赖：mcp-student-data → teacher-service `GET /teacher/by-user/{userId}`（附 `X-Internal-Token`），用于判定教师院系。
+- 令牌：访问令牌新增 `aud=[educare-api, mcp-student-data]`；mcp-student-data 要求 `aud` 含 `mcp-student-data`（兼容开关 `educare.mcp.auth.allow-missing-audience`）。
+- knowledge-rag MCP（Python）也会收到同一个 `Authorization` 头，但目前不校验；它不返回学生个人数据。
+
+## 维护记录：JAVA-RISK-PLAN-20261013（2026-10-13）
+
+agent-service 新增 `com.edu.agent.ai` 包（Java 版风险识别 / 方案生成）。默认配置下调用链不变。
+
+- legacy 流水线：`AgentTaskServiceImpl.executeRiskAnalyze / executePlanGenerate → RiskPlanDispatcher →`
+  - risk：`legacy`（默认）→ `RiskAnalyzeService`；`python` → `AiInferenceClient.riskAnalyze`；`java` → `JavaRiskAssessmentService`
+  - plan：`python`（默认）→ `AiInferenceClient.generatePlan`；`java` → `JavaPlanGenerationService`
+- Java 实现：`PromptPayloads`（清洗 + XML 包裹）→ `StructuredLlmClient`（Spring AI `BeanOutputConverter` + 有界重试）→ `LlmTextCaller`（本地 `@Primary` ChatClient，数据不出本地）。
+- AgentLoop 主路径（默认）不受影响。
+- 新增仅评测用端点 `/agent/_internal/eval/api/v1/agent/risk`（默认不注册）。
+- `common` 的 `PromptSanitizer` 规则与 Python `prompt_guard.py` 完全对齐。
+
 ## 维护记录：JAVA-AUDIT-20261013（2026-10-13）
 
 agent-service 新增 `com.edu.agent.audit` 包。默认（`educare.ai.audit.impl=python`）调用链不变。

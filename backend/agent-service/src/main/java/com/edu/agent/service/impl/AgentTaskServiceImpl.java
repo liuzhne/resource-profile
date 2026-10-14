@@ -19,7 +19,6 @@ import com.edu.agent.enums.TaskStatus;
 import com.edu.agent.feign.AiInferenceClient;
 import com.edu.agent.mapper.AgentTaskMapper;
 import com.edu.agent.service.AgentTaskService;
-import com.edu.agent.service.RiskAnalyzeService;
 import com.edu.agent.service.StudentPortraitAggregator;
 import com.edu.agent.skill.SkillLoader;
 import com.edu.agent.sse.WarningPublisher;
@@ -36,6 +35,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scheduling.annotation.Async;
+import com.edu.agent.security.McpCaller;
+import com.edu.agent.security.McpCallerContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,7 +61,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final AgentTaskMapper agentTaskMapper;
     private final AiInferenceClient aiInferenceClient;          // P3 阶段接入 RAG / 方案 / 合规
     private final StudentPortraitAggregator portraitAggregator;   // P2-5：基于真实端点的画像聚合
-    private final RiskAnalyzeService riskAnalyzeService;          // P2-5：真实 LLM 风险识别
+    private final com.edu.agent.ai.RiskPlanDispatcher riskPlanDispatcher; // JAVA-RISK-PLAN-20261013：risk/plan 实现切换（默认保持现状）
     private final StringRedisTemplate redisTemplate;
     private final WarningPublisher warningPublisher;              // F-2：终态事件发布
     private final AgentRunner agentRunner;                        // AGENT-RUNNER-20261013：只依赖接口，当前实现为 AgentLoop
@@ -137,6 +138,12 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
      */
     @Override
     public Long triggerTask(Long studentId) {
+        return triggerTask(studentId, McpCaller.system(studentId, "scheduler"));
+    }
+
+    @Override
+    public Long triggerTask(Long studentId, McpCaller caller) {
+        final McpCaller effective = caller != null ? caller : McpCaller.system(studentId, "unknown");
         String idemKey = TRIGGER_IDEM_PREFIX + studentId;
         Boolean acquired = redisTemplate.opsForValue()
                 .setIfAbsent(idemKey, "1", triggerIdempotencyWindowSeconds, TimeUnit.SECONDS);
@@ -153,7 +160,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         Long taskId = createTask(studentId);
         try {
             // Self-invocation bypasses @Async: explicitly enqueue instead of running the loop in HTTP.
-            agentExecutor.execute(() -> asyncExecute(taskId));
+            agentExecutor.execute(() -> asyncExecute(taskId, effective));
         } catch (RejectedExecutionException e) {
             failTask(taskId);
             redisTemplate.delete(idemKey);
@@ -189,6 +196,18 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     @Override
     @Async("agentExecutor")
     public void asyncExecute(Long taskId) {
+        AgentTask task = agentTaskMapper.selectById(taskId);
+        Long studentId = task == null ? null : task.getStudentId();
+        asyncExecute(taskId, McpCaller.system(studentId, "system"));
+    }
+
+    @Override
+    public void asyncExecute(Long taskId, McpCaller caller) {
+        log.info("任务 {} 以 MCP 身份 {} 执行", taskId, caller);
+        McpCallerContext.runAs(caller, () -> executeLocked(taskId));
+    }
+
+    private void executeLocked(Long taskId) {
         String lockKey = LOCK_PREFIX + taskId;
         String lockValue = UUID.randomUUID().toString();
 
@@ -530,7 +549,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         String maskedProfile = portraitAggregator.buildMaskedProfile(String.valueOf(studentId));
 
         // ② 调用本地 llama.cpp
-        return riskAnalyzeService.analyzeRisk(maskedProfile);
+        return riskPlanDispatcher.analyzeRisk(maskedProfile);
     }
 
     /**
@@ -576,9 +595,12 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             JSONArray chunks = knowledge != null ? knowledge.getJSONArray("chunks") : null;
             req.put("knowledge_chunks", chunks != null ? chunks : Collections.emptyList());
 
-            String response = aiInferenceClient.generatePlan(req);
+            String response = riskPlanDispatcher.generatePlan(req);
             log.info("任务 {} 方案生成完成", task.getId());
             return response != null ? response : fallbackPlan();
+        } catch (com.edu.agent.ai.AiStructuredOutputException e) {
+            // JAVA-RISK-PLAN-20261013：Java 实现显式失败 → 任务 FAILED，不用占位方案冒充成功
+            throw e;
         } catch (Exception e) {
             log.error("任务 {} 方案生成异常", task.getId(), e);
             return fallbackPlan();
