@@ -653,3 +653,16 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 放弃方案：parallel 以 Python 为准、Java 只记录差异（不满足"任一侧拒绝即拒绝"）；对审核做结构化输出重试（同上，重试会提高误放行概率）；python 模式也换成严格判定（会改变默认行为，留到切换 java 时自然生效）。
 - 代价与约束：parallel 模式审核耗时取两侧较慢者、LLM 调用量翻倍；严格判定下 Java 的通过率可能低于 Python（例如模型输出 `"true"` 字符串），这是有意为之。与 JAVA-RISK-PLAN-20261013 同时合并时，`application.yml` 中两段 `educare.ai` 配置需要合成一个 `ai:` 块。
 - 验证：[`ComplianceAuditFailClosedTest`](./backend/agent-service/src/test/java/com/edu/agent/audit/ComplianceAuditFailClosedTest.java) 17 例，覆盖 Java 通过 / 模型拒绝 / 超时 / 模型异常 / 9 种解析失败 / 围栏 JSON / 自相矛盾 / 线程池拒绝；Python 侧连接失败 / 超时 / 非 JSON / 空 / 字符串 true；parallel 两侧通过 / 任一侧拒绝 / 任一侧出错 / 并发执行；编排异常；开关解析；prompt 一致性。真实模型下的通过率对比待测试环境验证。
+
+## RAG-JAVA-CORE-20261013：RAG 检索中不依赖 Milvus 的部分迁到 Java（2026-10-13）
+
+- 背景：Python `reranker_client.py` 失败时返回全零分占位，调用方只能靠"全零"猜测失败；单集合管线缓存键不含索引版本。
+- 选择：agent-service 新增 `com.edu.agent.rag`：
+  - `RerankClient`/`HttpRerankClient`：Cohere `/rerank` 同协议，失败一律返回 `RerankResult.failed(原因)`，不抛异常，也不返回占位分。网络错误、非 2xx、非 JSON、缺 results、空结果、index 越界或重复、字段缺失、全部分数 ≤ 0 都算失败。全零判为失败是为了与 Python 回退判定保持一致。
+  - `KnowledgeRetrievalService`：精排失败时保留向量原顺序，不写缓存，打 warn 日志，结果带 `rerank_failure`；空召回时 `fallback=true`，也不缓存。
+  - `RagCacheKey`：在 Python 键的基础上加入索引版本（`VectorStore.indexVersion`），前缀改为 `edu:rag:pipe:java:`，与 Python 缓存隔离。
+  - `VectorStore`/`EmbeddingClient` 只是接口，**未实现**。embedding 模型与 Milvus 字段映射留给用户决定（TODO RAG-JAVA-CORE-20261013）。
+  - 开关 `educare.ai.rag.impl`：默认 `python`，行为不变。设为 `java` 时若缺少上述实现会在启动期显式失败，避免静默返回空知识。
+  - java 模式下任务链路用 `retrieveMulti`：多路 query × 多集合，按 `source_db:chunk_id` 去重，排序用精排分（没有时用向量分），返回与 Python `/rag/retrieve` 同形的 JSON。
+- 已知差异：多集合合并时精排分与向量分混排，各集合之间尚未做全局精排（Python 是全局 rerank）。接入 Milvus 后再评估。
+- 验证：`KnowledgeRetrievalServiceTest`（翻译自 `test_rag_pipeline_cache_key.py` 并补充用例）、`HttpRerankClientTest`（本地 HttpServer）。

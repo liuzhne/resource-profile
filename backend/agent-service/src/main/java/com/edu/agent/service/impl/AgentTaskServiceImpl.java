@@ -74,6 +74,14 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     @Qualifier("agentExecutor")
     private final Executor agentExecutor;
 
+    /** RAG-JAVA-CORE-20261013：仅当 educare.ai.rag.impl=java 时存在；默认 python，此字段为 null，行为不变。 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.edu.agent.rag.KnowledgeRetrievalService javaKnowledgeRetrieval;
+
+    /** RAG-JAVA-CORE-20261013：java 模式下检索的逻辑集合（与 Python MILVUS_COLLECTIONS 的 key 对齐）。 */
+    @org.springframework.beans.factory.annotation.Value("${educare.ai.rag.collections:case,psychology,policy,success}")
+    private List<String> javaRagCollections = List.of("case", "psychology", "policy", "success");
+
     @Value("${educare.idempotency.trigger-window-seconds:30}")
     private long triggerIdempotencyWindowSeconds;
 
@@ -570,7 +578,14 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             ));
             req.put("top_k", 5);
 
-            String response = aiInferenceClient.retrieveKnowledge(req);
+            String response;
+            if (javaKnowledgeRetrieval != null) {
+                @SuppressWarnings("unchecked")
+                List<String> queries = (List<String>) req.get("queries");
+                response = JSON.toJSONString(javaKnowledgeRetrieval.retrieveMulti(queries, javaRagCollections, 5));
+            } else {
+                response = aiInferenceClient.retrieveKnowledge(req);
+            }
             log.info("任务 {} RAG 检索完成，长度: {}", task.getId(), response == null ? 0 : response.length());
             return response != null ? response : fallbackKnowledge();
         } catch (Exception e) {

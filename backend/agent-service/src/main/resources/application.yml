@@ -188,6 +188,7 @@ educare:
   # structured.max-attempts 次后任务显式 FAILED。eval-endpoint 仅供 eval/run_eval.py 离线评测，生产保持 false。
   # JAVA-AUDIT-20261013：audit = 合规审核实现。python（默认，原链路不变）| java | parallel（两侧并发，任一侧不通过即不通过）。
   # java / parallel 下任何错误（超时、模型异常、输出无法解析）都按不通过处理。timeout 为单侧超时。
+  # RAG-JAVA-CORE-20261013：知识检索实现开关。python（默认，行为不变）| java（需要 EmbeddingClient/VectorStore 实现，当前未提供→启动失败）
   # 注意：educare.ai 只能有这一个块，新增子项请加在下面（ApplicationYamlDuplicateKeyTest 会拦截重复键）。
   ai:
     risk:
@@ -201,6 +202,16 @@ educare:
     audit:
       impl: ${EDUCARE_AI_AUDIT_IMPL:python}
       timeout: ${EDUCARE_AI_AUDIT_TIMEOUT:60s}
+    rag:
+      impl: ${EDUCARE_AI_RAG_IMPL:python}
+      collections: case,psychology,policy,success
+      recall-expand: 3
+      cache-ttl: 1h
+      reranker:
+        enabled: ${EDUCARE_AI_RAG_RERANK_ENABLED:true}
+        base-url: ${RERANKER_BASE_URL:http://localhost:8093}
+        model: ${RERANKER_MODEL:bge-reranker-base}
+        timeout: 30s
   agent:
     loop:
       enabled: ${EDUCARE_AGENT_LOOP_ENABLED:true}

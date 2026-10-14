@@ -48,6 +48,10 @@ class ApplicationYamlDuplicateKeyTest {
             assertNotNull(educare, "缺少 educare 块");
             Object ai = educare.get("ai");
             assertInstanceOf(Map.class, ai, "educare.ai 应为单个映射块");
+            Map<String, Object> aiMap = (Map<String, Object>) ai;
+            for (String k : new String[]{"rag", "risk", "plan", "structured", "eval-endpoint", "audit"}) {
+                assertTrue(aiMap.containsKey(k), "educare.ai 缺少子项 " + k);
+            }
         }
     }
 }

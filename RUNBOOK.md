@@ -996,3 +996,11 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
 - 观测：每次审核打一条 `[audit] mode=... approved=... failure=...`；`failure=TIMEOUT` 偏多 → 调大超时或检查模型端点；`PARSE_ERROR` 偏多 → 模型不遵守格式。
 - 排错：任务大量变为 REJECTED → 查 `compliance_audit.audit_failure` 与 `audit_note`，区分是出错（fail-closed）还是模型真实拒绝。
 - 回滚：`EDUCARE_AI_AUDIT_IMPL=python` 并重启，无数据变更；已存的 parallel/java 结果 JSON 向后兼容（只多了可选字段）。
+
+## 维护记录：RAG-JAVA-CORE-20261013（2026-10-13）
+
+- 开关：`EDUCARE_AI_RAG_IMPL=python`（默认）或 `java`。当前设为 `java` 会在启动时报 `需要 EmbeddingClient/VectorStore 实现`，这是预期行为，改回 `python` 即可。
+- 其他配置：`RERANKER_BASE_URL`、`RERANKER_MODEL`、`EDUCARE_AI_RAG_RERANK_ENABLED`，以及 `educare.ai.rag.recall-expand`、`cache-ttl`、`collections`。
+- 排错：日志中的 `rag-java 精排失败（原因）` 表示本次回退为向量顺序且没有缓存，下次请求会重试精排。Redis 键前缀为 `edu:rag:pipe:java:`。
+- 验证：`cd backend && mvn -q -pl agent-service -am test -Dtest='KnowledgeRetrievalServiceTest,HttpRerankClientTest' -Dsurefire.failIfNoSpecifiedTests=false`。
+- 回滚：回退本提交即可，默认配置下无行为变更。

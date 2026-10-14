@@ -405,3 +405,7 @@ agent-service 新增 `com.edu.agent.audit` 包。默认（`educare.ai.audit.impl
   - parallel：`ComplianceAuditService →` 并发 `PythonComplianceAuditor`（Feign）+ `JavaComplianceAuditor`，任一侧不通过即不通过
 - 新增线程池 `complianceAuditExecutor`（固定 8 线程，队列 256，满则该侧按不通过处理）。
 - 安全边界：java / parallel 模式下审核为 fail-closed；`compliance_audit` 存库 JSON 结构不变，新增 `audit_source`、`audit_failure`、`audit_note`、`parallel` 可选字段。
+
+## 维护记录：RAG-JAVA-CORE-20261013（2026-10-13）
+
+agent-service 新增 `com.edu.agent.rag`，组成为 `KnowledgeRetrievalService → EmbeddingClient(接口) + VectorStore(接口) + RerankClient(HttpRerankClient) + RagCache(RedisRagCache)`。只有 `educare.ai.rag.impl=java` 时才装配。默认 `python`，阶段 2 仍调 ai-inference-service `/api/v1/rag/retrieve`。向量库与 embedding 暂无 Java 实现（TODO）。详见 DECISIONS.md 同标识条目。
