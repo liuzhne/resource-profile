@@ -336,7 +336,7 @@
 
 ## ADR-026：main 即生产，Render 在 CI 通过后按服务增量部署
 
-- 状态：已采纳
+- 状态：已废弃（2026-10-13，被 KAMATERA-DEPLOY-20261013 取代）
 - 日期/修复标识：2026-09-15 / RENDER-CD-20260915
 - 背景：Render 服务未声明 `branch`（隐式跟随仓库默认分支 `main`），并使用已废弃的 `autoDeploy: true`
   （每个提交立即部署）。CI 只在 `pull_request` 上运行，main 的 ruleset 只要求走 PR、不要求检查通过，
@@ -601,6 +601,14 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 放弃方案：直接迁 Spring AI Alibaba Graph（当前无流程类需求，收益不足）。
 - 约束：容器内只能有一个 `AgentRunner` bean；新增实现时需用 `@Primary`/`@Qualifier` 或配置开关选择。`SubAgentToolCallback` / `SubAgentRegistry` 也改为依赖 `AgentRunner`；`run(req)` 只保留接口默认方法。
 - 验证：`mvn -q -pl agent-service -am test`（JDK 21）通过，agent-service 96 例 0 失败。
+
+## KAMATERA-DEPLOY-20261013：生产迁至 Kamatera，移除 Render 配置（2026-10-13）
+
+- 背景：生产已改为在 Kamatera 服务器上以 `docker compose -f docker-compose.yml -f docker-compose.prod.yml` 部署（先过 `scripts/preflight-prod.sh`），入口 `https://resource-profile.45-130-165-168.nip.io`。仓库中的 `render.yaml` 已不再使用，且其中「生产禁用 Nacos」等描述会误导后续方案。
+- 选择：删除 `render.yaml` 与只服务于它的 `scripts/sync-render-performance.py`；CI 工作流中残留的 `render.yaml` 路径与注释暂未清理（推送凭证缺少 workflow 权限），另行跟进，对 CI 无影响；`bench-production-api.py` 默认地址改为 Kamatera 入口；ADR-026 标记为已废弃。
+- 未改动：`docs/production-tests/2026-09-16/` 下的历史测试记录保留原样；前端针对 Render 休眠的预热与 429 重试逻辑（`frontend/tests/prewarm.test.mjs`、`retry.test.mjs` 对应实现）暂不动，另行评估是否在自托管环境下移除。
+- 运维：Render 控制台中的 Blueprint 服务需手工停用，否则仍会跟随 `main`。
+- 验证：CI YAML 解析通过；无运行时代码改动。
 
 ## AUTHZ-MCP-20261013：MCP 调用携带用户身份，student-data 工具逐个做水平授权（2026-10-13）
 
