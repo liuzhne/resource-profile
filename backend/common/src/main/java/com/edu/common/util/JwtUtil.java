@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -46,7 +47,7 @@ public class JwtUtil {
      * 生成访问令牌
      */
     public String generateAccessToken(String subject, Map<String, Object> claims) {
-        return generateToken(subject, claims, jwtProperties.getAccessTokenExpire());
+        return generateAccessTokenWithAudience(subject, claims, jwtProperties.getAccessTokenExpire());
     }
 
     /**
@@ -75,6 +76,83 @@ public class JwtUtil {
 
         return builder.compact();
     }
+
+    /**
+     * AUTHZ-MCP-20261013：访问令牌带 {@code aud}（{@link JwtProperties#getAudiences()}）。
+     * 刷新令牌不带 aud，避免被当作访问令牌转发给 MCP。
+     */
+    private String generateAccessTokenWithAudience(String subject, Map<String, Object> claims, long expire) {
+        Date now = new Date();
+        JwtBuilder builder = Jwts.builder()
+                .subject(subject)
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + expire))
+                .signWith(key);
+        if (claims != null) {
+            claims.forEach(builder::claim);
+        }
+        List<String> audiences = jwtProperties.getAudiences();
+        if (audiences != null && !audiences.isEmpty()) {
+            builder.audience().add(audiences).and();
+        }
+        return builder.compact();
+    }
+
+    /**
+     * AUTHZ-MCP-20261013：签发<b>系统身份</b>令牌，供异步/预警任务调用 MCP。
+     *
+     * <p>subject 固定为 {@code system:<name>}，{@code typ=system}，{@code scope} 只给调用所需的最小权限，
+     * {@code student_id} 把令牌绑定到单个学生（模型填的 studentId 不可能越出这个学生），
+     * {@code initiator} 记录发起者（用户 id 或 {@code scheduler}）。受众只含 {@code audience}。
+     */
+    public String generateSystemToken(String name, String audience, List<String> scopes,
+                                      Long boundStudentId, String initiator) {
+        Date now = new Date();
+        JwtBuilder builder = Jwts.builder()
+                .subject(SYSTEM_SUBJECT_PREFIX + name)
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + jwtProperties.getSystemTokenExpire()))
+                .claim(CLAIM_TYPE, TYPE_SYSTEM)
+                .claim(CLAIM_SCOPE, scopes == null ? List.of() : List.copyOf(scopes))
+                .claim(CLAIM_INITIATOR, initiator == null ? "unknown" : initiator)
+                .audience().add(audience).and()
+                .signWith(key);
+        if (boundStudentId != null) {
+            builder.claim(CLAIM_STUDENT_ID, boundStudentId);
+        }
+        return builder.compact();
+    }
+
+    /**
+     * AUTHZ-MCP-20261013：解析并校验受众。签名/过期校验同 {@link #parseToken}；此外：
+     * <ul>
+     *   <li>令牌带 aud 且不含 {@code requiredAudience} → 拒绝（错误受众永远拒绝）；</li>
+     *   <li>令牌不带 aud → 仅当 {@code allowMissingAudience=true}（兼容旧令牌的过渡开关）才接受。</li>
+     * </ul>
+     *
+     * @throws JwtException 任一校验失败
+     */
+    public Claims parseTokenForAudience(String token, String requiredAudience, boolean allowMissingAudience) {
+        Claims claims = parseToken(token);
+        Set<String> aud = claims.getAudience();
+        if (aud == null || aud.isEmpty()) {
+            if (allowMissingAudience) {
+                return claims;
+            }
+            throw new JwtException("令牌缺少 aud，要求 " + requiredAudience);
+        }
+        if (!aud.contains(requiredAudience)) {
+            throw new JwtException("令牌受众不匹配，要求 " + requiredAudience);
+        }
+        return claims;
+    }
+
+    public static final String SYSTEM_SUBJECT_PREFIX = "system:";
+    public static final String CLAIM_TYPE = "typ";
+    public static final String TYPE_SYSTEM = "system";
+    public static final String CLAIM_SCOPE = "scope";
+    public static final String CLAIM_INITIATOR = "initiator";
+    public static final String CLAIM_STUDENT_ID = "student_id";
 
     /**
      * 解析令牌

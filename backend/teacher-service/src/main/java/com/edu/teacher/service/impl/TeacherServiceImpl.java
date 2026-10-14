@@ -40,6 +40,13 @@ public class TeacherServiceImpl implements TeacherService {
     }
 
     @Override
+    public Teacher getByUserId(Long userId) {
+        return teacherMapper.selectOne(new LambdaQueryWrapper<Teacher>()
+                .eq(Teacher::getUserId, userId)
+                .last("LIMIT 1"));
+    }
+
+    @Override
     public void save(Teacher teacher) {
         teacherMapper.insert(teacher);
     }

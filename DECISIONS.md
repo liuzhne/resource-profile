@@ -609,3 +609,18 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
 - 未改动：`docs/production-tests/2026-09-16/` 下的历史测试记录保留原样；前端针对 Render 休眠的预热与 429 重试逻辑（`frontend/tests/prewarm.test.mjs`、`retry.test.mjs` 对应实现）暂不动，另行评估是否在自托管环境下移除。
 - 运维：Render 控制台中的 Blueprint 服务需手工停用，否则仍会跟随 `main`。
 - 验证：CI YAML 解析通过；无运行时代码改动。
+
+## AUTHZ-MCP-20261013：MCP 调用携带用户身份，student-data 工具逐个做水平授权（2026-10-13）
+
+- 背景：`mcp-student-data` 的 4 个 tool 只靠 `127.0.0.1` 网络隔离和可选的 `X-MCP-Token`，不认识调用者是谁；模型填的 `studentId` 不受任何约束，教师（甚至被注入的 prompt）可以让 Agent 读任意学生的心理/成绩数据。
+- 选择：
+  - agent-service 每次 MCP 请求都附 `Authorization: Bearer`：用户在请求里触发的任务转发**该用户原始 JWT**；没有用户上下文的异步/预警任务（定时扫描、内部凭证触发）现签**系统令牌**。见 [`McpCallerTokenResolver`](./backend/agent-service/src/main/java/com/edu/agent/security/McpCallerTokenResolver.java)、[`McpClientConfig`](./backend/agent-service/src/main/java/com/edu/agent/config/McpClientConfig.java)。身份经 MCP SDK 的 `transportContextProvider` 在调用线程捕获，避免 Reactor 线程切换丢失 ThreadLocal。
+  - 系统令牌（[`JwtUtil.generateSystemToken`](./backend/common/src/main/java/com/edu/common/util/JwtUtil.java)）：`sub=system:agent-task`、`typ=system`、`scope=[student-data:read]`、`student_id` 绑定本任务学生、`initiator` 记录发起者（用户 id / `scheduler` / `internal`）、`aud=[mcp-student-data]`、有效期 15 分钟。无角色，所以拿到它也过不了其它服务的 `AccessGuard`；网关的 Redis 会话白名单也不认它。
+  - mcp-student-data 用自定义 transport `contextExtractor`（[`McpServerTransportConfig`](./backend/mcp-student-data/src/main/java/com/edu/mcp/student/config/McpServerTransportConfig.java)）把 `Authorization` 放进 MCP transport context；每个 tool 第一行调用 [`StudentAccessPolicy.authorize`](./backend/mcp-student-data/src/main/java/com/edu/mcp/student/security/StudentAccessPolicy.java)，先用 common `JwtUtil` 校验签名、过期和 `aud`（[`McpCallerAuthenticator`](./backend/mcp-student-data/src/main/java/com/edu/mcp/student/security/McpCallerAuthenticator.java)），再做水平授权；任何失败都抛异常，不触达下游（fail-closed）。
+  - 授权规则：学生只能读 `student_info.user_id` 等于自己的记录；admin / psychologist 全校；teacher / counselor / academic_advisor 只能读**本院系**（`teacher_info.dept_id == student_info.dept_id`）学生；系统身份必须有 `student-data:read` 且只能读绑定学生。新增 teacher-service `GET /teacher/by-user/{userId}`（仅本人或内部凭证）供 MCP 取教师院系。
+  - `aud`：auth-service 签发的访问令牌默认带 `aud=[educare-api, mcp-student-data]`（`jwt.audiences`，置空列表即回到旧形态）；刷新令牌不带 aud，因此不能被当访问令牌转发给 MCP。
+- 兼容开关：`educare.mcp.auth.allow-missing-audience`（env `EDUCARE_MCP_AUTH_ALLOW_MISSING_AUDIENCE`，默认 `false`）。升级窗口内若要继续接受升级前签发、不带 aud 的旧令牌（最长 24h），临时设为 `true`，窗口结束改回。带了 aud 但不含 `mcp-student-data` 的令牌在任何模式下都拒绝。
+- "教师的学生"如何定义：仓库没有班主任/任课-学生关系表，院系是现有数据里唯一的归属关系，先按院系判定；以后有了班级/导师关系表，只需改 `StudentAccessPolicy` 里这一处。
+- 放弃方案：只在 HTTP filter 层拒绝无 token 请求（initialize / tools/list 本身不需要用户身份，且挡不住"有 token 但读别人"）；把用户 id 放进 MCP `_meta` 或工具参数（模型可见、可伪造）；异步任务一律用系统身份（教师触发时会绕过教师院系限制，所以用户触发的任务转发用户本人 JWT）。
+- 代价与约束：mcp-student-data 每次 tool 调用多 1 次 student-service（教师角色再多 1 次 teacher-service）Feign 调用；用户 JWT 若在任务排队期间过期，任务里的 MCP 调用会被拒（fail-closed，任务失败可重触发）；没有身份的 MCP tool 调用一律失败，所以 agent-service 和 mcp-student-data 必须一起发布。
+- 验证：[`StudentDataToolsAuthorizationTest`](./backend/mcp-student-data/src/test/java/com/edu/mcp/student/security/StudentDataToolsAuthorizationTest.java) 覆盖学生读他人、教师读非本院系学生、伪造令牌、过期令牌、错误 aud、缺少令牌、缺少 aud（默认拒绝 / 兼容模式接受）、刷新令牌、系统身份越出绑定学生、无 scope、下游异常、经 `MethodToolCallback` 传入模型参数；[`McpCallerIdentityPropagationTest`](./backend/agent-service/src/test/java/com/edu/agent/security/McpCallerIdentityPropagationTest.java) 覆盖出站头注入；`JwtUtilTest`、`TeacherControllerTest` 补充用例。`cd backend && mvn -B clean test` 共 297 例 0 失败。真实 MCP 链路联调待验证。
