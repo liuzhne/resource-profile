@@ -882,3 +882,21 @@ RT-05属追踪关联能力改善：循环开始先生成真实trace/root span，
 ### BUSINESS-INTEGRATION-20261015（2026-10-15）：整合工作区业务改动
 
 用户明确选择“当前全部业务改动”，因此整合此前尚未提交的账号权限、师生画像、心理测评、前端性能/可观测、部署/SQL工具与本次Java AI迁移，而非仅摘取迁移文件造成依赖缺失。采用独立分支整合远端 main，保留已合入的 AgentRunner 抽象和缓存修复；现有其他迁移PR不自动合并或关闭。排除密钥、临时文件、截图和原始测试结果，保留实现、回归测试与叙述文档。合并须检查本地回归与远端CI，不绕过仓库分支保护；代码合并不等于生产退役或完整模型验收。
+
+## RAG-CACHE-RERANK-20261013：RAG 管线缓存键纳入 rerank 开关（2026-10-13）
+
+- 背景：`retrieve_from_collection` 的缓存键只含集合、query、top_k，不含是否 rerank。切换 `RERANKER_ENABLED` 或按请求传 `enable_rerank` 后，在 `RAG_CACHE_TTL` 内会返回另一种排序的旧结果。
+- 选择：在计算缓存键前确定 `do_rerank`（显式参数优先，否则取配置），并写入 [`_pipeline_cache_key`](./ai-inference-service/app/services/rag_pipeline.py)；同时在 requirements 中固定 `setuptools<82`（pymilvus 2.4 运行时依赖 `pkg_resources`）。
+- 补充（评审）：请求了 rerank 但精排失败或全零分、回退为 Milvus 排序时，结果不写入缓存，下次请求重试精排；`setuptools<82` 为临时规避，升级到不再 import `pkg_resources` 的 pymilvus 后删除。
+- 放弃方案：切换配置时清空 Redis（运维易漏，且无法覆盖按请求开关）；缩短 TTL（只缩小窗口）。
+- 代价与约束：上线后旧格式的键不再命中，首轮请求全部回源一次；旧键按 TTL 自然过期。
+- 验证：[单测](./ai-inference-service/tests/test_rag_pipeline_cache_key.py) 在修复前 3 例失败、修复后通过；全量 33 例在 Python 3.11 与 3.10（Dockerfile 版本）下通过（外部服务均 mock）。真实 Milvus/Redis/reranker 联调待验证。
+
+## AGENT-RUNNER-20261013：AgentTaskServiceImpl 与 AgentLoop 之间引入 AgentRunner 接口（2026-10-13）
+
+- 背景：后续要做 AI 辅助助手，未来可能换 Graph 编排或多 Agent 结构；业务层直接依赖 `AgentLoop` 具体类，替换时要改上层。
+- 选择：新增 [`AgentRunner`](./backend/agent-service/src/main/java/com/edu/agent/core/AgentRunner.java)（`run(req)` / `run(req, validator)`），`AgentLoop` 作为首个实现，`AgentTaskServiceImpl` 只注入接口。纯重构，行为不变。
+- 命名：不用 `AgentOrchestrator`，避免与 orchestrator-workers 模式混淆，该名留给未来的多 Agent 实现。
+- 放弃方案：直接迁 Spring AI Alibaba Graph（当前无流程类需求，收益不足）。
+- 约束：容器内只能有一个 `AgentRunner` bean；新增实现时需用 `@Primary`/`@Qualifier` 或配置开关选择。`SubAgentToolCallback` / `SubAgentRegistry` 也改为依赖 `AgentRunner`；`run(req)` 只保留接口默认方法。
+- 验证：`mvn -q -pl agent-service -am test`（JDK 21）通过，agent-service 96 例 0 失败。

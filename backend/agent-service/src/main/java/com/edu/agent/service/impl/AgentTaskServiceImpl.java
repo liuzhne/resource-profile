@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.edu.agent.core.AgentLoop;
+import com.edu.agent.core.AgentRunner;
 import com.edu.agent.core.AgentFailure;
 import com.edu.agent.core.AgentLoopRequest;
 import com.edu.agent.core.AgentLoopResult;
@@ -67,7 +67,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final RiskAnalyzeService riskAnalyzeService;          // P2-5：真实 LLM 风险识别
     private final StringRedisTemplate redisTemplate;
     private final WarningPublisher warningPublisher;              // F-2：终态事件发布
-    private final AgentLoop agentLoop;                            // H-2.3：AgentLoop 切流目标
+    private final AgentRunner agentRunner;                        // AGENT-RUNNER-20261013：只依赖接口，当前实现为 AgentLoop
     private final ObjectProvider<ToolCallbackProvider> toolCallbackProviders;  // H-2.3：MCP 工具列表（启动期 fail-fast 时 ObjectProvider 让单测能选择不注入）
     private final SkillLoader skillLoader;                        // H-3.5：技能加载器（按需注入 classpath skills 到 system prompt）
     private final com.edu.agent.core.SubAgentRegistry subAgentRegistry;  // J-2.1：子代理 agent-as-tool（默认关）
@@ -329,7 +329,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
      *
      * <p>状态机仍流转 {@code PENDING → RISK_ANALYZING → KNOWLEDGE_RETRIEVING → PLAN_GENERATING
      * → COMPLIANCE_CHECKING → COMPLETED/REJECTED}，保证前端 polling/SSE 看到的中间态语义不变；
-     * 但 RISK_ANALYZING 阶段由 {@link AgentLoop#run} 一次性产出 {@code risk_analysis} +
+     * 但 RISK_ANALYZING 阶段由 {@link AgentRunner#run} 一次性产出 {@code risk_analysis} +
      * {@code intervention_plan} 两份 JSON，知识检索由 knowledge-rag MCP tool 内嵌完成，
      * KNOWLEDGE_RETRIEVING / PLAN_GENERATING 仅做状态流转标记（执行体为空，结果已由 AgentLoop 写入）。
      * 合规审核 P4 仍走旧 {@link #executeComplianceAudit}。
@@ -449,7 +449,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
                 task.getId(), tools.size(), AGENT_LOOP_MAX_ITERATIONS);
         // J-1.3：传入 final_answer 校验器 —— 双 JSON schema 不合格则触发修复轮，而非直接 FAILED。
         try {
-            return agentLoop.run(req, AgentTaskServiceImpl::validateFinalAnswer);
+            return agentRunner.run(req, AgentTaskServiceImpl::validateFinalAnswer);
         } finally {
             // Includes no-search, failed-search and partial evidence; never infer execution from model text.
             String snapshot = retrievals.snapshot();

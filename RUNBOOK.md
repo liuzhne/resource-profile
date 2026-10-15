@@ -1568,3 +1568,15 @@ docker compose -f scripts/local-java-ai/compose.yaml stop
 ### BUSINESS-INTEGRATION-20261015（2026-10-15）：推送与合并验证
 
 整合分支 `codex/java-ai-business-integration-20261015`，目标 `main`。推送前执行 JDK21全后端 `mvn clean verify`，前端 `npm test` / `lint:check` / `build` / `size:check`，部署与SQL工具回归及 `scripts/test-preflight-prod.sh`，检查候选提交不含真实凭据和原始测试产物。远端 main 的新增提交合入后重新执行受影响回归，再检查PR CI；实际结果见 `docs/educare/BUSINESS_INTEGRATION_20261015.md`。远端评测变量当前未启用模型调用。Render配置仍含checksPass自动部署规则，合并可能触发仍绑定仓库的Render服务；当前生产Kamatera的发布仍须独立验证，不据PR合并宣称已发布。回退使用经审查的Git revert，不删除数据卷或自动逆执行SQL。
+
+## 维护记录：RAG-CACHE-RERANK-20261013（2026-10-13）
+
+- 验证：`cd ai-inference-service && uv venv -p 3.11 .venv && . .venv/bin/activate && uv pip install -r requirements.txt -r tests/requirements.txt pytest pytest-asyncio && python -m pytest -q`，通过判据为全部通过（含 `tests/test_rag_pipeline_cache_key.py`）。
+- 线上排查：切换 `RERANKER_ENABLED` 后，同一 query 的 `reranked` 字段应立即随配置变化，不再等待 `RAG_CACHE_TTL`；reranker 故障期间回退结果不缓存，日志出现 `rerank 回退结果不缓存`，恢复后下一次请求即重新精排。待验证（需真实 Redis/Milvus）。
+- 回滚：回退本提交。注意：若本版本运行期间切换过 `RERANKER_ENABLED`，回退后旧格式键（不含 rerank 标记）可能被重新读到，返回切换前的结果；此时需清理 `edu:rag:pipe:*` 缓存（如 `redis-cli --scan --pattern 'edu:rag:pipe:*' | xargs -r redis-cli del`），或等待 `RAG_CACHE_TTL` 过期后再视为结果最新。未切换过配置则无需处理。
+
+## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
+
+- 验证：`cd backend && mvn -q -pl agent-service -am test`（JDK 21），通过判据为 0 失败，含 `AgentRunnerContractTest`。
+- 排错：启动报 `expected single matching bean of type AgentRunner` 说明出现了第二个实现，需指定 `@Primary` 或 `@Qualifier`。
+- 回滚：回退本提交即可，无配置或数据变更。

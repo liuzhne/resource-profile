@@ -24,7 +24,7 @@ from app.services.knowledge_provenance import corpus_revision, provenance
 logger = logging.getLogger(__name__)
 
 
-def _pipeline_cache_key(collection_key: str, query: str, top_k: int, revision: str = "") -> str:
+def _pipeline_cache_key(collection_key: str, query: str, top_k: int, rerank: bool, revision: str = "") -> str:
     h = hashlib.sha256()
     h.update(collection_key.encode("utf-8"))
     h.update(b"|")
@@ -33,6 +33,7 @@ def _pipeline_cache_key(collection_key: str, query: str, top_k: int, revision: s
     h.update(str(top_k).encode())
     h.update(b"|")
     h.update(revision.encode("utf-8"))
+    h.update(b"|rerank=1" if rerank else b"|rerank=0")
     return "edu:rag:pipe:v2:" + h.hexdigest()[:32]
 
 
@@ -75,7 +76,8 @@ async def retrieve_from_collection(
             "error": f"unknown collection_key: {collection_key}",
         }
 
-    cache_key = _pipeline_cache_key(collection_key, query, top_k,
+    do_rerank = settings.RERANKER_ENABLED if enable_rerank is None else enable_rerank
+    cache_key = _pipeline_cache_key(collection_key, query, top_k, do_rerank,
                                     await corpus_revision([collection_key]))
     cached = await cache_get(cache_key)
     if cached:
@@ -114,7 +116,7 @@ async def retrieve_from_collection(
         }
 
     reranked = False
-    do_rerank = settings.RERANKER_ENABLED if enable_rerank is None else enable_rerank
+    rerank_fell_back = False
     if do_rerank and len(hits) > 1:
         documents = [(h.get("content") or h.get("title") or "") for h in hits]
         rerank_results = await get_reranker_client().rerank(
@@ -134,6 +136,7 @@ async def retrieve_from_collection(
             hits = ordered
             reranked = True
         else:
+            rerank_fell_back = True
             logger.warning("rag_pipeline reranker 返回零分，回退 milvus 排序")
 
     final = hits[:top_k]
@@ -158,6 +161,10 @@ async def retrieve_from_collection(
         "fallback": False,
         "chunks": chunks,
     }
+    if rerank_fell_back:
+        # 请求了 rerank 但精排失败：不写入 rerank=1 的缓存键，下次请求重新尝试精排
+        logger.info("rag_pipeline rerank 回退结果不缓存 key=%s collection=%s", cache_key, collection_key)
+        return payload
     await cache_setex(cache_key, settings.RAG_CACHE_TTL, json.dumps(payload, ensure_ascii=False))
     logger.info(
         "rag_pipeline X-Cache: MISS key=%s collection=%s top_k=%s reranked=%s",

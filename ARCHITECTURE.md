@@ -616,3 +616,11 @@ v1/v2验收未过已真实回滚，v3在loopback预览通过生产API后发布�
 ### BUSINESS-INTEGRATION-20261015（2026-10-15）
 
 按用户授权整合当前全部业务改动，并保留远端 main 已合入的 AgentRunner 接口与 RAG 缓存修复。本次 Git 整合本身无新增架构影响；受影响边界沿用本文账户/画像/心理测评、Agent、Java知识服务和部署章节。源代码与可复跑测试入库，密钥、本地环境、截图和原始验证结果留在本机；说明文档中的对应引用标为本地产物。镜像下载问题和生产验收未完成状态不得因代码合并而改写为通过。
+
+## 维护记录：RAG-CACHE-RERANK-20261013（2026-10-13）
+
+无架构影响。仅修正 [ai-inference-service RAG 管线](./ai-inference-service/app/services/rag_pipeline.py) 的缓存键组成（新增 rerank 维度），调用链与数据流不变。详见 DECISIONS.md 同标识条目。
+
+## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
+
+agent-service 内部新增抽象层：`AgentTaskServiceImpl → AgentRunner（接口）→ AgentLoop（实现）`。服务边界、外部调用链与数据流不变。详见 DECISIONS.md 同标识条目。

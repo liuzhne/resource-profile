@@ -267,8 +267,8 @@ class McpAdapterIntegrationTest(unittest.IsolatedAsyncioTestCase):
     def test_changed_corpus_revision_changes_api_and_mcp_cache_keys(self):
         self.assertNotEqual(rag._rag_cache_key(3, ["policy"], ["保密"], None, "a"),
                             rag._rag_cache_key(3, ["policy"], ["保密"], None, "b"))
-        self.assertNotEqual(rag_pipeline._pipeline_cache_key("policy", "保密", 3, "a"),
-                            rag_pipeline._pipeline_cache_key("policy", "保密", 3, "b"))
+        self.assertNotEqual(rag_pipeline._pipeline_cache_key("policy", "保密", 3, False, "a"),
+                            rag_pipeline._pipeline_cache_key("policy", "保密", 3, False, "b"))
 
     async def test_search_collection_clamps_top_k_and_shapes_response(self):
         pipeline = AsyncMock(return_value={

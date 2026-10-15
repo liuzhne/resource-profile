@@ -25,14 +25,14 @@ public class SubAgentToolCallback implements ToolCallback {
                     + "\"description\":\"交给该专家子代理的问题/上下文\"}},\"required\":[\"query\"]}";
 
     private final SubAgent spec;
-    private final AgentLoop agentLoop;
+    private final AgentRunner agentRunner;
     private final Supplier<List<ToolCallback>> allToolsSupplier;
     private final ToolDefinition toolDefinition;
 
-    public SubAgentToolCallback(SubAgent spec, AgentLoop agentLoop,
+    public SubAgentToolCallback(SubAgent spec, AgentRunner agentRunner,
                                 Supplier<List<ToolCallback>> allToolsSupplier) {
         this.spec = spec;
-        this.agentLoop = agentLoop;
+        this.agentRunner = agentRunner;
         this.allToolsSupplier = allToolsSupplier;
         this.toolDefinition = DefaultToolDefinition.builder()
                 .name(spec.name())
@@ -53,7 +53,7 @@ public class SubAgentToolCallback implements ToolCallback {
         AgentLoopRequest req = new AgentLoopRequest(
                 spec.systemPrompt(), query, subTools, spec.maxIterations(), "subagent-" + spec.name());
         log.info("[SubAgent][{}] 调用，tools={} queryLen={}", spec.name(), subTools.size(), query.length());
-        AgentLoopResult r = agentLoop.run(req);
+        AgentLoopResult r = agentRunner.run(req);
         if (r.finalAnswer() == null) {
             return "（子代理 " + spec.name() + " 未给出结论，status=" + r.status() + "）";
         }

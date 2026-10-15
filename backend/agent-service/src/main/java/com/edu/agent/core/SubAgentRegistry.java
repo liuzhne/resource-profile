@@ -23,7 +23,7 @@ import java.util.function.Supplier;
 @RequiredArgsConstructor
 public class SubAgentRegistry {
 
-    private final AgentLoop agentLoop;
+    private final AgentRunner agentRunner;
     private final SkillLoader skillLoader;
 
     @Value("${educare.agent.subagents.enabled:false}")
@@ -66,6 +66,6 @@ public class SubAgentRegistry {
         String systemPrompt = "你是" + desc + "\n只就你的专业视角给出**简要**结论与依据，"
                 + "基于工具返回的事实推理，遵守相关红线。\n\n# 专业方法\n" + skillBody;
         SubAgent spec = new SubAgent(name, desc, systemPrompt, toolNames, maxIterations);
-        return new SubAgentToolCallback(spec, agentLoop, allTools);
+        return new SubAgentToolCallback(spec, agentRunner, allTools);
     }
 }

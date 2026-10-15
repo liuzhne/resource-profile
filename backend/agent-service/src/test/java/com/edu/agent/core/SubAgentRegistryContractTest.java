@@ -23,7 +23,7 @@ class SubAgentRegistryContractTest {
 
     @Test
     void eachSubAgentReceivesItsCanonicalToolSubset() {
-        AgentLoop loop = mock(AgentLoop.class);
+        AgentRunner loop = mock(AgentRunner.class);
         when(loop.run(any(AgentLoopRequest.class)))
                 .thenReturn(new AgentLoopResult(AgentLoopStatus.COMPLETED, "ok", List.of(), 1));
         SkillLoader skills = mock(SkillLoader.class);
