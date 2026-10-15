@@ -1,10 +1,11 @@
 package com.edu.agent.sse;
 
-import com.edu.common.util.JwtUtil;
+import com.edu.agent.security.AgentSessionVerifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,18 +32,27 @@ import java.util.Map;
 public class WarningSseController {
 
     private final SseEmitterRegistry registry;
-    private final JwtUtil jwtUtil;
+    private final AgentSessionVerifier sessions;
 
     @Value("${educare.sse.timeout-millis:1800000}")
     private long timeoutMillis;
 
     @GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream(
+    public ResponseEntity<SseEmitter> stream(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestParam(value = "token", required = false) String tokenParam) {
 
-        Long userId = extractUserId(authHeader, tokenParam);
+        String token = extractToken(authHeader, tokenParam);
+        AgentSessionVerifier.Verification verification = sessions.verify(token);
+        if (verification.status() != AgentSessionVerifier.Status.VALID) {
+            return ResponseEntity.status(verification.status() == AgentSessionVerifier.Status.UNAVAILABLE ? 503 : 401).build();
+        }
+        AgentSessionVerifier.Session session = verification.session();
+        // Same staff + agent:read boundary as the ordinary task list; no anonymous/internal SSE shortcut.
+        if (!session.warningsAllowed()) return ResponseEntity.status(403).build();
+        Long userId = session.userId();
         SseEmitter emitter = new SseEmitter(timeoutMillis);
+        registry.add(emitter, session);
 
         // 立刻发一帧 hello 让浏览器进入 OPEN 状态，避免 fetchEventSource 重试 backoff
         try {
@@ -53,28 +63,20 @@ public class WarningSseController {
                             "ts", System.currentTimeMillis())));
         } catch (IOException e) {
             emitter.completeWithError(e);
-            return emitter;
+            registry.close(emitter);
+            return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(emitter);
         }
 
-        registry.add(emitter);
         log.info("F-2：SSE 连接建立 userId={} 当前活跃 {}", userId, registry.size());
-        return emitter;
+        return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(emitter);
     }
 
-    private Long extractUserId(String authHeader, String tokenParam) {
-        String token = null;
+    private String extractToken(String authHeader, String tokenParam) {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            token = authHeader.substring(7);
+            return authHeader.substring(7);
         } else if (tokenParam != null && !tokenParam.isBlank()) {
-            token = tokenParam;
+            return tokenParam;
         }
-        if (token == null) return 0L;
-        try {
-            String subject = jwtUtil.getSubject(token);
-            return subject == null ? 0L : Long.parseLong(subject);
-        } catch (Exception e) {
-            log.debug("F-2：SSE 鉴权失败：{}", e.getMessage());
-            return 0L;
-        }
+        return null;
     }
 }

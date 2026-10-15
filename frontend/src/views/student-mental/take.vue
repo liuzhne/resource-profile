@@ -1,5 +1,8 @@
 <template>
   <div class="page-container">
+    <el-alert v-if="loadError" type="error" :closable="false" :title="loadError"
+      ><el-button link @click="fetchData">重新加载</el-button></el-alert
+    >
     <el-card v-loading="loading">
       <template #header>
         <div class="card-header">
@@ -62,14 +65,36 @@
               placeholder="请输入..."
             />
 
-            <!-- 量表（按文本回退处理，仅展示，不计分） -->
-            <el-input v-else v-model="answers[q.id].text" placeholder="（量表题，请输入数字）" />
+            <div v-else-if="q.questionType === 'scale'">
+              <span>{{ parseScaleLabels(q.scaleLabels).min }}</span>
+              <el-input-number
+                v-model="answers[q.id].scaleValue"
+                :min="q.scaleMin"
+                :max="q.scaleMax"
+                :step="1"
+                step-strictly
+              />
+              <span>{{ parseScaleLabels(q.scaleLabels).max }}</span>
+              <small>范围：{{ q.scaleMin }} – {{ q.scaleMax }}</small>
+            </div>
+            <el-alert
+              v-else
+              type="error"
+              :closable="false"
+              title="暂不支持此题型，请联系管理员修正问卷"
+            />
           </div>
         </div>
 
         <div class="submit-bar">
           <el-button @click="$router.push('/student-mental/list')">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">提交答卷</el-button>
+          <el-button
+            type="primary"
+            :disabled="loading || !questions.length || loadedQuestionnaireId !== questionnaireId"
+            :loading="submitting"
+            @click="handleSubmit"
+            >提交答卷</el-button
+          >
         </div>
       </el-form>
     </el-card>
@@ -77,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { studentGetQuestionnaireForTaking, studentSubmitAnswers } from '@/api/mental'
@@ -86,9 +111,12 @@ import { useUserStore } from '@/store/modules/user'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
-const questionnaireId = Number(route.params.id)
+const questionnaireId = computed(() => Number(route.params.id))
+const loadedQuestionnaireId = ref<number | null>(null)
+let loadSequence = 0
 
 const loading = ref(false)
+const loadError = ref('')
 const submitting = ref(false)
 const questionnaire = ref<any>(null)
 const questions = ref<any[]>([])
@@ -106,25 +134,45 @@ const parseOpts = (raw: any): any[] => {
     return []
   }
 }
+const parseScaleLabels = (raw: any) => {
+  try {
+    return JSON.parse(raw || '{}')
+  } catch {
+    return {}
+  }
+}
 
 const fetchData = async () => {
+  const id = questionnaireId.value
+  const sequence = ++loadSequence
   loading.value = true
+  loadError.value = ''
   try {
-    const res = await studentGetQuestionnaireForTaking(questionnaireId)
+    const res = await studentGetQuestionnaireForTaking(id)
+    if (sequence !== loadSequence || id !== questionnaireId.value) return
     const d = res.data
     questionnaire.value = d.questionnaire
     questions.value = d.questions || []
     questions.value.forEach((q: any) => {
-      answers[q.id] = { singleIndex: null, multiIndices: [], text: '' }
+      answers[q.id] = { singleIndex: null, multiIndices: [], text: '', scaleValue: null }
     })
+    loadedQuestionnaireId.value = id
   } catch (e) {
-    console.error('加载题目失败', e)
+    if (sequence === loadSequence) loadError.value = (e as any)?.message || '数据加载失败，请重试'
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 
 const handleSubmit = async () => {
+  const id = questionnaireId.value
+  if (
+    loadedQuestionnaireId.value !== id ||
+    loading.value ||
+    submitting.value ||
+    !questions.value.length
+  )
+    return
   for (const q of questions.value) {
     if (!q.required) continue
     const a = answers[q.id]
@@ -143,6 +191,13 @@ const handleSubmit = async () => {
       ElMessage.warning(`第 ${q.sortOrder} 题为必答`)
       return
     }
+    if (
+      q.questionType === 'scale' &&
+      (!Number.isInteger(a.scaleValue) || a.scaleValue < q.scaleMin || a.scaleValue > q.scaleMax)
+    ) {
+      ElMessage.warning(`第 ${q.sortOrder} 题需填写范围内的整数`)
+      return
+    }
   }
   const userId = userStore.userInfo?.id
   if (!userId) {
@@ -151,7 +206,7 @@ const handleSubmit = async () => {
   }
   const payload = {
     userId,
-    questionnaireId,
+    questionnaireId: id,
     answers: questions.value.map((q: any) => {
       const a = answers[q.id]
       let optionIndices: number[] = []
@@ -161,7 +216,8 @@ const handleSubmit = async () => {
       return {
         questionId: q.id,
         optionIndices,
-        text: a.text || ''
+        text: a.text || '',
+        scaleValue: q.questionType === 'scale' ? a.scaleValue : null
       }
     })
   }
@@ -169,7 +225,7 @@ const handleSubmit = async () => {
   try {
     const res = await studentSubmitAnswers(payload)
     ElMessage.success('提交成功')
-    router.push(`/student-mental/result/${res.data.id}`)
+    if (id === questionnaireId.value) router.push(`/student-mental/result/${res.data.id}`)
   } catch (e) {
     console.error('提交失败', e)
   } finally {
@@ -177,7 +233,17 @@ const handleSubmit = async () => {
   }
 }
 
-onMounted(fetchData)
+watch(
+  questionnaireId,
+  () => {
+    questionnaire.value = null
+    questions.value = []
+    loadedQuestionnaireId.value = null
+    for (const key of Object.keys(answers)) delete answers[Number(key)]
+    fetchData()
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped lang="scss">

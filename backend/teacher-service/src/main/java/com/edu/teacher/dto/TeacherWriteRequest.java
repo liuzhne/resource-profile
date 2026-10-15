@@ -1,0 +1,61 @@
+package com.edu.teacher.dto;
+import com.edu.common.exception.BusinessException;
+import com.edu.teacher.entity.Teacher;
+import lombok.Data;
+@Data
+public class TeacherWriteRequest {
+    private Long userId;
+    private String employeeId;
+    private String name;
+    private Integer gender;
+    private java.time.LocalDate birthDate;
+    private String deptName;
+    private String title;
+    private String education;
+    private String school;
+    private String major;
+    private String researchArea;
+    private java.time.LocalDate joinDate;
+    private String political;
+    private String phone;
+    private String email;
+    private Integer status;
+    public Teacher validatedEntity() {
+        if (userId == null || userId <= 0) throw new BusinessException(400, "请选择有效的关联账号");
+        if (gender != null && gender != 0 && gender != 1) throw new BusinessException(400, "性别值无效");
+        if (employeeId == null || employeeId.isBlank()) throw new BusinessException(400, "employeeId 不能为空");
+        if (name == null || name.isBlank()) throw new BusinessException(400, "name 不能为空");
+        if (employeeId != null && employeeId.length() > 50) throw new BusinessException(400, "employeeId 长度不能超过 50");
+        if (name != null && name.length() > 50) throw new BusinessException(400, "name 长度不能超过 50");
+        if (deptName != null && deptName.length() > 100) throw new BusinessException(400, "deptName 长度不能超过 100");
+        if (title != null && title.length() > 50) throw new BusinessException(400, "title 长度不能超过 50");
+        if (education != null && education.length() > 50) throw new BusinessException(400, "education 长度不能超过 50");
+        if (school != null && school.length() > 100) throw new BusinessException(400, "school 长度不能超过 100");
+        if (major != null && major.length() > 100) throw new BusinessException(400, "major 长度不能超过 100");
+        if (researchArea != null && researchArea.length() > 500) throw new BusinessException(400, "researchArea 长度不能超过 500");
+        if (political != null && political.length() > 100) throw new BusinessException(400, "political 长度不能超过 100");
+        if (phone != null && phone.length() > 30) throw new BusinessException(400, "phone 长度不能超过 30");
+        if (email != null && email.length() > 100) throw new BusinessException(400, "email 长度不能超过 100");
+        if (status == null) status = 1;
+        if (status < 0 || status > 1) throw new BusinessException(400, "教师状态无效");
+        if (email != null && !email.isBlank() && !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) throw new BusinessException(400, "邮箱格式无效");
+        Teacher value = new Teacher();
+        value.setUserId(userId);
+        value.setEmployeeId(employeeId == null || employeeId.isBlank() ? null : employeeId.trim());
+        value.setName(name == null || name.isBlank() ? null : name.trim());
+        value.setGender(gender);
+        value.setBirthDate(birthDate);
+        value.setDeptName(deptName == null || deptName.isBlank() ? null : deptName.trim());
+        value.setTitle(title == null || title.isBlank() ? null : title.trim());
+        value.setEducation(education == null || education.isBlank() ? null : education.trim());
+        value.setSchool(school == null || school.isBlank() ? null : school.trim());
+        value.setMajor(major == null || major.isBlank() ? null : major.trim());
+        value.setResearchArea(researchArea == null || researchArea.isBlank() ? null : researchArea.trim());
+        value.setJoinDate(joinDate);
+        value.setPolitical(political == null || political.isBlank() ? null : political.trim());
+        value.setPhone(phone == null || phone.isBlank() ? null : phone.trim());
+        value.setEmail(email == null || email.isBlank() ? null : email.trim());
+        value.setStatus(status);
+        return value;
+    }
+}

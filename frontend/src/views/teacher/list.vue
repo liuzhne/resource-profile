@@ -7,7 +7,12 @@
           共 <b>{{ total }}</b> 名在册教师
         </div>
       </div>
-      <el-button type="primary" class="head-action" :icon="Plus" @click="notReady"
+      <el-button
+        v-if="canWrite"
+        type="primary"
+        class="head-action"
+        :icon="Plus"
+        @click="profileEditor.open()"
         >新增教师</el-button
       >
     </div>
@@ -72,7 +77,9 @@
               <td class="tnum">{{ row.joinDate || '—' }}</td>
               <td class="col-right">
                 <span class="row-action" @click="viewDetail(row)">查看</span>
-                <span class="row-action muted" @click="notReady">编辑</span>
+                <span v-if="canWrite" class="row-action" @click="profileEditor.open(row)"
+                  >编辑</span
+                >
               </td>
             </tr>
           </tbody>
@@ -90,10 +97,11 @@
           :total="total"
           layout="sizes, prev, pager, next"
           @current-change="handlePageChange"
-          @size-change="handlePageChange"
+          @size-change="handleSearch"
         />
       </div>
     </ChartState>
+    <ProfileEditor ref="profileEditor" @saved="refreshAfterSave" />
   </div>
 </template>
 
@@ -102,12 +110,26 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getTeacherList } from '@/api/teacher'
+import { getTeacherList, getTeacherOptions } from '@/api/teacher'
+import ProfileEditor from './ProfileEditor.vue'
+import { useUserStore } from '@/store/modules/user'
 import { avatarBg, initialOf } from '@/utils/avatar'
 import ChartState from '@/views/dashboard/components/ChartState.vue'
 
-const DEPT_OPTIONS = ['计算机学院', '软件学院', '数学学院', '物理学院']
-const TITLE_OPTIONS = ['教授', '副教授', '讲师']
+const DEPT_OPTIONS = ref([])
+const TITLE_OPTIONS = ref([])
+const profileEditor = ref(null)
+const user = useUserStore()
+const canWrite = computed(() => user.userRoles.some((role) => ['admin'].includes(role)))
+const fetchOptions = async () => {
+  const data = (await getTeacherOptions()).data
+  DEPT_OPTIONS.value = data.departments || []
+  TITLE_OPTIONS.value = data.titles || []
+}
+const refreshAfterSave = async () => {
+  currentPage.value = 1
+  await Promise.all([fetchList(), fetchOptions()])
+}
 
 const router = useRouter()
 const loading = ref(false)
@@ -172,13 +194,9 @@ const viewDetail = (row) => {
   router.push(`/teacher/detail/${row.id}`)
 }
 
-// 新增/编辑：现有接口有 createTeacher/updateTeacher，但原型未给表单稿，留待后续
-const notReady = () => {
-  ElMessage.info('该功能暂未开放')
-}
-
 onMounted(() => {
   fetchList()
+  fetchOptions().catch(() => ElMessage.error('获取教师筛选选项失败'))
 })
 </script>
 

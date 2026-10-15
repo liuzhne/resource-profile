@@ -5,6 +5,26 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
+const loginComponents = new Set([
+  'button',
+  'button-group',
+  'checkbox',
+  'checkbox-group',
+  'config-provider',
+  'dialog',
+  'focus-trap',
+  'form',
+  'form-item',
+  'icon',
+  'input',
+  'link',
+  'message',
+  'message-box',
+  'overlay',
+  'scrollbar',
+  'teleport'
+])
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -54,12 +74,22 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           const moduleId = id.replaceAll('\\', '/')
-          if (moduleId.includes('/node_modules/echarts/') || moduleId.includes('/node_modules/zrender/')) {
+          if (
+            moduleId.includes('/node_modules/echarts/') ||
+            moduleId.includes('/node_modules/zrender/')
+          ) {
             return 'charts'
           }
+          if (moduleId.includes('/node_modules/element-plus/')) {
+            const component =
+              moduleId.match(/\/components\/([^/]+)\//)?.[1] ||
+              moduleId.match(/\/theme-chalk\/el-([^/]+)\.css$/)?.[1]
+            if (!component || loginComponents.has(component)) return 'element-plus'
+          }
           if (
-            moduleId.includes('/node_modules/element-plus/') ||
-            moduleId.includes('/node_modules/@element-plus/icons-vue/')
+            moduleId.includes('/node_modules/@element-plus/icons-vue/') ||
+            moduleId.includes('/node_modules/@vue/') ||
+            moduleId.includes('/node_modules/vue/')
           ) {
             return 'element-plus'
           }

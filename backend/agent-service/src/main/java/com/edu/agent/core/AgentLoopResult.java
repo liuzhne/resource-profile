@@ -14,6 +14,14 @@ public record AgentLoopResult(
         AgentLoopStatus status,
         String finalAnswer,
         List<AgentTrace> traces,
-        int iterations
+        int iterations,
+        AgentFailure failure,
+        String traceId
 ) {
+    public AgentLoopResult(AgentLoopStatus status, String finalAnswer, List<AgentTrace> traces, int iterations) {
+        this(status, finalAnswer, traces, iterations, null, null);
+    }
+    public AgentLoopResult withTraceId(String id) {
+        return new AgentLoopResult(status, finalAnswer, traces, iterations, failure, id);
+    }
 }

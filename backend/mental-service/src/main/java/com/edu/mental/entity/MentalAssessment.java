@@ -20,6 +20,14 @@ public class MentalAssessment {
     @TableField("questionnaire_id")
     private Long questionnaireId;
 
+    /** Nullable for historical/imported assessments with no submitted response. */
+    private Long responseId;
+
+    @TableField(exist = false)
+    private String questionnaireTitle;
+    @TableField(exist = false)
+    private String questionnaireType;
+
     @SensitiveField(Sensitivity.EXTREME)
     private Integer score;
 
@@ -33,6 +41,14 @@ public class MentalAssessment {
     private String suggestion;
 
     private Integer status;
+
+    private String warningStatus;
+
+    @SensitiveField(Sensitivity.EXTREME)
+    private String warningNote;
+
+    private Long warningHandledBy;
+    private LocalDateTime warningHandledAt;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

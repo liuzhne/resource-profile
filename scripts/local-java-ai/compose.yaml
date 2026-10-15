@@ -1,0 +1,50 @@
+# Isolated synthetic-data test stack; never uses docker/.env or production volumes.
+name: rp-java-migration-test
+services:
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes: [redis:/data]
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes: [etcd:/etcd]
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    command: minio server /data
+    volumes: [minio:/data]
+  milvus:
+    image: milvusdb/milvus:v2.4.1
+    command: [milvus, run, standalone]
+    security_opt: [seccomp:unconfined]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes: [milvus:/var/lib/milvus]
+    depends_on: [etcd, minio]
+  api:
+    image: resource-profile-knowledge:local-migration-20261015
+    environment: &knowledge
+      REDIS_HOST: redis
+      MILVUS_HOST: milvus
+      EMBEDDING_BASE_URL: http://host.docker.internal:18092/v1
+      EMBEDDING_API_KEY: synthetic-fixture
+      EDUCARE_ADMIN_TOKEN: synthetic-admin
+      EDUCARE_INTERNAL_TOKEN: synthetic-internal
+      EDUCARE_MCP_TOKEN: synthetic-mcp
+    ports: ['127.0.0.1:18090:8090']
+    depends_on: [redis, milvus]
+  mcp:
+    image: resource-profile-knowledge:local-migration-20261015
+    environment:
+      <<: *knowledge
+      KNOWLEDGE_MCP_ENABLED: 'true'
+      KNOWLEDGE_API_ENABLED: 'false'
+      PORT: '8095'
+    ports: ['127.0.0.1:18095:8095']
+    depends_on: [redis, milvus]
+volumes:
+  redis:
+  etcd:
+  minio:
+  milvus:

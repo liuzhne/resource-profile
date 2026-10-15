@@ -3,6 +3,13 @@ import request from '@/utils/request'
 /* ========== 概览 / 报告（教职工） ========== */
 export const getMentalOverview = () => request.get('/mental/overview')
 export const getMentalAnalysis = () => request.get('/mental/analysis')
+export const exportMentalAnalysis = () =>
+  request.get('/mental/analysis/export.csv', { responseType: 'blob' })
+export const getStudentMentalHistory = (studentId) =>
+  request.get(`/mental/students/${studentId}/assessments`)
+export const getMentalWarnings = (params) => request.get('/mental/warnings', { params })
+export const handleMentalWarning = (id, data) =>
+  request.patch(`/mental/warnings/${id}`, data, { retry: false })
 
 /* ========== 问卷元数据（读：教职工；写：admin/psychologist） ========== */
 export const getQuestionnaireList = (params) => request.get('/mental/questionnaires', { params })
@@ -22,6 +29,15 @@ export const addQuestion = (questionnaireId, data) =>
 export const updateQuestion = (questionId, data) =>
   request.put(`/mental/questions/${questionId}`, data)
 export const deleteQuestion = (questionId) => request.delete(`/mental/questions/${questionId}`)
+const excelBody = (file) => {
+  const body = new FormData()
+  body.append('file', file)
+  return body
+}
+export const previewQuestionImport = (id, file) =>
+  request.post(`/mental/questionnaires/${id}/import/preview`, excelBody(file), { retry: false })
+export const importQuestionFile = (id, file) =>
+  request.post(`/mental/questionnaires/${id}/import`, excelBody(file), { retry: false })
 
 /* ========== 完成情况（教职工；原始分仅 admin/psychologist 可见，其余角色为 null） ========== */
 export const getCompletionList = (questionnaireId) =>

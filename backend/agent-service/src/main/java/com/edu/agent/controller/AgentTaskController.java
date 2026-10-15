@@ -5,6 +5,7 @@ import com.alibaba.csp.sentinel.slots.block.BlockException;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.edu.agent.entity.AgentTask;
 import com.edu.agent.service.AgentTaskService;
+import com.edu.agent.security.AgentTaskViewPolicy;
 import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
 import com.edu.common.security.Roles;
@@ -65,7 +66,7 @@ public class AgentTaskController {
         if (task == null) {
             return Result.error("任务不存在");
         }
-        return Result.success(task);
+        return Result.success(AgentTaskViewPolicy.project(task, canSeeRawMental(authHeader)));
     }
 
     /**
@@ -81,6 +82,13 @@ public class AgentTaskController {
         if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.STAFF_VIEW)) {
             return Result.error(403, "无权查看任务列表");
         }
-        return Result.success(agentTaskService.listTasks(page, size, status, riskLevel));
+        IPage<AgentTask> tasks = agentTaskService.listTasks(page, size, status, riskLevel);
+        boolean privileged = canSeeRawMental(authHeader);
+        return Result.success(tasks.convert(task -> AgentTaskViewPolicy.project(task, privileged)));
+    }
+
+    private boolean canSeeRawMental(String authHeader) {
+        return accessGuard.hasAnyRole(authHeader, Roles.EXTREME_VIEW)
+                || ((authHeader == null || !authHeader.startsWith("Bearer ")) && accessGuard.isVerifiedInternalCall());
     }
 }

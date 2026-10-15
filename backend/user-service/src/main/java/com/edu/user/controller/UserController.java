@@ -6,6 +6,10 @@ import com.edu.common.security.AccessGuard;
 import com.edu.common.security.Roles;
 import com.edu.user.entity.User;
 import com.edu.user.service.UserService;
+import com.edu.user.service.UserAdministrationService;
+import com.edu.user.dto.UserWriteRequest;
+import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +20,7 @@ public class UserController {
 
     private final UserService userService;
     private final AccessGuard accessGuard;
+    private final UserAdministrationService administration;
 
     @GetMapping("/list")
     public Result<Page<User>> list(
@@ -43,23 +48,21 @@ public class UserController {
     }
 
     @PostMapping
-    public Result<Void> save(@RequestBody User user,
+    public Result<Long> save(@Valid @RequestBody UserWriteRequest user,
                              @RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.ADMIN)) {
             return Result.error(403, "无权管理用户");
         }
-        userService.save(user);
-        return Result.success();
+        return Result.success(administration.save(null, accessGuard.currentUserId(authHeader), user));
     }
 
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody User user,
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody UserWriteRequest user,
                                @RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.ADMIN)) {
             return Result.error(403, "无权管理用户");
         }
-        user.setId(id);
-        userService.update(user);
+        administration.save(id, accessGuard.currentUserId(authHeader), user);
         return Result.success();
     }
 
@@ -69,7 +72,13 @@ public class UserController {
         if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.ADMIN)) {
             return Result.error(403, "无权管理用户");
         }
-        userService.delete(id);
+        administration.delete(id, accessGuard.currentUserId(authHeader));
         return Result.success();
+    }
+
+    @GetMapping("/{id}/roles")
+    public Result<List<Long>> roles(@PathVariable Long id, @RequestHeader(value="Authorization",required=false) String authHeader) {
+        if(!accessGuard.allowSelfRoleOrInternal(authHeader,null,Roles.ADMIN)) return Result.error(403,"无权管理用户");
+        return Result.success(administration.roleIds(id));
     }
 }

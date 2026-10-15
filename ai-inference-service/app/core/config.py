@@ -22,6 +22,16 @@ class Settings:
     LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "60"))
     LLM_CACHE_PROMPT_ENABLED: bool = os.getenv(
         "LLM_CACHE_PROMPT_ENABLED", "true").lower() in ("1", "true", "yes")
+    LLM_REQUEST_POLICY_ENABLED: bool = os.getenv("EDUCARE_LLM_REQUEST_POLICY_ENABLED", "false").lower() == "true"
+    LLM_SHARED_COOLDOWN_ENABLED: bool = os.getenv("EDUCARE_LLM_SHARED_COOLDOWN_ENABLED", "true").lower() == "true"
+    LLM_REQUEST_QUEUE_CAPACITY: int = int(os.getenv("EDUCARE_LLM_REQUEST_QUEUE_CAPACITY", "2"))
+    LLM_REQUEST_MAX_WAIT_MS: int = int(os.getenv("EDUCARE_LLM_REQUEST_MAX_WAIT_MS", "180000"))
+    LLM_MIN_REQUEST_INTERVAL_MS: int = int(os.getenv("EDUCARE_LLM_MIN_REQUEST_INTERVAL_MS", "60000"))
+    LLM_RETRY_MAX_ATTEMPTS: int = int(os.getenv("EDUCARE_LLM_RETRY_MAX_ATTEMPTS", "3"))
+    LLM_RETRY_MAX_DELAY_MS: int = int(os.getenv("EDUCARE_LLM_RETRY_MAX_DELAY_MS", "120000"))
+    LLM_MAX_OUTPUT_TOKENS: int = int(os.getenv("EDUCARE_LLM_MAX_OUTPUT_TOKENS", "2400"))
+    LLM_MAX_INPUT_CHARACTERS: int = int(os.getenv("EDUCARE_LLM_MAX_INPUT_CHARACTERS", "18000"))
+    LLM_REASONING_EFFORT: str = os.getenv("SPRING_AI_OPENAI_CHAT_OPTIONS_REASONING_EFFORT", "")
 
     # Milvus
     MILVUS_HOST: str = os.getenv("MILVUS_HOST", "milvus-standalone")
@@ -37,6 +47,8 @@ class Settings:
     EMBEDDING_BASE_URL: str = os.getenv("EMBEDDING_BASE_URL", "http://host.docker.internal:8092/v1")
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "bge-large-zh-v1.5")
     EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "1024"))
+    # 外部 embedding 与生成模型可使用不同供应商；未配置时兼容既有共享 key。
+    EMBEDDING_API_KEY: str = os.getenv("EMBEDDING_API_KEY", "")
 
     # Reranker —— 宿主机 llama.cpp BGE-reranker-base（端口 8093，启动时带 --reranking）
     RERANKER_BASE_URL: str = os.getenv("RERANKER_BASE_URL", "http://host.docker.internal:8093")
@@ -60,10 +72,13 @@ class Settings:
     ADMIN_TOKEN: str = os.getenv("EDUCARE_ADMIN_TOKEN", "")
     UPSERT_HASH_TTL: int = int(os.getenv("EDUCARE_UPSERT_HASH_TTL", str(7 * 24 * 3600)))  # 7d
 
-    # G-5.2：Langfuse trace。空 keys → SDK no-op，不影响主流程。
+    # Langfuse v4：三项任一为空时关闭；默认仅记录模型/tokens/耗时。
     LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY: str = os.getenv("LANGFUSE_SECRET_KEY", "")
-    LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
+    LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "")
+    # 仅合成数据验收显式启用；避免向外部可观测平台发送学生/心理内容。
+    LANGFUSE_CAPTURE_CONTENT: bool = os.getenv(
+        "LANGFUSE_CAPTURE_CONTENT", "false").strip().lower() == "true"
 
     # H-1.3：knowledge-rag MCP server（FastMCP，独立进程）。
     # 端口与 mcp-student-data(8094) 配对，主 FastAPI 仍占 8090。

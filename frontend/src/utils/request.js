@@ -1,131 +1,163 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/modules/user'
-import { shouldRetry, retryDelay, isColdStartFailure, MAX_RETRY } from './retry'
+import {
+  RequestBudget,
+  resolveRequestProfile,
+  resolveRequestPolicy,
+  shouldRetry,
+  retryAfterDelay,
+  isTransientFailure,
+  isCanceledRequest,
+  serviceWarmupEnabled
+} from './retry'
 import { wakeServicesNow } from './warmup'
 
-// Render 免费层的 web service 闲置约 15 分钟后休眠，冷启动实测 30~120s。
-// 原先 10s 的超时必然等不到唤醒完成，表现为「接口永远超时」；
-// 故放宽默认超时，并对「确定未抵达应用」的失败自动重试。
-const DEFAULT_TIMEOUT = 60000
+const monotonicNow = () => globalThis.performance?.now?.() ?? Date.now()
 
-const request = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: DEFAULT_TIMEOUT,
-  headers: {
-    'Content-Type': 'application/json'
+// The optional dependencies exercise the real Axios interceptor chain with an offline adapter.
+export const createRequestClient = ({
+  env = import.meta.env,
+  // user -> auth -> request -> user is a real module cycle; resolve Pinia only per request.
+  getUserStore = () => useUserStore(),
+  message = ElMessage,
+  wake = wakeServicesNow,
+  now = monotonicNow,
+  wallNow = Date.now,
+  setTimer = setTimeout,
+  clearTimer = clearTimeout
+} = {}) => {
+  const profile = resolveRequestProfile(env)
+  const request = axios.create({
+    baseURL: env.VITE_API_BASE_URL || '/api',
+    timeout: profile.timeout,
+    headers: { 'Content-Type': 'application/json' }
+  })
+  const clearUnauthorizedSession = (config) => {
+    const userStore = getUserStore()
+    const authorization = config?.headers?.get?.('Authorization') || config?.headers?.Authorization
+    // A late 401 belongs only to the session that sent this request.
+    if (userStore.token && authorization === `Bearer ${userStore.token}`) userStore.clearSession()
   }
-})
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// 唤醒提示：全局只保留一条，避免多个并发请求把屏幕刷满
-let wakingNotice = null
-
-// 冷启动最长要等约 2 分钟，必须让用户看到进度，否则会以为页面卡死
-const showWakingNotice = (attempt) => {
-  // 免费实例冷启动实测约 157s，明确告知耗时量级，避免用户以为卡死而反复点击
-  const text = `服务正在唤醒中，首次访问约需 2-3 分钟，请勿关闭页面…（第 ${attempt}/${MAX_RETRY} 次重试）`
-  if (wakingNotice) {
-    // 已有提示则就地更新文案，不再叠加新的一条
-    const el = document.querySelector('.waking-notice .el-message__content')
-    if (el) el.textContent = text
-    return
+  const fail = (error, config) => {
+    const budget = config?.__requestBudget
+    const finalError = budget?.failure() || error
+    finalError.config ||= config
+    budget?.finish()
+    if (error.response?.status === 401) clearUnauthorizedSession(config)
+    if (isCanceledRequest(finalError) || finalError.__requestNoticeShown)
+      return Promise.reject(finalError)
+    finalError.__requestNoticeShown = true
+    if (error.response?.status === 403)
+      message.warning(error.response?.data?.message || '无权限访问该资源')
+    else if (finalError.code === 'ERR_REQUEST_BUDGET')
+      message.error('请求等待已超过时间上限，请稍后重试')
+    else if (['ECONNABORTED', 'ETIMEDOUT'].includes(finalError.code))
+      message.error('请求响应超时，请稍后重试')
+    else if (error.response?.status === 429) message.error('请求频率受限，请稍后重试')
+    else if (isTransientFailure(finalError)) message.error('连接暂时不可用，请稍后重试')
+    else message.error(error.response?.data?.message || error.message || '请求失败')
+    return Promise.reject(finalError)
   }
-  wakingNotice = ElMessage({
-    message: text,
-    type: 'info',
-    duration: 0,
-    showClose: true,
-    customClass: 'waking-notice',
-    onClose: () => {
-      wakingNotice = null
+
+  request.interceptors.request.use(async (config) => {
+    let budget = config.__requestBudget
+    if (!(budget instanceof RequestBudget) || budget.closed) {
+      budget = new RequestBudget(resolveRequestPolicy(config, profile), config.signal, {
+        now,
+        setTimer,
+        clearTimer
+      })
+      config.__requestBudget = budget
+      config.__retryCount = 0
+    }
+    config.signal = budget.signal
+    try {
+      const initialFailure = budget.failure()
+      if (initialFailure) throw initialFailure
+      const userStore = getUserStore()
+      if (!config.url?.startsWith('/auth/') && !config.headers.Authorization)
+        await budget.waitFor(userStore.ensureSession())
+      const preparationFailure = budget.failure()
+      if (preparationFailure) throw preparationFailure
+      if (userStore.token && !config.headers.Authorization)
+        config.headers.Authorization = `Bearer ${userStore.token}`
+      config.timeout = Math.max(1, Math.min(budget.policy.timeout, Math.floor(budget.remaining())))
+      budget.adapter ||= axios.getAdapter(config.adapter)
+      config.adapter = async (attemptConfig) => {
+        try {
+          const beforeSend = budget.failure()
+          if (beforeSend) throw beforeSend
+          // Native adapters obey signal; this race also bounds adapters that settle late.
+          return await budget.waitFor(budget.adapter(attemptConfig))
+        } catch (error) {
+          error.config ||= attemptConfig
+          throw error
+        }
+      }
+      return config
+    } catch (error) {
+      budget.finish()
+      // Preserve an inner refresh request's session identity and diagnostic handling.
+      error.config ||= config
+      throw error
     }
   })
+
+  request.interceptors.response.use(
+    (response) => {
+      if (response.data?.code === 401) clearUnauthorizedSession(response.config)
+      const expired = response.config.__requestBudget?.failure()
+      if (expired) return fail(expired, response.config)
+      response.config.__requestBudget?.finish()
+      if (['blob', 'arraybuffer'].includes(response.config.responseType)) return response
+      const res = response.data
+      if (res.code !== 200) {
+        if (res.code === 403) message.warning(res.message || '无权限执行该操作')
+        else message.error(res.message || '请求失败')
+        return Promise.reject(
+          Object.assign(new Error(res.message), { code: res.code, __requestNoticeShown: true })
+        )
+      }
+      return res
+    },
+    async (error) => {
+      const config = error.config
+      const budget = config?.__requestBudget
+      if (
+        budget &&
+        !budget.closed &&
+        shouldRetry(error, config, budget.policy) &&
+        !budget.failure()
+      ) {
+        const attempt = (config.__retryCount || 0) + 1
+        const delay = retryAfterDelay(error, attempt, budget.policy, wallNow())
+        if (Number.isFinite(delay) && delay < budget.remaining()) {
+          config.__retryCount = attempt
+          // Optional Render prewarm is never inferred from hostname, timeout or a failed write.
+          if (serviceWarmupEnabled(env) && [429, 502, 503, 504].includes(error.response?.status))
+            wake()
+          if (!budget.noticeShown) {
+            budget.noticeShown = true
+            message({
+              message: '连接暂时不稳定，正在重新尝试…',
+              type: 'info',
+              duration: 2000,
+              grouping: true
+            })
+          }
+          try {
+            await budget.delay(delay)
+          } catch (canceled) {
+            return fail(canceled, config)
+          }
+          return request(config)
+        }
+      }
+      return fail(error, config)
+    }
+  )
+  return request
 }
 
-const closeWakingNotice = () => {
-  if (!wakingNotice) return
-  wakingNotice.close()
-  wakingNotice = null
-}
-
-request.interceptors.request.use(
-  (config) => {
-    const userStore = useUserStore()
-    if (userStore.token) {
-      config.headers.Authorization = `Bearer ${userStore.token}`
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
-
-request.interceptors.response.use(
-  (response) => {
-    // 只要有请求成功返回，说明服务已醒，撤掉唤醒提示
-    closeWakingNotice()
-
-    if (response.config.responseType === 'blob') {
-      return response
-    }
-
-    const res = response.data
-
-    if (res.code !== 200) {
-      if (res.code === 403) {
-        // 端点级授权拒绝（AccessGuard）：身份有效、只是角色不够，提示即可，不登出
-        ElMessage.warning(res.message || '无权限执行该操作')
-      } else {
-        ElMessage.error(res.message || '请求失败')
-      }
-
-      if (res.code === 401) {
-        const userStore = useUserStore()
-        userStore.logout()
-      }
-
-      return Promise.reject(new Error(res.message))
-    }
-
-    return res
-  },
-  async (error) => {
-    const config = error.config
-
-    // 经网关转发的请求叫不醒休眠中的下游服务（Render 直接回 429），重试再多也等不到它醒；
-    // 故撞上冷启动类失败时先绕过网关直连唤醒，重试窗口内即可等到服务就绪（详见 utils/warmup.js）
-    if (isColdStartFailure(error)) wakeServicesNow()
-
-    if (shouldRetry(error, config)) {
-      config.__retryCount = (config.__retryCount || 0) + 1
-      showWakingNotice(config.__retryCount)
-      await sleep(retryDelay(config.__retryCount))
-      return request(config)
-    }
-
-    closeWakingNotice()
-
-    // HTTP 401（网关 JwtAuthGlobalFilter 拒绝：未登录/过期/登出后旧 token）→ 自动登出。
-    // 注意：业务层 401（body code===401）在上面的成功分支处理；这里专门兜 HTTP 状态码 401。
-    if (error.response?.status === 401) {
-      const userStore = useUserStore()
-      userStore.logout()
-    }
-
-    // 重试用尽后才提示，且把冷启动类失败翻译成人话，避免用户看到「timeout of 60000ms exceeded」
-    if (isColdStartFailure(error)) {
-      ElMessage.error('服务唤醒超时，请稍后重试')
-    } else if (error.response?.status === 403) {
-      // HTTP 403（如网关拦下 /_internal/）响应体常为空，给出可读提示
-      ElMessage.warning(error.response?.data?.message || '无权限访问该资源')
-    } else {
-      ElMessage.error(error.response?.data?.message || error.message || '网络错误')
-    }
-    return Promise.reject(error)
-  }
-)
-
-export default request
+export default createRequestClient()

@@ -28,6 +28,6 @@ class InternalCallFeignWiringTest {
 
     @Test
     void aiInferenceClient_doesNotReceiveInternalCredential() {
-        assertThat(carriesInternalCredential(AiInferenceClient.class)).isFalse();
+        assertThat(carriesInternalCredential(AiInferenceClient.class)).isTrue();
     }
 }

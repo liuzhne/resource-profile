@@ -25,18 +25,20 @@
             <span class="profile-tag" :style="statusStyle">{{ teacherInfo.status }}</span>
           </div>
 
-          <!-- 评教三项后端均未提供，统一显示占位 -->
+          <!-- 统计只来自真实评教记录。 -->
           <div class="mini-stats">
             <div class="mini-stat">
-              <div class="mini-value accent">{{ teacherInfo.evaluationScore }}</div>
+              <div class="mini-value accent">{{ portrait.evaluationScore ?? '—' }}</div>
               <div class="mini-label">综合评分</div>
             </div>
             <div class="mini-stat">
-              <div class="mini-value">{{ teacherInfo.evaluationCount }}</div>
+              <div class="mini-value">{{ portrait.evaluationCount ?? '—' }}</div>
               <div class="mini-label">评价次数</div>
             </div>
             <div class="mini-stat">
-              <div class="mini-value">{{ teacherInfo.satisfaction }}</div>
+              <div class="mini-value">
+                {{ portrait.satisfaction == null ? '—' : `${portrait.satisfaction}%` }}
+              </div>
               <div class="mini-label">满意度</div>
             </div>
           </div>
@@ -51,10 +53,10 @@
               <span class="v tnum">{{ teacherInfo.joinDate || '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="k">联系电话</span><span class="v">{{ teacherInfo.phone }}</span>
+              <span class="k">联系电话</span><span class="v">{{ teacherInfo.phone || '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="k">电子邮箱</span><span class="v">{{ teacherInfo.email }}</span>
+              <span class="k">电子邮箱</span><span class="v">{{ teacherInfo.email || '—' }}</span>
             </div>
           </div>
         </aside>
@@ -86,42 +88,39 @@
                   <span class="v">{{ f.v || '—' }}</span>
                 </div>
               </div>
-              <p v-if="hasMissingBasic" class="no-source missing-note">
-                <el-icon :size="14"><WarningFilled /></el-icon>
-                <span>「政治面貌」在 `teacher_info` 表中无对应字段，接口不返回该项。</span>
-              </p>
             </template>
 
-            <!-- 教学成果 -->
             <template v-else-if="activeTab === 'teaching'">
-              <div class="section-title">教学成果</div>
-              <p class="no-source">
-                <el-icon :size="14"><WarningFilled /></el-icon>
-                <span
-                  >教学成果暂无数据来源：`teacher_info` 表与 `/teacher/{id}`
-                  接口均不含该类记录，需后端新增表与接口。</span
-                >
-              </p>
+              <TeacherRecords
+                :teacher-id="route.params.id"
+                kind="TEACHING"
+                title="教学成果"
+                :records="portrait.teaching || []"
+                :can-write="canWrite"
+                @changed="fetchDetail"
+              />
             </template>
-
-            <!-- 科研项目 -->
             <template v-else-if="activeTab === 'research'">
-              <div class="section-title">科研项目</div>
-              <p class="no-source">
-                <el-icon :size="14"><WarningFilled /></el-icon>
-                <span>科研项目暂无数据来源，同上。</span>
-              </p>
+              <TeacherRecords
+                :teacher-id="route.params.id"
+                kind="RESEARCH"
+                title="科研项目"
+                :records="portrait.research || []"
+                :can-write="canWrite"
+                @changed="fetchDetail"
+              />
             </template>
-
-            <!-- 教学评价 -->
             <template v-else>
-              <div class="section-title">教学评价</div>
-              <p class="no-source">
-                <el-icon :size="14"><WarningFilled /></el-icon>
-                <span
-                  >评教数据（综合评分 / 评价次数 /
-                  满意度）暂无数据来源，左侧三项统计同样为占位。</span
-                >
+              <TeacherRecords
+                :teacher-id="route.params.id"
+                title="教学评价"
+                :records="portrait.evaluations || []"
+                :can-write="canWrite"
+                evaluation
+                @changed="fetchDetail"
+              />
+              <p class="stat-definition">
+                综合评分为现有评价平均分；满意度仅统计已回答“是否满意”的记录。
               </p>
             </template>
           </div>
@@ -132,10 +131,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ArrowLeft, WarningFilled } from '@element-plus/icons-vue'
-import { getTeacherDetail } from '@/api/teacher'
+import { ArrowLeft } from '@element-plus/icons-vue'
+import { getTeacherDetail, getTeacherPortrait } from '@/api/teacher'
+import TeacherRecords from './Records.vue'
+import { useUserStore } from '@/store/modules/user'
 import { initialOf } from '@/utils/avatar'
 import ChartState from '@/views/dashboard/components/ChartState.vue'
 import { ElMessage } from 'element-plus'
@@ -151,29 +152,14 @@ const tabs = [
 ]
 
 const activeTab = ref('basic')
+const user = useUserStore()
+const canWrite = computed(() => user.userRoles.includes('admin'))
+const portrait = ref({})
 const loading = ref(false)
 const loadError = ref(false)
 
-const teacherInfo = ref({
-  name: '',
-  dept: '',
-  title: '',
-  status: '—',
-  employeeId: '',
-  joinDate: '',
-  phone: '—',
-  email: '—',
-  gender: '—',
-  birthDate: '',
-  political: '—',
-  education: '',
-  school: '',
-  major: '',
-  researchArea: '',
-  evaluationScore: '—',
-  evaluationCount: '—',
-  satisfaction: '—'
-})
+const teacherInfo = ref({})
+let fetchVersion = 0
 
 const deptTitle = computed(
   () =>
@@ -198,8 +184,6 @@ const basicFields = computed(() => [
   { k: '研究方向', v: teacherInfo.value.researchArea }
 ])
 
-const hasMissingBasic = computed(() => teacherInfo.value.political === '—')
-
 const formatGender = (val) => {
   if (val === 0) return '女'
   if (val === 1) return '男'
@@ -213,6 +197,7 @@ const formatStatus = (val) => {
 }
 
 const fetchDetail = async () => {
+  const version = ++fetchVersion
   const id = route.params.id
   if (!id) {
     ElMessage.error('教师ID不存在')
@@ -221,9 +206,12 @@ const fetchDetail = async () => {
   loading.value = true
   loadError.value = false
   try {
-    const res = await getTeacherDetail(id)
+    const [res, extra] = await Promise.all([getTeacherDetail(id), getTeacherPortrait(id)])
+    if (version !== fetchVersion) return
+    portrait.value = extra.data || {}
     const data = res.data
     if (!data) {
+      teacherInfo.value = {}
       ElMessage.warning('未找到该教师信息')
       return
     }
@@ -231,20 +219,16 @@ const fetchDetail = async () => {
       ...data,
       dept: data.deptName || '—',
       gender: formatGender(data.gender),
-      status: formatStatus(data.status),
-      // 以下字段 teacher_info 表均无，保持占位而非编造
-      political: '—',
-      phone: '—',
-      email: '—',
-      evaluationScore: '—',
-      evaluationCount: '—',
-      satisfaction: '—'
+      status: formatStatus(data.status)
     }
   } catch (error) {
+    if (version !== fetchVersion) return
+    teacherInfo.value = {}
+    portrait.value = {}
     loadError.value = true
     ElMessage.error('获取教师详情失败')
   } finally {
-    loading.value = false
+    if (version === fetchVersion) loading.value = false
   }
 }
 
@@ -252,9 +236,8 @@ const goBack = () => {
   router.back()
 }
 
-onMounted(() => {
-  fetchDetail()
-})
+onMounted(fetchDetail)
+watch(() => route.params.id, fetchDetail)
 </script>
 
 <style scoped lang="scss">
@@ -288,7 +271,7 @@ onMounted(() => {
   }
 }
 
-.missing-note {
+.stat-definition {
   margin-top: 14px;
 }
 </style>

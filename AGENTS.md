@@ -2,6 +2,10 @@
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
+## 2026-10-15 Java AI 迁移当前边界
+
+用户已确认全部 Java 化（JAVA-AI-MIGRATION-20261015）。当前源码新增 `backend/knowledge-service`，由 Spring AI embedding/MCP + Milvus REST 兼容层承接 RAG、知识导入及8095工具；方案/审核在 agent-service 的 `AgentGenerationService`。部署名 `ai-inference-service:8090` 保留兼容但镜像已改Java。`ai-inference-service/` 旧Python源码仅供迁移参考，不进默认部署包；本文下方旧Python开发说明为历史资料。生产切换未执行，不得声称线上已退役。下一步与验证见 `docs/educare/JAVA_AI_MIGRATION_20261015.md`、执行计划JVM-4。新检索功能应扩展Java knowledge-service；未发现需要Spring AI Alibaba的能力缺口。
+
 ## Project Overview
 
 Resource-Profile is a **Teacher-Student Resource Portrait System** (师生资源画像系统) — a microservices-based educational platform with a Vue 3 frontend, Spring Boot backend, and a Python AI inference sidecar (LLM + RAG over Milvus).

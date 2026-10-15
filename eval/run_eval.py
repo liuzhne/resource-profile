@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from collections import Counter, defaultdict
@@ -122,6 +123,7 @@ async def _call_one(
         resp = await client.post(
             f"{base_url.rstrip('/')}/api/v1/agent/risk",
             json=payload,
+            headers={"X-Internal-Token": os.environ.get("EDUCARE_INTERNAL_TOKEN", "")},
             timeout=timeout,
         )
         resp.raise_for_status()

@@ -125,7 +125,7 @@ INJECT_PAYLOAD=$(cat <<'JSON'
 JSON
 )
 INJECT_RESP=$(curl -s -X POST -H 'Content-Type: application/json' \
-    -d "$INJECT_PAYLOAD" "$AI_INFERENCE/api/v1/agent/risk")
+    -H "X-Internal-Token: ${EDUCARE_INTERNAL_TOKEN:?Set internal credential}" -d "$INJECT_PAYLOAD" "$AI_INFERENCE/api/v1/agent/risk")
 INJECT_RISK=$(echo "$INJECT_RESP" | jq -r '.risk_level // empty')
 INJECT_TYPE=$(echo "$INJECT_RESP" | jq -r '.primary_risk_type // empty')
 echo "  返回 risk_level=$INJECT_RISK, primary_risk_type=$INJECT_TYPE"

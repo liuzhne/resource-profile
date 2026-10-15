@@ -47,6 +47,8 @@ jobs:
       - name: 安装依赖
         run: pip install httpx
       - name: 跑全集 eval + 阈值门控
+        env:
+          EDUCARE_INTERNAL_TOKEN: ${{ secrets.EVAL_INTERNAL_TOKEN }}
         run: |
           BASELINE_ARG=""
           if [ -f eval/baseline.json ]; then BASELINE_ARG="--baseline eval/baseline.json"; fi

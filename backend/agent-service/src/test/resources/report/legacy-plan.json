@@ -1,0 +1,8 @@
+{
+  "report_title": "纯合成旧方案", "summary": "合成旧支持安排",
+  "immediate_actions": [{"action": "安排合成学习辅导", "owner": "合成导师", "deadline_days": 3, "references": ["synthetic-case-002"]}],
+  "long_term_plan": [{"phase": "1月", "goals": ["完成合成复习", "建立合成记录"], "metrics": ["每周合成复核一次"]}],
+  "talk_outline": "合成旧倾听提纲",
+  "resources": [{"type": "课程", "name": "合成学习课程", "link_or_contact": "https://example.invalid/synthetic"}],
+  "references": ["synthetic-policy-001"]
+}

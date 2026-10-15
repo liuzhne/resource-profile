@@ -92,16 +92,12 @@ class QuestionServiceImplTest {
     }
 
     @Test
-    void getForRespondent_malformedOrNonArrayOptions_dropped() {
-        // 解析不了就整体不下发，宁可无选项也不带出分值
-        givenQuestionnaire(1, question("not-json"), question("{\"score\":3}"), question(null));
-
-        List<Question> out = service.getForRespondent(1L).getQuestions();
-
-        assertThat(out.get(0).getOptions()).isNull();
-        assertThat(out.get(1).getOptions()).isNull();
-        // 简答题本就没有选项
-        assertThat(out.get(2).getOptions()).isNull();
+    void getForRespondent_malformedOrNonArrayOptions_rejected() {
+        // Broken selection templates must report a configuration error instead of silently showing an unanswerable question.
+        for (String malformed : List.of("not-json", "{\"score\":3}")) {
+            givenQuestionnaire(1, question(malformed));
+            assertThatThrownBy(() -> service.getForRespondent(1L)).isInstanceOf(BusinessException.class);
+        }
     }
 
     @Test

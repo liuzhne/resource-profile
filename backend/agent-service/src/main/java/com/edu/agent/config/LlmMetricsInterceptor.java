@@ -76,7 +76,7 @@ public class LlmMetricsInterceptor implements ClientHttpRequestInterceptor {
         Instant start = Instant.now();
         ClientHttpResponse response = execution.execute(request, body);
         String path = request.getURI().getPath();
-        if (path == null || !path.contains("/chat/completions")) {
+        if (path == null || !path.contains("/chat/completions") || !response.getStatusCode().is2xxSuccessful()) {
             return response;
         }
         try {
@@ -110,8 +110,14 @@ public class LlmMetricsInterceptor implements ClientHttpRequestInterceptor {
             metadata.put("cached_n", cachedN);
             metadata.put("prefill_ms", prefillMs);
             metadata.put("cache_hit_rate", hitRate);
+            String route = switch (reqRoot.path("response_format").path("json_schema").path("name").asText()) {
+                case "educare_audit" -> "llm.audit";
+                case "educare_plan" -> "llm.plan";
+                case "educare_risk" -> "llm.risk";
+                default -> "llm.chat";
+            };
             langfuseClient.traceGeneration(
-                    "llm.chat",
+                    route,
                     model,
                     messages,
                     output,
@@ -122,7 +128,7 @@ public class LlmMetricsInterceptor implements ClientHttpRequestInterceptor {
                     Instant.now()
             );
         } catch (Exception e) {
-            log.debug("解析 llama.cpp timings 失败（指标未记录）: {}", e.getMessage());
+            log.debug("解析 llama.cpp timings 失败（指标未记录）: {}", e.getClass().getSimpleName());
         }
         return response;
     }

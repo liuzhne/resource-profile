@@ -96,4 +96,24 @@ class DashboardControllerTest {
         assertThat(r.getCode()).isEqualTo(200);
         verify(dashboardService).getTrend("week");
     }
+    @Test
+    void distributionAndLoginReadBothAllowStaffAndDenyStudent() {
+        when(jwtUtil.getSubject("tok")).thenReturn("9");
+        when(jwtUtil.parseRoles("tok")).thenReturn(Set.of("teacher"));
+        assertThat(controller.distribution(AUTH).getCode()).isEqualTo(200);
+        assertThat(controller.recentLogins(AUTH).getCode()).isEqualTo(200);
+        when(jwtUtil.parseRoles("tok")).thenReturn(Set.of("student"));
+        assertThat(controller.distribution(AUTH).getCode()).isEqualTo(403);
+        assertThat(controller.recentLogins(AUTH).getCode()).isEqualTo(403);
+        verify(dashboardService).getDistribution();
+        verify(dashboardService).getRecentLogins();
+    }
+    @Test
+    void trendStudentIsDenied() {
+        when(jwtUtil.getSubject("tok")).thenReturn("9");
+        when(jwtUtil.parseRoles("tok")).thenReturn(Set.of("student"));
+        assertThat(controller.trend("week", AUTH).getCode()).isEqualTo(403);
+        verify(dashboardService,never()).getTrend("week");
+    }
+
 }

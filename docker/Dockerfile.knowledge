@@ -1,0 +1,23 @@
+FROM eclipse-temurin:21-jdk-jammy AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends maven \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . .
+
+RUN mvn -B -pl knowledge-service -am clean package -DskipTests
+
+FROM eclipse-temurin:21-jre-jammy
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/knowledge-service/target/*.jar app.jar
+
+EXPOSE 8090 8095
+
+ENTRYPOINT ["java", "-jar", "app.jar"]

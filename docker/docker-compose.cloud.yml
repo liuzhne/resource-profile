@@ -1,0 +1,510 @@
+# Cloud VM full-stack deployment. This is independent of the local/Render compose.
+# Run from repository root with a private, untracked env file:
+#   docker compose --env-file docker/.env.cloud -f docker/docker-compose.cloud.yml config --quiet
+#   python3 scripts/cloud-deploy.py build
+#   python3 scripts/cloud-deploy.py start-private
+# After seed password rotation and DNS/TLS preparation, explicitly start frontend.
+# Frontend's public profile prevents a plain up from exposing default seed accounts.
+# Requires Docker Compose >= 2.23.1 (configs.content).
+# SELinux bind relabeling uses legacy Binds; deployment gates check source paths
+# before starting services because create_host_path:false bypasses relabeling.
+# Only frontend publishes host ports. All service-to-service calls use Docker DNS.
+# Full Milvus + nine JVMs require capacity validation; do not assume a 12 GiB VM fits.
+# Initialize/rotate seed passwords before starting the public frontend.
+
+name: ${CLOUD_PROJECT_NAME:-edu-portrait-cloud}
+
+x-runtime: &runtime
+  restart: unless-stopped
+  networks:
+    - edu-network
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-java-environment: &java-environment
+  SPRING_PROFILES_ACTIVE: prod
+  SPRING_CLOUD_NACOS_DISCOVERY_ENABLED: "false"
+  SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED: "false"
+  SPRING_CLOUD_NACOS_CONFIG_ENABLED: "false"
+  SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED: "false"
+  SPRING_CONFIG_IMPORT: optional:classpath:application.yml
+  SPRING_MAIN_LAZY_INITIALIZATION: "false"
+  SPRING_MVC_SERVLET_LOAD_ON_STARTUP: "1"
+  EDUCARE_PERFORMANCE_DATABASE_WARMUP: "true"
+  MYBATIS_PLUS_CONFIGURATION_LOG_IMPL: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  SERVER_COMPRESSION_ENABLED: "true"
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+  MYSQL_HOST: mysql
+  MYSQL_PORT: "3306"
+  MYSQL_DATABASE: edu_portrait
+  MYSQL_USER: ${MYSQL_USER:-edu}
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}
+  MYSQL_SSL_MODE: ${MYSQL_SSL_MODE:-PREFERRED}
+  DB_MAXIMUM_POOL_SIZE: "3"
+  DB_MINIMUM_IDLE: "1"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}
+  # Boot 3.2 uses spring.data.redis; override historical spring.redis YAML too.
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}
+  SPRING_DATA_REDIS_DATABASE: "0"
+  JWT_SECRET: ${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}
+  EDUCARE_INTERNAL_TOKEN: ${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}
+  EDUCARE_MCP_TOKEN: ${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}
+  JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom
+
+x-java-dependencies: &java-dependencies
+  mysql:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+x-java-healthcheck: &java-healthcheck
+  test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"]
+  interval: 15s
+  timeout: 5s
+  retries: 20
+  start_period: 180s
+
+x-java-service: &java-service
+  <<: *runtime
+  environment: *java-environment
+  depends_on: *java-dependencies
+  mem_limit: 512m
+  healthcheck: *java-healthcheck
+
+x-knowledge-environment: &knowledge-environment
+  EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:?Set the external embedding URL including /v1}
+  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-${LLM_API_KEY}}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:?Set the embedding model}
+  EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
+  # Dense retrieval remains enabled; optional reranking requires an external endpoint.
+  RERANKER_ENABLED: ${RERANKER_ENABLED:-false}
+  RERANKER_BASE_URL: ${RERANKER_BASE_URL:-http://127.0.0.1:8093}
+  RERANKER_MODEL: ${RERANKER_MODEL:-bge-reranker-base}
+  MILVUS_HOST: milvus-standalone
+  MILVUS_PORT: "19530"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}
+  EDUCARE_INTERNAL_TOKEN: ${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}
+  EDUCARE_MCP_TOKEN: ${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}
+  EDUCARE_ADMIN_TOKEN: ${EDUCARE_ADMIN_TOKEN:?Set a fresh RAG administration credential}
+
+services:
+  mysql:
+    <<: *runtime
+    image: mysql:8.0
+    mem_limit: 1g
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set a fresh MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: edu_portrait
+      MYSQL_USER: ${MYSQL_USER:-edu}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=256M
+      - --max-connections=100
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - type: bind
+        source: ../sql/init
+        target: /docker-entrypoint-initdb.d
+        read_only: true
+        bind:
+          create_host_path: true
+          selinux: Z
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql -h 127.0.0.1 -u root -e 'SELECT 1' >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  redis:
+    <<: *runtime
+    image: redis:7-alpine
+    mem_limit: 384m
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}
+    command:
+      - sh
+      - -c
+      - exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  etcd:
+    <<: *runtime
+    image: quay.io/coreos/etcd:v3.5.5
+    mem_limit: 512m
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command:
+      - etcd
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --data-dir=/etcd
+    volumes:
+      - etcd_data:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    <<: *runtime
+    # The historical minio/minio 2023 tag is no longer anonymously pullable.
+    # Milvus upstream's mirror has a verified ARM64 manifest.
+    image: milvusdb/minio:RELEASE.2024-12-18T13-15-44Z
+    mem_limit: 512m
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?Set a fresh MinIO access ID}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?Set a fresh MinIO secret}
+    command: ["server", "/data", "--console-address", ":9001"]
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  milvus-standalone:
+    <<: *runtime
+    image: milvusdb/milvus:v2.4.1
+    # The original v2.4.1 manifest includes linux/arm64 and linux/amd64.
+    # ARM manifest digest: sha256:4a497e12abed983c9e74480c11bb98b7092dfaa0d51f69d76880a6392a05f3a7
+    mem_limit: 8g
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    configs:
+      - source: milvus-user-config
+        target: /milvus/configs/user.yaml
+        mode: 0600
+    volumes:
+      - milvus_data:/var/lib/milvus
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9091/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  auth-service:
+    <<: *java-service
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.auth
+    environment:
+      <<: *java-environment
+      PORT: "8081"
+
+  user-service:
+    <<: *java-service
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.user
+    environment:
+      <<: *java-environment
+      PORT: "8082"
+
+  teacher-service:
+    <<: *java-service
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.teacher
+    environment:
+      <<: *java-environment
+      PORT: "8083"
+
+  student-service:
+    <<: *java-service
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.student
+    environment:
+      <<: *java-environment
+      PORT: "8084"
+
+  mental-service:
+    <<: *java-service
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.mental
+    environment:
+      <<: *java-environment
+      PORT: "8085"
+
+  data-service:
+    <<: *java-service
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.data
+    environment:
+      <<: *java-environment
+      PORT: "8086"
+
+  ai-inference-service:
+    <<: *runtime
+    image: edu-portrait-knowledge:cloud
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.knowledge
+    mem_limit: 1g
+    environment:
+      <<: *knowledge-environment
+      PORT: "8090"
+      AGENT_SERVICE_URL: http://agent-service:8087
+    depends_on:
+      redis:
+        condition: service_healthy
+      milvus-standalone:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
+      interval: 15s
+      timeout: 6s
+      retries: 20
+      start_period: 60s
+
+  knowledge-rag-mcp:
+    <<: *runtime
+    image: edu-portrait-knowledge:cloud
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.knowledge
+    mem_limit: 1g
+    environment:
+      <<: *knowledge-environment
+      KNOWLEDGE_MCP_ENABLED: "true"
+      KNOWLEDGE_API_ENABLED: "false"
+      PORT: "8095"
+      MCP_KNOWLEDGE_RAG_PORT: "8095"
+      MCP_KNOWLEDGE_RAG_PATH: /mcp
+    depends_on:
+      redis:
+        condition: service_healthy
+      milvus-standalone:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8095/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  mcp-student-data:
+    <<: *java-service
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.mcp-student-data
+    environment:
+      <<: *java-environment
+      PORT: "8094"
+      STUDENT_SERVICE_URL: http://student-service:8084
+      MENTAL_SERVICE_URL: http://mental-service:8085
+    depends_on:
+      student-service:
+        condition: service_healthy
+      mental-service:
+        condition: service_healthy
+
+  agent-service:
+    <<: *java-service
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.agent
+    mem_limit: 768m
+    environment:
+      <<: *java-environment
+      PORT: "8087"
+      SPRING_AI_OPENAI_BASE_URL: ${SPRING_AI_OPENAI_BASE_URL:?Set the Java OpenAI-compatible API root}
+      SPRING_AI_OPENAI_API_KEY: ${LLM_API_KEY:?Set the external model API key}
+      SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL: ${LLM_MODEL:?Set the external chat model}
+      SPRING_AI_OPENAI_CHAT_OPTIONS_RESPONSE_FORMAT_TYPE: ${SPRING_AI_OPENAI_CHAT_OPTIONS_RESPONSE_FORMAT_TYPE:-TEXT}
+      SPRING_AI_OPENAI_CHAT_OPTIONS_REASONING_EFFORT: ${SPRING_AI_OPENAI_CHAT_OPTIONS_REASONING_EFFORT:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-2048}
+      EDUCARE_LLM_REQUEST_POLICY_ENABLED: ${EDUCARE_LLM_REQUEST_POLICY_ENABLED:-false}
+      EDUCARE_LLM_SHARED_COOLDOWN_ENABLED: ${EDUCARE_LLM_SHARED_COOLDOWN_ENABLED:-true}
+      EDUCARE_LLM_REQUEST_QUEUE_CAPACITY: ${EDUCARE_LLM_REQUEST_QUEUE_CAPACITY:-2}
+      EDUCARE_LLM_REQUEST_MAX_WAIT_MS: ${EDUCARE_LLM_REQUEST_MAX_WAIT_MS:-180000}
+      EDUCARE_LLM_MIN_REQUEST_INTERVAL_MS: ${EDUCARE_LLM_MIN_REQUEST_INTERVAL_MS:-60000}
+      EDUCARE_LLM_RETRY_MAX_ATTEMPTS: ${EDUCARE_LLM_RETRY_MAX_ATTEMPTS:-3}
+      EDUCARE_LLM_RETRY_MAX_DELAY_MS: ${EDUCARE_LLM_RETRY_MAX_DELAY_MS:-120000}
+      EDUCARE_LLM_MAX_OUTPUT_TOKENS: ${EDUCARE_LLM_MAX_OUTPUT_TOKENS:-2400}
+      EDUCARE_LLM_MAX_INPUT_CHARACTERS: ${EDUCARE_LLM_MAX_INPUT_CHARACTERS:-18000}
+      EDUCARE_AGENT_LOOP_STRUCTURED_OUTPUT_ENABLED: ${EDUCARE_AGENT_LOOP_STRUCTURED_OUTPUT_ENABLED:-false}
+      EDUCARE_AGENT_LOOP_DEADLINE_SECONDS: ${EDUCARE_AGENT_LOOP_DEADLINE_SECONDS:-900}
+      EDUCARE_AGENT_TASK_CONCURRENCY: ${EDUCARE_AGENT_TASK_CONCURRENCY:-1}
+      EDUCARE_AGENT_TASK_QUEUE_CAPACITY: ${EDUCARE_AGENT_TASK_QUEUE_CAPACITY:-2}
+      EDUCARE_AGENT_TASK_LOCK_SECONDS: ${EDUCARE_AGENT_TASK_LOCK_SECONDS:-1200}
+      AI_INFERENCE_READ_TIMEOUT_MS: ${AI_INFERENCE_READ_TIMEOUT_MS:-240000}
+      LLM_CACHE_PROMPT_ENABLED: "false"
+      EDUCARE_LLM_CACHE_PROMPT: "false"
+      STUDENT_SERVICE_URL: http://student-service:8084
+      MENTAL_SERVICE_URL: http://mental-service:8085
+      DATA_SERVICE_URL: http://data-service:8086
+      AI_INFERENCE_URL: http://ai-inference-service:8090
+      MCP_STUDENT_DATA_URL: http://mcp-student-data:8094
+      MCP_KNOWLEDGE_RAG_URL: http://knowledge-rag-mcp:8095
+      MCP_KNOWLEDGE_RAG_ENDPOINT: /mcp
+      MCP_CLIENT_REQUEST_TIMEOUT: 120s
+      SPRING_AI_MCP_CLIENT_ENABLED: "true"
+      EDUCARE_MCP_DEFERRED_ENABLED: "false"
+      EDUCARE_AGENT_LOOP_ENABLED: "true"
+      EDUCARE_AGENT_LOOP_PROTOCOL: react
+      EDUCARE_EXPORT_PATH: /var/lib/edu-exports
+      EDUCARE_FONT_PATH: file:/opt/educare-fonts/NotoSansSC-Regular.ttf
+      EDUCARE_SCHEDULE_ENABLED: "false"
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_CAPTURE_CONTENT: ${LANGFUSE_CAPTURE_CONTENT:-false}
+      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-true}
+      LANGFUSE_CONNECT_TIMEOUT_MS: ${LANGFUSE_CONNECT_TIMEOUT_MS:-2000}
+      LANGFUSE_READ_TIMEOUT_MS: ${LANGFUSE_READ_TIMEOUT_MS:-5000}
+    volumes:
+      - agent_exports:/var/lib/edu-exports
+      - type: bind
+        source: ${CLOUD_EXPORT_FONT_FILE:-../.local-run/cloud/fonts/NotoSansSC-Regular.ttf}
+        target: /opt/educare-fonts/NotoSansSC-Regular.ttf
+        read_only: true
+        bind:
+          create_host_path: true
+          selinux: Z
+    depends_on:
+      <<: *java-dependencies
+      data-service:
+        condition: service_healthy
+      mcp-student-data:
+        condition: service_healthy
+      knowledge-rag-mcp:
+        condition: service_healthy
+      ai-inference-service:
+        condition: service_healthy
+
+  gateway:
+    <<: *java-service
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.gateway
+    environment:
+      <<: *java-environment
+      PORT: "8080"
+      SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED: "false"
+      EDUCARE_GATEWAY_AUTH_ENABLED: "true"
+      EDUCARE_GATEWAY_AUTH_CHECK_SESSION: "true"
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      TEACHER_SERVICE_URL: http://teacher-service:8083
+      STUDENT_SERVICE_URL: http://student-service:8084
+      MENTAL_SERVICE_URL: http://mental-service:8085
+      DATA_SERVICE_URL: http://data-service:8086
+      AGENT_SERVICE_URL: http://agent-service:8087
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      teacher-service:
+        condition: service_healthy
+      student-service:
+        condition: service_healthy
+      mental-service:
+        condition: service_healthy
+      data-service:
+        condition: service_healthy
+      agent-service:
+        condition: service_healthy
+
+  frontend:
+    <<: *runtime
+    profiles: [public]
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend.cloud
+      args:
+        VITE_AI_ENABLED: "true"
+        VITE_LANGFUSE_URL: ${VITE_LANGFUSE_URL:-https://jp.cloud.langfuse.com}
+        VITE_REQUEST_PROFILE: "standard"
+        VITE_ENABLE_SERVICE_WARMUP: "false"
+    mem_limit: 128m
+    environment:
+      CLOUD_SITE_ADDRESS: ${CLOUD_SITE_ADDRESS:-${OCI_SITE_ADDRESS:?Set the HTTPS hostname before exposing login}}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - type: bind
+        source: ./caddy/Caddyfile.cloud
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind:
+          create_host_path: true
+          selinux: Z
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+configs:
+  # Match fresh MinIO credentials; never silently retain upstream minioadmin defaults.
+  # Use hex/alphanumeric credential values (generated deployment env), not YAML quotes/newlines.
+  milvus-user-config:
+    # content is copied from an in-memory tar into the container filesystem,
+    # not mounted from a host temp file; validate SELinux labels on the real VM.
+    content: |
+      minio:
+        address: minio
+        port: 9000
+        accessKeyID: "${MINIO_ACCESS_KEY:?Set a fresh MinIO access ID}"
+        secretAccessKey: "${MINIO_SECRET_KEY:?Set a fresh MinIO secret}"
+        useSSL: false
+        bucketName: a-bucket
+
+networks:
+  # Containers need outbound access for external model/embedding APIs. No host-published
+  # data ports; Cloud ingress should allow only SSH (trusted source), TCP 80/443.
+  edu-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
+  etcd_data:
+  minio_data:
+  milvus_data:
+  agent_exports:
+  caddy_data:
+  caddy_config:

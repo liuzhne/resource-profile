@@ -61,24 +61,30 @@ public class SpringAiConfig {
     @Primary
     public OpenAiApi openAiApi(
             LlmMetricsInterceptor llmMetricsInterceptor,
-            ResponseErrorHandler responseErrorHandler) {
+            ResponseErrorHandler responseErrorHandler,
+            LlmRequestPolicy requestPolicy) {
         // 本地 tier：挂 cache_prompt（llama.cpp slot cache）+ metrics 两个拦截器
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10000);
+        factory.setReadTimeout(60000);
         RestClient.Builder restBuilder = RestClient.builder()
-                .requestFactory(new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory()))
+                .requestFactory(new BufferingClientHttpRequestFactory(factory))
                 .requestInterceptor(new LlamaCppCachePromptInterceptor(cachePromptEnabled))
-                .requestInterceptor(llmMetricsInterceptor);
+                // Metrics wraps the whole retry sequence: RestClient's execution iterator is one-shot.
+                .requestInterceptor(llmMetricsInterceptor)
+                .requestInterceptor(requestPolicy);
         return OpenAiApi.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
                 .restClientBuilder(restBuilder)
                 .webClientBuilder(WebClient.builder())
-                .responseErrorHandler(responseErrorHandler)
+                .responseErrorHandler(requestPolicy.enabled() ? new LlmResponseErrorHandler() : responseErrorHandler)
                 .build();
     }
 
     @Bean
     @Primary
-    public OpenAiChatModel openAiChatModel(OpenAiApi openAiApi, RetryTemplate retryTemplate) {
+    public OpenAiChatModel openAiChatModel(OpenAiApi openAiApi, RetryTemplate retryTemplate, LlmRequestPolicy requestPolicy) {
         OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
                 .model(model)
                 .temperature(temperature)
@@ -93,7 +99,8 @@ public class SpringAiConfig {
         return OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(options)
-                .retryTemplate(retryTemplate)
+                // The HTTP policy owns bounded 429 retries/Retry-After. Never multiply them with Spring AI retries.
+                .retryTemplate(requestPolicy.enabled() ? RetryTemplate.builder().maxAttempts(1).build() : retryTemplate)
                 .build();
     }
 

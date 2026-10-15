@@ -15,7 +15,7 @@
       <div class="content">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" />
+            <component :is="Component" :key="route.fullPath" />
           </transition>
         </router-view>
       </div>
@@ -25,12 +25,14 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAppStore } from '@/store/modules/app'
 import Sidebar from './Sidebar.vue'
 import Navbar from './Navbar.vue'
 import TagsView from './TagsView.vue'
 
 const appStore = useAppStore()
+const route = useRoute()
 const isMobile = computed(() => appStore.isMobile)
 </script>
 

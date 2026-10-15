@@ -7,7 +7,12 @@
           共 <b>{{ total.toLocaleString('en-US') }}</b> 名在册学生
         </div>
       </div>
-      <el-button type="primary" class="head-action" :icon="Plus" @click="notReady"
+      <el-button
+        v-if="canWrite"
+        type="primary"
+        class="head-action"
+        :icon="Plus"
+        @click="profileEditor.open()"
         >新增学生</el-button
       >
     </div>
@@ -87,7 +92,9 @@
               </td>
               <td class="col-right">
                 <span class="row-action" @click="viewDetail(row)">查看</span>
-                <span class="row-action muted" @click="notReady">编辑</span>
+                <span v-if="canWrite" class="row-action" @click="profileEditor.open(row)"
+                  >编辑</span
+                >
               </td>
             </tr>
           </tbody>
@@ -109,6 +116,7 @@
         />
       </div>
     </ChartState>
+    <ProfileEditor ref="profileEditor" @saved="refreshAfterSave" />
   </div>
 </template>
 
@@ -117,32 +125,33 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getStudentList } from '@/api/student'
+import { getStudentList, getStudentOptions } from '@/api/student'
+import ProfileEditor from './ProfileEditor.vue'
+import { formatGpa } from './format'
+import { useUserStore } from '@/store/modules/user'
 import { avatarBg, initialOf } from '@/utils/avatar'
 import ChartState from '@/views/dashboard/components/ChartState.vue'
 
-const DEPT_OPTIONS = [
-  '计算机学院',
-  '软件学院',
-  '数学学院',
-  '物理学院',
-  '化学学院',
-  '生命科学学院',
-  '电子工程学院',
-  '心理学院',
-  '医学院',
-  '文学院',
-  '历史学院',
-  '哲学学院',
-  '教育学院',
-  '艺术学院',
-  '体育学院',
-  '法学院',
-  '经济管理学院',
-  '外国语学院',
-  '马克思主义学院'
-]
-const GRADE_OPTIONS = ['2024', '2023', '2022', '2021', '2020']
+const DEPT_OPTIONS = ref([])
+const GRADE_OPTIONS = ref([])
+const profileEditor = ref(null)
+const user = useUserStore()
+const canWrite = computed(
+  () =>
+    user.userRoles.includes('admin') ||
+    (user.userRoles.includes('teacher') &&
+      (!Array.isArray(user.userInfo?.permissions) ||
+        user.userInfo.permissions.includes('student:write')))
+)
+const fetchOptions = async () => {
+  const data = (await getStudentOptions()).data
+  DEPT_OPTIONS.value = data.departments || []
+  GRADE_OPTIONS.value = data.grades || []
+}
+const refreshAfterSave = async () => {
+  currentPage.value = 1
+  await Promise.all([fetchList(), fetchOptions()])
+}
 
 const router = useRouter()
 const loading = ref(false)
@@ -198,15 +207,6 @@ const viewDetail = (row) => {
   router.push(`/student/detail/${row.id}`)
 }
 
-const notReady = () => {
-  ElMessage.info('该功能暂未开放')
-}
-
-const formatGpa = (g) => {
-  const n = Number(g)
-  return Number.isFinite(n) ? n.toFixed(2) : '—'
-}
-
 // 阈值沿用改版前的 3.5 / 2.5，与原型一致
 const gpaColor = (g) => {
   const n = Number(g)
@@ -232,7 +232,10 @@ const statusStyle = (s) =>
     2: { background: 'var(--fill-grey)', color: 'var(--fill-grey-fg)' }
   })[s] ?? { background: 'var(--fill-grey)', color: 'var(--fill-grey-fg)' }
 
-onMounted(fetchList)
+onMounted(() => {
+  fetchList()
+  fetchOptions().catch(() => ElMessage.error('获取学生筛选选项失败'))
+})
 </script>
 
 <style scoped lang="scss">

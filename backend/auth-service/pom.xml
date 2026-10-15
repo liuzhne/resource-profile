@@ -83,6 +83,11 @@
         </dependency>
         <!-- 单测：JUnit 5 + Mockito + AssertJ（纯 Mockito，不起 Spring 上下文） -->
         <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>

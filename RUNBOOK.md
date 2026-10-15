@@ -1,7 +1,166 @@
 # Resource-Profile 运行手册
 
-> 最近更新：2026-10-05
+> 最近更新：2026-10-11
 > 适用范围：当前仓库的开发、测试、排错和发布准备。真实 AI/生产签字状态以 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) R-5/R-6 为准。
+
+## FIELD-CONTRACT-AUDIT-20261007：页面、接口与数据库契约审计（2026-10-07）
+
+状态：以下为修复前审计基线；实现与当前验证状态见FIELD-CONTRACT-FIX-20261007条目。见[完整报告](./docs/audits/FIELD_CONTRACT_AUDIT_2026_10_07.md)、结构化清单（本地测试产物，不入库：`./docs/audits/FIELD_CONTRACT_AUDIT_2026_10_07.json`）、CSV（本地测试产物，不入库：`./docs/audits/FIELD_CONTRACT_AUDIT_2026_10_07.csv`）。22路由视图、7API模块、生产20表220列已覆盖；61项按问题组去重，包括42项契约问题、18项已声明未开放/来源缺口和1项权限UI适配。现有实体映射无缺列；不能将所有61项称为数据库缺列或已发生生产故障。
+
+启动前提：源码与增量SQL可读；生产元数据核对通过既有固定SSH身份和MySQL Pod执行，只读取`information_schema.COLUMNS`。SQL如下，凭据仅由Pod环境传给mysql，不把密码放命令行或输出中：
+
+```sql
+SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = 'edu_portrait'
+ORDER BY TABLE_NAME,ORDINAL_POSITION;
+```
+
+本次已执行：源码字段/调用链及320个证据行锚点核对；生产只读列查询成功；22实体256映射字段、24 Java/1 XML mapper、11 DTO文件14类和20表初始化定义交叉核对。虚构数据重新编译并实际调用当前MCP tool，心理键错配、未知成绩均值和跨学生来源未校验复现；合法ReAct schema对象的页面旧字段投影错配复现。没有真实业务行读取/写入、模型调用、部署或数据迁移。详细可复核结果见报告§4及三个JSON证据文件；离线投影不是浏览器/PDF实测。
+
+快速定位命令（仓库根目录，已执行源码搜索；不会输出凭据文件）：
+
+```bash
+rg -n '政治面貌|phone|email|evaluationScore' frontend/src/views/teacher/detail.vue
+rg -n 'getStudentDetail|成绩|学业' frontend/src/views/student/detail.vue
+rg -n 'deadline_days|goals|metrics|references' frontend/src/views/agent/ReportDetail.vue
+rg -n 'riskLevel|questionnaireType|factorScores|totalCredit' backend/mcp-student-data/src/main/java/com/edu/mcp/student/tool/StudentDataTools.java
+rg -n 'sys_login_log|LoginLog' backend sql
+```
+
+后续通过判据（**待验证**）：角色矩阵在任务JSON/学生结果/PDF响应中均正确裁剪；心理查询保留请求学生归属；详情A→B标签切换读写绑定B；MCP有记录时返回真实授权等级和明确来源；量表/选项计分格式一致、非法/缺必答提交拒绝且不落库；历史答案按提交版本回显；ReAct与legacy在页面/PDF均完整；未出分与0不同、日期清空能落库、统计期间/人数/学院口径与标签一致。禁止用真实生产学生写入来复现，优先用隔离库虚构夹具；需要完整Agent时沿用明确的数据外发授权规则。
+
+排错：先区分缺来源、未接已有API、形态/口径不一致和角色脱敏，再决定改DTO/映射/查询或增加业务能力。无列不代表必须加列（排名可派生、JSON属性不独立建列）；有列也不证明主路径在写入。共享userId问题先确定账号/学生绑定模型，再核对重复及历史归属，不直接加唯一约束、不使用LIMIT 1掩盖混档。当前用户分页、注销及退出弹窗是前轮已修复项，本次不重复计数。
+
+回滚：本次没有运行修改，无镜像/SQL回滚需要；审计结论应保留为历史证据，后续修复按编号补状态及验证结果。新修复上线时另记录镜像/配置/源文件与迁移的保留数据回滚方案，不删除PVC或初始化生产数据库。R-5/R-6验收状态保持原状。
+
+## LOGOUT-DIALOG-CSS-20261007：退出弹窗缺失样式（2026-10-07）
+
+状态：修复及生产前端部署完成，浏览器视觉/交互验证通过。见 [报告及截图](./docs/production-tests/2026-10-07/LOGOUT_DIALOG_REPORT.md)和 聚合证据（本地测试产物，不入库：`./docs/production-tests/2026-10-07/LOGOUT_DIALOG_RESULTS.json`）。最新frontend为 `edu-portrait-kamatera-frontend:prod-fix-20261007-dialog-css`，11:36:19 UTC Ready；下节三个发布批次保留其历史快照。
+
+原因/修复：Navbar显式调用的ElMessageBox/ElMessage没有进入模板自动导入CSS链，teleport弹窗因此缺样式。 [main.js](./frontend/src/main.js) 在自定义样式之前导入两项官方服务 `style/css`，自动包含base/overlay/button/input；无需额外坐标补丁或全库样式。
+
+复现/通过判据：真实账号登录 → 用户菜单“退出登录” → 标题/提示/图标及“取消”“确定”/关闭均可见，白色卡片居中；取消或关闭只收起弹窗并留在登录后的页面，确认经原注销API回登录。应同时截屏并读取可见DOM几何，不能只凭AX出现按钮宣称布局正确。本轮1280×720下修复前left/top=0/0、width1280、透明背景、overlay static；修复后left/top=430/296、420×128、白色背景、overlay fixed，中心误差0。实际取消、关闭、确认均通过，临时账号已退出/标签关闭。
+
+已执行：`cd frontend` 后 `npm test`（93/93）、`npm run build`、`npm run size:check`、`npx eslint src/main.js`，均通过。构建和公开入口所引用CSS须包含 `.el-message-box`、`.el-overlay-message-box`、`.el-message`；本轮新 `element-plus-D-tsrTlC.css` HTTP200/227671字节、SHA256 `18d6502499098839d410b67bee8a3779b9c0ce1ec7a288075b331c7754cfd98b`，JS体积2046.1KiB满足门。旧页面需刷新以加载新CSS引用。使用真实生产浏览器验证布局与操作，既有会话回归一并执行。
+
+发布：仅1个公开文件 `frontend/src/main.js` 的增量包，785字节、SHA256 `c045158fd747dbc166ba0766c6cf472e6cb734b12226cec8ffdf276ea15a109e`。VM留 `source-backups/prod-fix-20261007-dialog-css.tar.gz` 及 `pre-prod-fix-20261007-dialog-css` 镜像，导入containerd后只更新frontend。发布/回滚映像在VM私有 `.local-run/kamatera/prod-fix-20261007-dialog-css-{deployment,rollback}.json`，不改后端、Secret、PVC或初始化资料。
+
+排错：若仍在左上角，先刷新并核对HTML引用的新CSS及200状态/三个选择器；确认所有页面引用共享main入口，检查body teleport和覆盖样式，不直接增加margin掩盖缺文件。回滚（准备完成、未执行）：按实际rollback记录把frontend image恢复 `edu-portrait-kamatera-frontend:pre-prod-fix-20261007-dialog-css`，再等待rollout Ready并核查入口；它恢复上一版用户分页/注销修复，但会重新出现本次样式故障。无需改密、重启后端或删除数据。
+
+
+## PROD-FIX-20261007：四项生产故障修复与复验（2026-10-07）
+
+状态：四项修复代码及三批部署完成；前三项线上复验通过，AI 回归/真实合成请求通过，完整示例 Agent 等待本次具体外发授权。实际结果见 [修复报告](./docs/production-tests/2026-10-07/FIX_REPORT.md)及 FIX_RESULTS.json（本地测试产物，不入库：`./docs/production-tests/2026-10-07/FIX_RESULTS.json`）；下节原冒烟待实施文字保留为历史快照。本次不改变域名/供应商套餐/PVC。
+
+验证必须逐项完成：真实浏览器菜单注销前将该会话 token 仅保存于 VM 私有 0600 文件，注销后同 token GET 业务接口为401且Redis会话为空，最后删除私有文件；旧登录→新登录→旧token注销时，新token仍200，正式注销新token后401。学生真实登录默认本人问卷页面、没有看板错误，直接访问全校面板/师生管理返回允许的入口，后端对应API仍403；教师和管理员的已授权页面不受阻。用户列表生产MySQL total 等于实际匹配行数，size=1的多页不重叠且无password字段。Groq先用无个人内容的合成请求隔离响应格式与429退避，再经用户对具体示例资料/接收方的一次授权验收完整Agent，只触发一次并要求真实工具成功、final JSON校验与风险/计划落库；Cloud新时间窗观测无I/O。
+
+本地新增分页真实 SQL 回归见 [UserPaginationSqlTest](./backend/user-service/src/test/java/com/edu/user/service/impl/UserPaginationSqlTest.java)，前端回归见 [session-access.test.mjs](./frontend/tests/session-access.test.mjs)和 [user-list.test.mjs](./frontend/tests/user-list.test.mjs)。凭据读取既有私有文件，不输出密码/API key/token/业务资料/模型文本/原始日志。使用 JDK21、CI/VM Node22（本地实际 Node26.10 构建通过）；沙盒 ByteBuddy 自附加受限时在测试启动加载已缓存 javaagent，不绕过 Enforcer/JaCoCo。实际 common75/auth27/user11/agent114、前端93、Python50（实际SDK环境）和K3s13项通过，相关覆盖率门通过；frontend build 通过，lint 零错误但有既有 vite.config.js 格式警告。
+
+生产实测：浏览器正式退出后的同 JWT401/Redis 空；同秒新旧 JWT不同且旧注销不影响新会话。学生默认本人问卷无错误、受限 URL重定向；用户真实 MySQL总数3、size1四页[1,1,1,0]且无password，管理页面真实查询3→1→3。公网18/内部21/RAG8全通过、业务53通过0失败1无foreign夹具跳过、17/17 Deployment Ready、8 PVC Bound、HPA当前/目标1且指标有效。测试会话已注销，浏览器临时标签关闭；没有重灌知识或资料。
+
+已执行本地命令：backend 各受影响模块分别 `mvn -o -Daether.syncContext.named.factory=noop -pl <module> -am test`（JDK21，按环境需要启动 javaagent）；frontend `npm test`、`npm run build`、`npm run lint:check`；实际SDK venv 下 `python -m unittest discover -s ai-inference-service/tests`，以及 `python3 scripts/test-k3s-deploy.py`。本轮忽略目录 `.local-run/kamatera/` 留只读 `fix-public-20261007.py`、`fix-runtime-20261007.py` 和会话变更 `fix-business-20261007.py`、`fix-auth-race-20261007.py`、`fix-pagination-20261007.py` 的脱敏审计；VM 对应目录位于 `/opt/resource-profile`。业务/浏览器/Agent复验不要同账号并发。RAG工具 `fix-rag-20261007.py`只做固定合成查询并检查新缓存/1024维非零向量，无upsert。所有临时工具通过已有固定主机身份SSH运行，不能导出私有env、token或原始日志。
+
+AI线上实际参数：严格ReAct schema、输出2400、输入18000字符、reasoning low；Java/Python开启Redis DB0共享冷却60s，请求等待180s/排队2，429至多3次/单次Retry-After最多120s，400不重试；独立任务池并发1/排队2、loop900s/锁1200s、HTTP连接10s/读取60s、Feign读取240s。仅17项非秘密参数同步至39个Secret字段，其他值和凭据保持。模型正文/SQL参数日志关闭，Langfuse内容仍false。新Python镜像单次合成请求200、JSON有效、167tokens、17运行断言通过、调用后共享冷却约59s；Cloud新 `llm.other` 有用量/耗时且I/O空。完整 `fix-agent-20261007.py` 尚未执行，收到本次明确授权后只允许触发一次，工具成功/final校验/落库和新trace全部通过才可勾R-5.2。
+
+排错：400固定状态直接终止，检查schema/最终产物和输入预算，不能将合成成功断言为原400根因；429查看安全状态、共享冷却/Retry-After与Groq组织其他调用，等待预算耗尽明确失败，不升级付费或无限重试。队满返回503并持久化FAILED，进程内排队不提供崩溃后PENDING恢复。deadline900s、连接/读取有限，不能因健康接口正常宣称完整任务成功。
+
+发布路径已执行：公开源码增量包核验SHA → VM原源码/镜像备份 → 原生构建唯一tag → 新旧镜像同时导入containerd → 受影响Deployment更新及Ready。三批为 `prod-fix-20261007-base`（frontend/auth/user）、`prod-fix-20261007-ai`（agent/Python/knowledge MCP）、`prod-fix-20261007-user-ui`（frontend）。VM私有各 `<release>-deployment.json`、`<release>-rollback.json`记录真实镜像；源码备份 `.local-run/kamatera/source-backups/<release>.tar.gz`，构建日志留VM，不对外复制。
+
+回滚（准备完成，**未实际执行**）：按对应记录把 Deployment image设为 `pre-<release>` 并等待Ready；frontend用户页回滚至 `pre-prod-fix-20261007-user-ui`仍保留首批注销/角色修复。AI仅回滚镜像时可保留新非秘密参数和Secret引用；若还需恢复完整参数，先将三个Deployment环境引用恢复VM私有 `source-backups/prod-fix-20261007-ai-env-references-before.json`，再恢复原环境文件 `source-backups/prod-fix-20261007-ai.env`及 `source-backups/prod-fix-20261007-ai-secret.json`、使用旧镜像并重建/等待Ready。不要先删新Secret字段而仍保留新引用，否则Pod会缺配置；先确认其间没有新的合法配置修改，避免覆盖。备份含秘密仅留VM0600，禁止下载/打印。恢复后重新查健康和相关权限，不使用latest restart、删PVC、重跑种子/RAG或关闭权限掩盖失败。
+
+## PROD-SMOKE-20261007：Kamatera 当前生产冒烟（2026-10-07）
+
+[实测报告与复现步骤](./docs/production-tests/2026-10-07/REPORT.md) / 脱敏聚合证据（本地测试产物，不入库：`./docs/production-tests/2026-10-07/RESULTS.json`）：公网18/18、内部21/21、合成RAG8/8及本次新Langfuse记录通过；三角色API共54项，52通过、1失败（user分页total=0）、1跳过（无foreign学生档案夹具）。浏览器教师面板/学生问卷通过，学生默认dashboard失败；UI退出后旧令牌仍200，正式auth/logout后401；一次新明确授权Agent约20.3秒FAILED，当前窗口有Groq json_validate_failed/400和rate_limit_exceeded/429。完整冒烟未通过。
+
+前提：沿用固定主机身份SSH、已有HTTPS域名、0600私有配置/示例密码，不输出令牌、数据或原始日志。认证测试会替换同账号Redis白名单，不与浏览器或Agent并发使用同一角色。完整模型调用只在新一轮具体示例数据/接收方授权后执行；现有单次生成脚本会拒绝重触发。本轮所有测试令牌均已正式注销，临时浏览器标签已关闭，原登录页保留。未重建镜像、改生产配置或改资源。
+
+待实施修复及通过判据：
+
+- UI注销接线：[Navbar](./frontend/src/components/Layout/Navbar.vue)等待[服务端logout](./frontend/src/api/auth.js)，再清本地状态；401的本地清理独立。验证浏览器回登录页且同一旧令牌业务401；注销失败有明确反馈。**修复待实施/待验证**。
+- 学生落地：[路由](./frontend/src/router/index.js)/[登录action](./frontend/src/store/modules/user.js)按角色进入本人入口；学生登录不再加载全校接口，手工受限URL仍拒绝，教师/admin正常。**待实施/待验证**；不可开放全校数据规避403。
+- user分页：[UserServiceImpl](./backend/user-service/src/main/java/com/edu/user/service/impl/UserServiceImpl.java)对应模块注册分页插件；验证非空列表total正确、每页不超size、两页无重复及密码仍无内容。本轮records=3/total=0，密码计数均0。**待实施/待验证**。
+- Agent：先以无个人资料固定请求隔离JSON400，核对实测额度/队列/有界退避；新授权测试须工具成功、合法final_answer与最终产物落库。健康/提交200/失败trace均不算成功。**待实施/待验证**。
+
+排错时同时读取HTTP和业务code；/auth/userInfo匿名为HTTP200/code500且data为空，业务网关匿名为HTTP401，内部/Caddy为HTTP403。用当前来源验证新RAG查询，不能用旧缓存/fallback/零向量当绿。跨学生档案测试须不同所有人的受控夹具；本轮全部4档案同一owner，因此跳过。真实质量、负载/SSE/导出、异地完整恢复、告警和历史凭据轮换未验，R-5.2/R-6不勾选。
+
+本轮没有部署变更，无生产回滚动作。后续修复发布前留受影响组件的已知镜像/配置；失败回到旧版本并保留PVC，禁止删卷、降低授权或无限模型重试。其他代码/配置的历史回滚按其原记录。
+
+## LANGFUSE-OTLP-20261007：Cloud v4 接入验证（2026-10-07）
+
+当前状态取代下一节的账户准备阶段：本地 `docker/.env.kamatera` 已填日本区三项；实际 GET projects 200，OTLP HTTP/JSON v4 三条合成 span 接受200、v2查询验证父子关系及模型/用量。没有发送 input/output 或师生数据。私有聚合证据 `.local-run/kamatera/langfuse-otlp-verification-20261007.json` 为0600。原VM已安全同步三个供应商配置，九项内部凭据相等、未重启服务；旧配置仅保存在VM `.local-run/kamatera/config-backups/env.pre-langfuse-20261007`（0600）。
+
+迁移代码已完成：[Java客户端](./backend/agent-service/src/main/java/com/edu/agent/config/LangfuseClient.java) 改 OTLP `/api/public/otel/v1/traces`、Basic、`x-langfuse-ingestion-version:4`，使用标准 ID/纳秒时间及显式映射；检查HTTP/partialSuccess，限时且fail-soft。[Python](./ai-inference-service/app/services/llm_client.py) 迁移新SDK并在 [应用lifespan](./ai-inference-service/app/main.py) 退出时 shutdown。`LANGFUSE_CAPTURE_CONTENT=false` 由Cloud/K3s映射，默认关闭I/O与自由文本元数据；合成协议探针不能代替应用SDK验收。
+
+已通过：Java9项HTTP合约及相关调用方共20项，Python41项（实际v4 SDK内存exporter）与pip check，K3s13项及Cloud安全打包14项。两个受影响镜像重建导入、16私有服务Ready及Milvus初始化通过。三库合成RAG首次真实写入/检索、双MCP认证/list/call、Python真实生成均通过。Cloud v2查询实际 `llm.audit`、`llm.chat`、`agent.loop`，模型/usage/timing有效，全部I/O为空；Java仍为并列trace，Agent汇总不声明模型token。用户明确授权一次student1公开示例资料向Groq传输后，仅触发一次Agent：约20秒FAILED，ReAct第二轮终止TOOL_ERROR；服务器只读脱敏诊断出现HTTP400 `json_validate_failed` 和HTTP429 `rate_limit_exceeded`，不是Langfuse接入失败，也没有MCP调用失败证据。未自动重触发或调整供应商付费配置。R-5.1可观测验收通过，完整生成及R-5.2~R-5.4/R-6仍未通过。证据：本地 `.local-run/kamatera/langfuse-application-verification-20261007.json`；VM私有 `agent-diagnosis-20261007.json` 和 `k3s-ai-acceptance-20261007-agent.json`。
+
+公网阶段已通过：`publish`创建frontend并受信HTTPS健康200，外部 `/login`200、匿名业务401、内部路径403；TLSv1.3，证书有效至2027-01-05 UTC。外部仅22/80/443可达，已测试的Kubernetes、数据库及服务端口关闭，证据 `.local-run/kamatera/public-verification-20261007.json`；三角色业务20项再次通过。来源严格核验通过：5表所有INSERT业务值、公开JSON规则迁移、其他字段/default、ID序列和行数一致，两答卷/题目表为空；Milvus四库全部内容与固定合成文档相等、1024维有限非零，success为空。证明当前内容一致，不声明历史从未导入其他数据。此前自动审批两次拒绝Agent外传，取得用户对具体示例资料及Groq目的地的明确授权后才执行一次。来源聚合证据为VM私有 `seed-lineage-proof-20261007.json`、`milvus-synthetic-proof-20261007.json`。
+
+验收脚本排错：Java Long经Jackson序列化为字符串，脚本已按契约校准student/任务ID。重复测试随机doc ID与固定查询的1小时Redis缓存冲突，缓存返回上轮ID不能证明新写入失败；临时验收工具以固定测试doc、独立Milvus内容/向量核验及新查询验证真实检索，不清库、不删除未知资料。这不改变RAG运行架构，不能据此声明生产写入即时缓存失效。Agent排错须先分别复现供应商JSON约束与额度错误；`probe-models`基础成功不证明多轮JSON_OBJECT成功。后续生成修复和再次示例任务均待单独验证，不将TOOL_ERROR直接当作MCP故障。
+
+回滚：关闭Langfuse两项key并重启受影响工作负载，保留模型凭据和PVC；恢复备份仅限外部服务字段，不盲目覆盖已有内部密钥。旧镜像保留为 `pre-langfuse-20261007` 本机回滚tag；Cloud legacy停用后不能靠回退v2恢复有效上报。上线失败使用 `stop-public`，保留所有私有数据卷；该操作不终止Kamatera计费。
+
+## LANGFUSE-CLOUD-SETUP-20261007：Langfuse配置与兼容性（2026-10-07）
+
+账户准备：推荐Langfuse Cloud Hobby、日本区域，建立专用项目，在Project Settings的API Keys生成一对Public/Secret Key。当前私有 `docker/.env.kamatera` 填 `LANGFUSE_HOST=https://jp.cloud.langfuse.com`、`LANGFUSE_PUBLIC_KEY` 与 `LANGFUSE_SECRET_KEY`；实际区域不同则使用该区域站点根URL。HOST不要包含 `/api/public/ingestion`，不要将Groq/Cloudflare key复用为Langfuse凭据，也不要给key加Bearer/Basic前缀。Secret Key私下填写；当前代码使用HOST，没有BASE_URL映射。
+
+兼容性硬事实：[Java客户端](./backend/agent-service/src/main/java/com/edu/agent/config/LangfuseClient.java)及 [Python v2 SDK](./ai-inference-service/requirements.txt)使用旧ingestion；[官方说明](https://langfuse.com/docs/api-and-data-platform/features/public-api)Cloud于2026-11-16停用trace/observation旧接口。账户准备不等于长期接入完成；建议正式启用前迁移Java OTLP及Python新SDK/BASE_URL映射，保留异步、fail-soft和无凭据关闭。不能仅升级requirements版本而保留旧装饰器接口。
+
+验收顺序（待执行）：正确区域API凭据认证 → 迁移代码的离线契约/业务回归 → 重建受影响镜像 → 经已验证SSH同步私有配置并部署AI服务 → 触发合成LLM/Agent任务 → Langfuse实际查到生成、模型/token/耗时及Agent记录。需检查SDK批次错误和flush，不能用“trace已启用”日志代替云端记录；当前Java记录并列而非完整父子trace，RAG/embedding/MCP没有独立覆盖。首次只用合成文本，真实资料先处理prompt/output/工具汇总脱敏。
+
+验证状态：仅本地代码/编排及官方文档核查通过；本次未获取Langfuse项目凭据，不做真实云认证、trace或迁移测试。回滚迁移时只恢复上版可观测实现并关闭Langfuse两项key，保留LLM/embedding和数据卷；在Cloud旧接口停用后不把回到v2当作有效trace恢复方案。完整步骤与公开参数见 [Kamatera手册 §3.2](./docs/deployment/KAMATERA_DEPLOYMENT.md#32-langfuse-cloud配置langfuse-cloud-setup-20261007)。
+
+## GROQ-PROBE-UA-20261007：剩余配置核对与供应商探针修正（2026-10-07）
+
+实查：本地模型 key 已配置且真实认证通过，Groq 返回 JSON 对象、Cloudflare 返回中文合成输入的有限非零1024维向量；VM 的 `LLM_API_KEY`/`EMBEDDING_API_KEY` 仍为占位值，因此 VM 完整配置门拒绝。非密钥参数、Account ID 和域名已齐；12项私有 Deployment Ready，data HPA 当前1副本、指标正常且上限2。frontend/AI/MCP尚未部署，未监听公网80/443。
+
+必需剩余输入仅为安全同步现有两个模型 key 到 VM，无须重新注册模型账户或再次索要密钥；同步前核对目标身份和既有内部凭据，值不进入聊天/日志。其余为执行步骤：真实 VM probe、`apply-private`、`init-rag`、导入合成演示知识与检索/双MCP/Agent验证、`publish` 和受信HTTPS验收。`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST` 当前缺失，属于后续R-5 trace/R-6完整验收要求，不是基础网站启动硬门；不新增Nacos、GPU、reranker或收费服务器。
+
+同次入口核对：域名 A 解析为45.130.165.168；firewalld默认public、服务仅cockpit/dhcpv6-client/ssh、未声明http/https且无额外端口。发布前须准备public区HTTP/HTTPS服务规则并外部实测80/443和证书；不能只凭主机INPUT列表推断K3s hostPort转发结果。本次未改防火墙。Cloudflare key字段只填原始token，现有EmbeddingClient及部署探针会自动加`Authorization: Bearer`；`-H`只是curl参数，不属于env配置。
+
+默认 urllib 客户端在当前 Groq 样本被边缘错误1010/403拦截。修正 [provider_request](./scripts/k3s-deploy.py) 发送明确 User-Agent 后，修正后的本地真实探针通过；`/private/tmp/resource-profile-oci-venv/bin/python scripts/test-k3s-deploy.py` 13项通过。VM脚本已校验并同步，SHA-256 `420f546247d382bdb0cbb807f3b83a55cd70d10433012162d2c33b88b4be3379`；未同步模型 key、修改Pod/PVC或发布公网。旧源码包仍是其制作时快照，后续打包须包含本次脚本修正。
+
+复测命令：`python3 scripts/k3s-deploy.py probe-models --env-file docker/.env.kamatera`；仅合成文本、输出通用成功状态，不暴露模型回复或凭据。若401/403持续，分别核查供应商认证、组织/模型权限及客户端请求特征；不因这次边缘拦截假设所有403都相同。回滚运维脚本可使用VM私有 `.local-run/kamatera/deploy-scripts/k3s-deploy.pre-UA-20261007.py`，保留真实凭据、TLS和数据卷；原默认标识可能再次触发已复现拦截。
+
+## GROQ-CLOUDFLARE-DEPLOY-20261006：免费模型配置准备（2026-10-06）
+
+聊天沿用 Groq GPT-OSS-120B，embedding 采用 Cloudflare BGE-M3；完整公共参数见 [Kamatera 手册 §3.1](./docs/deployment/KAMATERA_DEPLOYMENT.md#31-免费模型参数groq-cloudflare-deploy-20261006)。在忽略的 `docker/.env.kamatera`（0600）私下填写 Groq key、Cloudflare Account ID 与 Workers AI token，不将值发送到聊天或写入跟踪文件。Cloudflare 使用独立 `EMBEDDING_API_KEY`，不能留空后误复用 Groq key。
+
+本次只核查官方额度、现有代码配置和本地非秘密参数；未调用真实供应商、导入知识或上线公网。缺 key/Account ID 时配置门应拒绝；补齐后先运行 `python3 scripts/k3s-deploy.py check`，以已验证 SSH 上传私有 env，远端执行 `probe-models`、`apply-private`、`init-rag` 和合成知识写入/检索验收，再按既有 `publish` 门发布。通过判据为真实聊天内容有效、向量为非零有限 1024 维、中文写入/检索成功、双 MCP/AgentLoop/鉴权通过；健康探针或 embedding 失败回退零向量不算通过。上述真实验收均待验证，R-5/R-6 不变。
+
+同日实际操作：用户确认组合后，公开参数已写入本地 `docker/.env.kamatera` 和 VM `/opt/resource-profile/docker/.env.kamatera`；两侧均复读校验 0600、所有 API Key/内部凭据保持不变，未重启服务。URL 内 `change-me-account-id` 仍待真实 Account ID。以合成凭据运行 `validate_env` 并解析 K3s Secret 环境映射，Java agent 与两个 Python 服务的生成/向量配置通过；真实占位配置门仍正确拒绝。Java JSON_OBJECT/low 有效，Python 未实现这两项，仍依靠提示词/解析；清单固定 temperature 0.3、timeout 120 秒，私有文件记录相同默认值。未进行模型请求或重建镜像，无新增运行时代码变更。
+
+2026-10-07 / GROQ-CLOUDFLARE-DEPLOY-20261006 补充：真实 Account ID 已写入两侧 embedding URL，逐项对比证明其他字段未变。本地 `python3 scripts/k3s-deploy.py check --env-file docker/.env.kamatera` 实际通过（静态解析16私有服务及有界HPA，不调用模型）；本地两个模型 key 已设置，VM 两项仍为占位值。真实 API 认证、向量及业务验收待完成。回滚只恢复 embedding URL 到上一有效配置；此次未修改服务/PVC、无须重启现有业务。手册模板继续使用占位 ID，真实账号标识保留于私有配置。
+
+排错：401/403 核查对应供应商的 key/权限/Account ID；429 核查组织共享额度及有界退避，不擅自升级付费。旧知识如果来自其他 embedding 模型，应单独重嵌入，不能因同为 1024 维混用。回滚恢复上一版有效私有模型参数并重启受影响 AI/MCP 工作负载；没有上一版有效配置时保留现有私网业务阶段，不启公网。保留 PVC，不在模型接入失败时删除数据。
+
+## KAMATERA-DEPLOY-20261006 / K3S-HPA-DEPLOY-20261006：Kamatera 单节点部署（2026-10-06）
+
+完整操作见 [Kamatera 部署手册](./docs/deployment/KAMATERA_DEPLOYMENT.md) 与 [K3s 运行说明](./k8s/README.md)。用户已完成注册、US$10 押金与 VM 创建：新加坡 `resource-profile-sg`，`45.130.165.168`，Rocky Linux 9.8，Type A 4 核 / 24 GB / 100 GB。控制台月付 US$92、1000 GB 流量、超额 US$0.01/GB，无每日备份/托管/额外磁盘；30 天试用不是长期免费，精确到期日期仍需账单核对，关机不等于终止计费。
+
+SSH 专用私钥位于被忽略的 `.local-run/kamatera/ssh/id_ed25519`（0600），只上传公钥。先收集候选 host key，再通过已授权 SSH 仅写公开 nonce；控制台截图同时显示该 nonce 与完整本机 fingerprint 后，才固定到专用 known_hosts 并传源码/新秘密。不得用盲目 ssh-keyscan、StrictHostKeyChecking=no 或上传私钥绕过。Rocky 控制台写入需 O_NOCTTY，普通 shell 重定向到 /dev/tty1 可能 EIO。后续 `/usr/bin/ssh -F .local-run/kamatera/ssh/client.conf kamatera-resource-profile` 使用已固定身份；不输出密码、节点 token 或 kubeconfig。
+
+正式运行路径已按用户选择改为 [`scripts/k3s-deploy.py`](./scripts/k3s-deploy.py)，Docker 只构建镜像，再导入 K3s 的 containerd k8s.io namespace。备用 [`scripts/kamatera-deploy.py`](./scripts/kamatera-deploy.py)/Compose 不与 K3s 同时启动。K3s 固定官方 stable 版本 v1.36.5+k3s1，下载脚本先保存审查并由安装器核对二进制 SHA-256；保持 SELinux Enforcing，启用官方 k3s-selinux 与 Secret 静态加密，禁用 Traefik/ServiceLB。firewalld 信任默认 Pod 10.42.0.0/16、Service 10.43.0.0/16，公网不得开放 6443/8472/10250；控制面可在节点地址监听以支持集群内部 Service。
+
+K3s 清单通过 Secret 引用真实环境变量，Milvus MinIO 配置也是 Secret 文件0600；私有生成 JSON 只写忽略路径0600。SQL初始化目录、静态字体只读 hostPath 用精确源路径 semanage fcontext/restorecon 持久标记 container_file_t:s0；K3s 不会执行 Compose :Z。权限错误查标签、k3s/containerd 配置与 AVC，不用 setenforce0、privileged 或删除卷规避。数据使用8个local-path PVC，共申请46GiB，失败停前端保留卷。
+
+命令和阶段：独立构建/导入镜像 → check/render → apply-private → bootstrap-seeds → init-rag → 合成知识导入及真实检索 → probe-models → publish → 登录、鉴权/注销、SSE、中文PDF、HPA/备份恢复验收。域名和模型 API 尚未填写时，仅完成不依赖这些输入的集群/镜像/基础设施准备；不使用假 API key 绕过全栈门。发布要求真实 bcrypt 改密、DNS到VM、实际生成与 embedding 维度、私有 Pod Ready、受信任HTTPS。init-rag 建空集合不等于真实RAG。首轮 data-service HPA requests100m/目标70%/1–2副本、缩容窗口300秒；验证 metrics.k8s.io 和实际CPU负载→2副本→回缩1，固定副本测试不能代替HPA验收。其余单例采用Recreate，升级会中断。
+
+已审查上传的构建源码包 `.local-run/kamatera/source-rocky-reviewed.tar.gz`：348文件、298,604字节、SHA-256 `9c1bab75cfba2b5f4a07e9de5b991f24790bb4198e01196fec473553f4dfd285`，0600，无Git历史/秘密/业务数据。与前次独立构建包仅Compose/部署工具不同，其余346文件一致。新完整包 `.local-run/kamatera/source-k3s-reviewed.tar.gz` 含350文件、307,631字节，SHA-256 `90cdfcd9675ed4d5ba4fd8883ba197c660977020e59dade53c735bebe1dc641c`；只增加K3s清单/脚本并更新cloud打包白名单，347个旧文件一致。完整包已通过固定身份SSH上传并在VM核对摘要后解压。私有env、seed与官方静态TTF/OFL分别传输，历史.env.audit绝不读取/上传。初始仅合成数据，不迁移真实师生或心理记录。
+
+知识灌库404修复：[`app.main:create_app`](./ai-inference-service/app/main.py) 必须注册 rag_upsert.router。Python最小环境32项通过，实际工厂覆盖正常mock写入、401/503/422；可选SDK替身不是实际MCP或模型证据。真实验收由私网新管理token调用upsert并检索，token通过私有stdin/配置，不能置于命令行/日志。
+
+已执行：注册/押金/控制台报价/VM创建、主机跨通道身份验证、安全源码包传输和一致性、真实Rocky Enforcing、Docker29.8.2/Compose5.6.0、Docker SELinux与hello-world、firewalld启用。此前本地Python32项/部署14项、独立JDK21后端与前端构建、Caddy校验、字体中文PDF及PNG检查通过；K3s13项离线边界测试通过。Linux 11应用镜像构建并导入K3s成功，Node Ready、CoreDNS/metrics-server/local-path就绪、Secret加密与0600 kubeconfig、五基础设施PVC及默认账号bcrypt改密通过；12项私有服务Ready，真实三角色登录/权限/退出撤销20项通过，HPA受控CPU负载自动1→2通过、自动回缩1已验。MySQL合成快照已在新建隔离数据库还原，比对20表行数及种子hash通过，备份0600，测试库清理；完整应用/向量/跨主机恢复未验。待验证：完整AI/RAG/MCP、HTTPS、完整应用/向量备份恢复。R-5/R-6与历史凭据轮换B-2状态不变。
+
+## OCI-DEPLOY-20261006：OCI 注册与完整内网栈（2026-10-06，平台方案已被 Kamatera 取代）
+
+详细操作及回滚见 [OCI 部署手册](./docs/deployment/OCI_DEPLOYMENT.md)。账号所有者在 Safari 官方注册页面完成个人信息、邮箱验证、密码设置、付款验证和条款确认；之后核对 Home Region、实际 A1 免费额度、可用容量及费用边界。域名、模型接口和新建/迁移数据方式尚未确定时，不执行公网发布。当前本地已经生成被忽略的 `docker/.env.oci` 与 `.local-run/oci/seed-credentials.json`（0600）；禁止打印、提交或使用历史 `.env.audit` 凭据。
+
+在满足容量/费用条件的 Linux OCI 主机上：填私有配置 → `python3 scripts/oci-deploy.py check` → `build` → `start-private` → 使用安装了 `scripts/requirements-oci.txt` 的 Python 执行 `bootstrap-seeds` → `init-rag` → 私网业务与模型验证 → `publish` → 受信任 HTTPS、登录/角色、SSE、双 MCP 和真实 RAG 验收。完整命令、DNS、模型 URL/维度与私有传输前提见部署手册；启动至少 20 GiB，不能直接套用纯免费 12 GB VM。
+
+通过判据：17 个容器稳定（发布前 16 个）、只有 frontend 发布 80/443、默认账号密码全部替换、HTTPS 无警告、未登录业务 401/内部路径 403、真实 AI 输出和检索/持久化可核验、备份恢复演练通过。`init-rag` 创建空集合、Docker healthy 或 mock 测试不能代替真实模型/RAG 验收。失败先停 frontend、保留卷；回滚先前已验证版本，禁止 `down -v`。
+
+已执行：本地 Python 30 项、部署安全 7 项、合成配置 Compose 解析及端口/profile/DNS/17.25 GiB 内存断言、私有文件 0600/Git 忽略检查、前端构建、Caddy validate/adapt。待验证：完整 ARM 镜像构建、容器启动、Oracle 账号/VM、实际证书、模型/embedding、知识灌库、备份恢复、R-5/R-6；本机 Docker 启动未成功。此次未迁移业务数据、未创建收费资源、未完成历史凭据轮换。
 
 ## 1. 前置条件
 
@@ -791,6 +950,8 @@ GATEWAY=https://<domain>/api ADMIN_USER=admin ADMIN_PASS='<password>' bash scrip
 
 | 日期/标识 | 变更 | 验证状态 |
 |---|---|---|
+| 2026-10-06 / K3S-HPA-DEPLOY-20261006 | K3s/Secret/PVC、分阶段业务与data HPA | Node/metrics、12私有服务、11镜像、默认改密/三角色鉴权20项、MySQL隔离还原20表通过；HPA1→2已验，自动回缩1已验；完整AI/TLS待模型配置 |
+| 2026-10-06 / KAMATERA-DEPLOY-20261006 | Kamatera 注册、押金/控制台报价核对、SSH/部署入口、Rocky SELinux 适配及知识导入 404 排错 | 押金到账、US$92 配置、源码包独立构建/一致性、Python 32 项和工具 14 项通过；服务器创建/SSH/Rocky/Docker主机验证通过；真实Pod/模型运行待验证 |
 | 2026-09-01 / DOC-BASELINE | 按当前脚本、CI、compose 和执行计划初始化启动/测试/排错/发布手册 | 文档链接与命令静态核对；未执行真实服务和生产发布 |
 | 2026-09-01 / RENDER-DEPLOY-20260901 | 增加 Render MCP/Feign 冷启动与 MySQL 协议排错、验证和回滚步骤 | 本地后端 125 例、前端构建通过；修复后云端复验待完成 |
 | 2026-09-01 / AIVEN-RENDER-20260901 | 增加 Aiven 初始化、Render 凭据注入、无 LLM 判据与回滚步骤 | 本地后端 177 例、前端构建、YAML 语法通过；云端待登录后验证 |
@@ -934,3 +1095,476 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：若deferred启动仍报
   自动配置清单完整性/无重复断言通过。忽略的本地 docker/.env.audit 副本已恢复，不参与 Git 跟踪。
   真实 Docker 全栈、GPU、HTTP/浏览器角色及生产验收未执行；原 heuristic 分支的 JDK 17 后端 249 例与
   前端验证保留为历史证据，平台凭证轮换仍待部署方执行。
+
+2026-10-06 / K3S-HPA-DEPLOY-20261006 实机验收补充：K3s Node/metrics与12私有服务Ready；11镜像原生构建导入、三角色业务鉴权20项通过，data HPA在受控CPU负载下自动1→2→1，保持300秒缩容稳定窗口、无手工scale。MySQL合成快照在隔离库还原比对20表通过；备份留在VM，本地导出因自动审批要求明确数据导出授权而未执行。临时域名已解析配置，完整模型/embedding配置缺失，AI/MCP/RAG与HTTPS公网发布仍待验证，R-5/R-6不变。详见k8s/README.md与Kamatera手册；回滚停frontend并保留PVC。
+
+## SSH-PASSWORD-STATE-20261006：root密码状态核对（2026-10-06）
+
+继续使用部署专用SSH公钥连接；只读passwd -S root可核对密码状态，sshd -T -C按当前root/客户端条件核对有效认证选项，不读取/etc/shadow或输出hash。本次实查PS（已设置密码），PasswordAuthentication/PubkeyAuthentication/PermitRootLogin=yes、PermitEmptyPasswords=no；没有原密码明文可查，设置来源未知。客户端配置禁止密码认证只限定部署连接方式，不改变服务器sshd。若账号所有者需要密码，可在已登录的SSH终端自行执行passwd私下设置；这是后续可选操作，本次未执行，也未修改sshd。无需重启应用或PVC。详见[Kamatera手册](./docs/deployment/KAMATERA_DEPLOYMENT.md)。
+
+2026-10-07 / LANGFUSE-OTLP-20261007 最终运行快照：17/17 Deployment Ready，frontend Ready；data HPA当前/目标均1、上限2，指标可用且ScalingActive=true。只读快照未施加新负载，不替代既有1→2→1扩缩容证据。
+
+2026-10-07 / LANGFUSE-OTLP-20261007 私网最终复验：修正版 `--stage private-ai` 全部8项通过，Agent触发次数0；三库固定合成文档持久化、1024维有效向量、非fallback检索、双MCP鉴权/工具及Python生成有效。既有upsert按固定doc前缀替换同批旧合成chunk，行数每库由2变1；此前全部行已核验为相同公开合成文本，没有删未知资料或清Redis。VM私有结果 `k3s-ai-acceptance-20261007-private-ai.json` 为0600；该阶段不代表完整Agent通过。
+
+## LOGIN-CREDENTIAL-UI-20261007：生产登录页移除默认凭据（2026-10-07）
+
+修改[登录组件](./frontend/src/views/login/index.vue)：删除默认账号提示与样式，账号/密码初始为空。本次不做数据库密码重置，生产种子密码此前已随机轮换且默认密码拒绝验收通过；本次不重新打印或测试密码。
+
+实际验证已通过：`npm run build`、`npm run size:check`、`./node_modules/.bin/eslint src/views/login/index.vue`（零错误/警告）；源码和login构建产物无默认账号提示/类，表单两个初始字段为空。经固定SSH上传唯一组件并核对SHA-256 `58b27a4683b61416a46af7a17a930f8f1059b6159ffe5695b6f6bc6f4da97102`；备份VM旧源码 `.local-run/kamatera/source-backups/login.pre-login-ui-20261007.vue` 与镜像 `edu-portrait-kamatera-frontend:pre-login-ui-20261007`，只重建frontend并导入K3s，更新Deployment至 `edu-portrait-kamatera-frontend:login-ui-20261007`，rollout Ready。浏览器刷新实际确认默认账号提示不存在、账号/密码输入为空；受信HTTPS/login200、healthz200及匿名业务401通过。没有提交登录、读取真实密码或触发Agent。私有证据 `.local-run/kamatera/login-ui-verification-20261007.json` 与截图 `login-ui-20261007.jpg`，均0600/Git忽略。浏览器密码管理器的正常自填不属于应用硬编码，不应禁用。
+
+回滚：在VM把 `edu-portrait-kamatera-frontend:pre-login-ui-20261007` 用 `docker save` 导入 `k3s ctr -n k8s.io images import -`，执行 `k3s kubectl -n educare set image deployment/frontend frontend=edu-portrait-kamatera-frontend:pre-login-ui-20261007`，再 `rollout status deployment/frontend --timeout=180s`；保留Caddy证书/PVC和后端。重新恢复修复时set image至 `login-ui-20261007`；旧版本会恢复被删除提示，仅紧急排查时使用。UI删除不替代历史凭据轮换B-2或完整AI/生产验收。
+
+## FIELD-CONTRACT-FIX-20261007：61组契约修复（2026-10-07）
+
+实现与逐项映射见[修复记录](./docs/audits/FIELD_CONTRACT_FIX_2026_10_07.md)。启动前提：JDK21、完整基础表、MySQL/Redis、JWT/内部凭证；
+真实SMS/SSO暂无配置，入口置灰。Maven验证须先将JAVA_HOME/PATH切换到JDK21；默认JDK25会被版本门拒绝。首次登录新额外示例学生需管理员开通并设置新密码；现有真实口令不迁移。
+
+验证命令（仓库根，凭据不进入命令行/输出）：
+```bash
+mvn -o -Daether.syncContext.named.factory=noop -f backend/pom.xml verify
+npm --prefix frontend test
+npm --prefix frontend run build
+npm --prefix frontend run size:check
+python3 scripts/apply-sql-migrations.py --transport k3s
+```
+
+执行结果：独立MySQL新库初始化、旧库升级、二次迁移、业务记录数量保留、有效旧心理角色绑定转换、后来权限编辑保留已通过。
+最终后端verify为472项、零失败/错误/跳过且覆盖率门通过；前端113项回归与角色权限契约、生产构建/体积门/lint（0/0）通过；部署和迁移启动门38项通过。生产三份迁移完成，26表274列/297实体字段及新增类型/nullable、JDBC投影通过，业务记录数保留。10个变更应用已发布 `prod-contract-20261007-v2`，全栈17个Deployment与17个Pod Ready。
+
+实际生产只读冒烟79项：76通过、0失败、2存量绑定阻塞、1无开放问卷跳过；覆盖未完整。退出与刷新后旧access/refresh拒绝、用户分页total及权限/字段检查通过。`student_questionnaire_self`、`student_history_self` 因共享账号返回业务码409；不要按失败数据随意重绑。模板脱敏检查须在授权人员创建合法开放问卷后复验。浏览器核对外部认证置灰、默认账号提示消失、说明弹窗正确显示。业务写入/模型请求/Agent执行均0；脱敏验收JSON（本地测试产物，不入库：`./docs/audits/FIELD_CONTRACT_PRODUCTION_VALIDATION_2026_10_07.json`）保留各项结果。
+
+已有库发布：先核对运行Pod镜像配置与文件系统层并保留准确回滚镜像；确认无在途Agent/PDF后短暂停用网关，保留压缩数据库备份。执行MySQL就绪→20基础表及220旧字段检查→版本化增量迁移→274字段类型/nullable检查→后端/前端镜像→恢复网关。任一迁移失败恢复旧网关并停止新应用发布。
+首次全量初始化只用于空库；本地/Compose/K3s失败均须停止后续启动。不要重放01种子、删除PVC、使用down -v或重置旧口令。
+部署参数VITE_LANGFUSE_URL在构建时注入，不在Pod运行时覆盖Vite资源；检查image label与静态链接，默认日本Cloud控制台新窗口。
+
+通过判据：所有模块测试及既有覆盖率门通过；非法答案/配置拒绝且无部分落库；历史改题/停用仍按快照回显；无快照明确提示；
+姓名/学号路径与返回studentId一致；未知课程成绩不改变已有平均分；角色权限变化撤销旧会话，登录并发不能重签旧权限；
+账号删除/档案新增并发不能删除已绑定账号；teacher看不到心理原分JSON/PDF；学生不入全校面板；统计日期/人口与标签一致。
+
+排错：多student_info绑定同userId返回409，管理员核实身份后使用有效独立学生账号重绑，禁止LIMIT1或批量猜测迁移；
+既有active mental_teacher与停用/删除psychologist冲突时迁移失败，请先明确角色保留决策；SHA-256变化的已执行迁移不能改旧文件，应增加新版本。
+选项配置非法返回400，不能把不完整选择题下发；历史无快照无法推断原题干；新增画像无业务记录显示为空。
+申请入口只登记人工流程，管理员通过既有校内渠道核验后自行开通/重置密码，再填写处置说明。peer IP限流在未经可信代理配置时可能共享网关来源，禁止信任任意XFF。
+
+发布制品：本机已验收Boot JAR按zip条目SHA-256去重传输，服务端重建后逐条验证字节与BOOT-INF/lib的STORED模式；整个zip文件SHA可因压缩元数据重建变化，不声称二进制文件完全相同。继承验证相同配置/层的原运行镜像，沿用Caddy、TLS、env引用、字体和PVC。新镜像Ready须观察新generation、updated/available/ready副本与Pod运行配置/层，而非只看旧副本数量。服务器既有Recreate策略有短暂中断，更新后浏览器应刷新旧静态资源。
+
+回滚：发布快照位于服务器 `/opt/resource-profile/.local-run/kamatera/prod-contract-20261007-v2/`，数据库备份为 `database-before.sql.gz`，源码备份为 `source-before.tar.gz`。`release.json` 内 `rollback_images` 保存准确旧镜像，均带 `:pre-prod-contract-20261007-v2` 标签；该文件还含私有运行配置，不要整份打印或分享。保留新增列/表与业务数据，只恢复上一组应用镜像和对应源码；回滚旧客户端可能不能操作新增记录，但不得删除列/表以求回退。
+若需数据恢复，先停止写入并使用发布前备份与恢复验证流程；不能在运行中的生产库覆盖恢复。R-5/R-6真实模型与上线签字不随本修复自动完成。
+
+本次镜像回滚命令（在服务器维护窗口、确认无在途Agent/PDF后执行；不执行SQL降级）：
+```bash
+python3 - <<'PY_ROLLBACK'
+import json
+import subprocess
+from pathlib import Path
+stage = Path('/opt/resource-profile/.local-run/kamatera/prod-contract-20261007-v2')
+record = json.loads((stage / 'release.json').read_text())
+maintenance = json.loads((stage / 'maintenance.json').read_text())
+order = ['auth-service', 'user-service', 'teacher-service', 'student-service',
+         'mental-service', 'data-service', 'mcp-student-data', 'agent-service',
+         'frontend', 'gateway']
+assert set(order) == set(record['rollback_images'])
+def kube(*args):
+    subprocess.run(['k3s', 'kubectl', '-n', 'educare', *args], check=True)
+kube('scale', 'deployment/gateway', '--replicas=0')
+for name in order:
+    kube('set', 'image', 'deployment/' + name,
+         name + '=' + record['rollback_images'][name])
+    if name != 'gateway':
+        kube('rollout', 'status', 'deployment/' + name, '--timeout=600s')
+kube('scale', 'deployment/gateway',
+     '--replicas=' + str(maintenance['gateway_replicas']))
+kube('rollout', 'status', 'deployment/gateway', '--timeout=600s')
+PY_ROLLBACK
+```
+回滚命令为操作预案，未实际执行；如果中途报错，网关保持维护状态，先检查目标镜像与Pod事件，不跳过失败继续恢复对外写入。源码恢复先核对 `source-before.tar.gz` 的成员与目标路径；不得覆盖私有env/凭据。
+
+## LANGFUSE-INLINE-20261008：站内追踪列表（2026-10-08）
+
+启动前提：已有 `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY`、`LANGFUSE_HOST`（当前日本区Cloud），管理员账号与有效网关会话，前端AI路由启用。无需新密钥、数据库迁移或自托管Langfuse。模型内容采集仍默认关闭。
+
+复现/验证：管理员打开 `/admin/trace`，默认近24小时，选择近7/30天并刷新、下一页/上一页。列表显示实际时间、操作名、模型、耗时、输入/输出/总token与观测级别；未记录用量不可显示真实0。当前页摘要不能当全窗口总量。接口 `/agent/api/v1/observability/observations` 的时间/页大小/游标必须有界，游标翻页保持时间边界，切换过滤清空游标。公网匿名/注销旧token由网关401，有效学生/teacher令牌业务码403；控制器直接请求时，无管理员JWT（包括仅内部凭证）403且不请求Cloud。后端302项、前端126项及权限契约/build/lint/体积门通过；生产HTTPS21项（业务只读，另含登录/注销）通过。登录后的浏览器视觉检查待验证，证据以[交付记录](./docs/production-tests/2026-10-08/LANGFUSE_INLINE_REPORT.md)为准。
+
+排错：配置缺失、Cloud鉴权失败/限流/超时分别显示固定错误，浏览器不能含secret、input/output、metadata、用户标识或错误正文。无记录与读取失败有不同状态。默认观测级别不等于业务成功；agent.loop为独立根观测，模型/token未记录。旧SDK或未使用v4摄取头的历史数据可能延迟15分钟可读，本项目当前出口已带v4头。保留次要Cloud链接用于原版高级功能，但站内读取不需要Cloud登录cookie。
+
+发布仅更新agent-service与frontend镜像，保留字体、环境变量、TLS与PVC。发布前验证准确原镜像与运行层，确认没有在途Agent/PDF，短暂维护窗口停止外部请求；失败恢复准确旧镜像及已复制源码，确认Ready后再恢复网关。无需SQL迁移或数据库恢复。
+
+完成于2026-10-08：标签 `prod-langfuse-inline-20261008-v1` 已发布，两个应用的实际镜像/运行层校验通过，网关恢复，17/17 Deployment与Pod Ready、8 PVC保留。公网近7/30天各11条，24小时0条；游标两页、参数边界、角色权限、既有用户接口及注销后的401均通过。未触发模型/Agent，无业务写入或SQL迁移。验收账号会话已全部注销，浏览器视觉复核需要正常管理员登录。
+
+实际最终镜像：agent-service为v1，frontend为 `prod-langfuse-inline-20261008-v2`。首次v1前端入口SHA与manifest不符，引用旧资源，静态发布未通过。重新构建时刷新全部构建输入mtime、禁用层缓存，导入前检查镜像内全部64个文件，上线后对active Pod逐文件SHA核对并确认镜像config/rootfs一致；最终公网64/64文件HTTP200/MIME/SHA及三个HTML入口均通过，17/17工作负载Ready。不能只凭镜像名、Ready或新trace文件可GET就认定首页入口正确。此过程未再次修改后端/SQL。
+
+入口排错时对比发布包 `frontend/index.html`、构建目录、独立Docker镜像、实际active Pod和公网的SHA，以及HTML所引用脚本/样式的MIME。本次固定mtime且同名同长度文件可能被BuildKit增量同步视为未变，属于推断；刷新输入mtime后仍须逐文件验证，`--no-cache`单独不足以替代字节校验。服务器修复记录及静态聚合结果见交付记录。禁止用忽略MIME、手工修改运行容器或关闭浏览器安全校验掩盖发布错误。
+
+服务器聚合验收命令（不打印凭据或观测正文）：
+
+```bash
+python3 /opt/resource-profile/.local-run/kamatera/langfuse-inline-readiness-20261008.py
+python3 /opt/resource-profile/.local-run/kamatera/langfuse-inline-smoke-20261008.py
+```
+
+第二条只做登录/注销及只读API；同一账号单会话策略可能使浏览器中的旧会话失效，测试后需正常重新登录。验证报告只保留字段契约、固定断言、数量和状态码。
+
+回滚预案（待验证，未实际执行）：先按同一发布门确认无在途Agent/PDF、暂停网关，再将两个Deployment镜像恢复为下列已保留标签并等待Ready；按当前版本与 `source-before.tar.gz` 的路径清单恢复公开源码，移除本次新增文件，保留私有env/PVC。确认两应用实际运行层与健康检查后恢复网关原副本数。不要对已经部署的发布目录重复运行 `deploy` 阶段。
+
+```bash
+k3s kubectl -n educare set image deployment/agent-service agent-service=edu-portrait-kamatera-agent-service:pre-prod-langfuse-inline-20261008-v1
+k3s kubectl -n educare set image deployment/frontend frontend=edu-portrait-kamatera-frontend:pre-prod-langfuse-inline-20261008-v1
+k3s kubectl -n educare rollout status deployment/agent-service --timeout=600s
+k3s kubectl -n educare rollout status deployment/frontend --timeout=600s
+```
+
+回滚源码备份位于 `/opt/resource-profile/.local-run/kamatera/prod-langfuse-inline-20261008-v1/source-before.tar.gz`；部署完整配置与凭据留在VM私有目录，不能作为脱敏报告导出。
+
+## 维护记录：DEMO-DATA-20261009（2026-10-09）
+
+启动前提：用户确认目标库仅含演示/测试业务；完整读取实际字段与最大 ID；只读预检无在途 Agent/PDF；合成载荷独立验证和破坏性输入测试通过。工具仅作用于 Kamatera `educare` namespace 的 `edu_portrait`，不触发模型/向量写入。操作说明与生成命令见[sql/demo/README.md](./sql/demo/README.md)。
+
+VM 应用命令（具体执行结果见交付报告；此处不是已执行证明）：
+
+```bash
+python3 scripts/demo_data/audit.py --output-dir /opt/resource-profile/.local-run/demo-data-20261009
+python3 scripts/validate_demo_data.py --dataset /opt/resource-profile/.local-run/demo-data-20261009/dataset.json --audit-before /opt/resource-profile/.local-run/demo-data-20261009/audit-before.json
+python3 scripts/demo_data/apply.py --dataset /opt/resource-profile/.local-run/demo-data-20261009/dataset.json --audit-before /opt/resource-profile/.local-run/demo-data-20261009/audit-before.json --state-dir /opt/resource-profile/.local-run/demo-data-20261009/application --apply
+```
+
+通过判据：80/1200有效档案、4年级/8专业、1281账户、唯一身份归属；所有生成字段存在、范围/学期/假期/GPA/学分与答卷/评分一致；业务精确读回与载荷摘要一致；管理员凭据/权限/迁移与原始操作日志不变，只有两演示用户的明确展示列可变。完整备份须在 VM 隔离 `network=none` MySQL 实际恢复，所有表内容摘要一致，再试导入通过后才生产提交。commit 内 `DEMO_DATA_APPLIED` 真实操作标记和私有 receipt 证明幂等，恢复原副本/HPA后 Ready 并公网只读冒烟通过。
+
+排错/回滚：只读预检或离线校验失败即拒绝，不扩大表白名单、不关闭外键；提交前任意错误同连接ROLLBACK并核对原计数/摘要后恢复应用。提交未知或提交后SQL校验失败保持维护，用私有备份原样恢复 edu_portrait 后逐表比对、再恢复原运行状态；不得把“最后一条SELECT成功”当整批成功。外部真实模型验收、PDF或故障回滚演练未执行时必须报告“待验证”。备份留VM且不提交Git/下载原始业务行，保留到本批次验收收口；无需更新容器镜像或重建PVC。
+
+当前执行证据、确切备份位置、生成条数、测试和生产API结果统一见[DEMO_DATA_REPORT.md](./docs/production-tests/2026-10-09/DEMO_DATA_REPORT.md)。实际登录/注销会增加真实日志并撤销相应旧浏览器会话，用户正常重新登录即可。
+
+完成于2026-10-09：离线15项/应用Mock15项/恢复分组与Long契约小检查通过；VM完整备份已实际network=none恢复并试导入，生产提交前后全内容核验通过，幂等返回ALREADY_APPLIED；90公网检查通过、0失败，17Deployment Ready/8PVC Bound及HPA恢复。备份确切路径与SHA、90项证据见交付报告。首轮脚本未处理既有Long字符串导致误判，后按字段白名单规范后复跑通过，不能将误判报告作产品缺陷结论。真正生产故障回滚和登录后逐页视觉验证仍为待验证；不需要重建镜像/PVC、全库初始化或清缓存。
+
+## AI-PROD-TEST-20261011：生产页面AI重点验收（2026-10-11）
+
+状态：**本轮只测试和提出修复计划，未实施业务修复或重新部署**。详细问题、截图及脱敏证据见 [AI_REPORT.md](./docs/production-tests/2026-10-11/AI_REPORT.md)。完整生成尚未通过；三个实际页面任务 task 3 / student 750、task 4 / student 346、task 5 / student 175 均首轮 `NonTransientAiException`，loop结果 `TOOL_ERROR` / iterations=1、任务终态FAILED，risk/plan/audit及RAG搜索均未形成。普通任务/观测学生请求为HTTP200业务403，但学生SSE确实HTTP200且收到他人task 5终态。修复后回归与回滚演练均**待验证**。
+
+启动前提：既有Kamatera HTTPS入口、有效管理员与独立学生会话、已核对来源的合成学生档案、当次具体资料模型外发授权；正常PDF/反馈需由真实任务形成有效方案。凭据只在既有受限配置/浏览器正常登录中使用，不进入命令行、截图、报告或控制台输出。AI预警输入是 `student_info.id` 主键，不是学号或登录账号ID；不为测试无效ID、分页或限流额外提交大量任务。
+
+页面复现与后续修复验收步骤（当前执行证据以报告为准）：
+
+1. 管理员打开 `/agent/warning`，选择已核对的合成学生ID，点击“触发分析”→“立即触发”；记录taskId、提交时间和状态。提交成功不等于生成成功，当前共享冷却为60秒，多轮任务允许有界等待，loop最多8轮/900秒。任务状态、工具实际执行与最终产物分别记录；不要重复点击制造额外模型调用。
+2. 打开 `/agent/report/{taskId}` 并刷新，核对学生归属、风险/方案、真实RAG snapshot与审核。当前FAILED页面只显示“系统异常”和未执行阶段，不能据此判定具体HTTP400/429。任务页03:49:56与本地追踪11:49:56相差8小时是已观察问题，后续修复需明确带偏移时间。
+3. 管理员打开 `/admin/trace`，切换24小时/7天/30天、刷新与分页，查本次新时间窗。站内观测级别 `DEFAULT`不等于任务通过；没有usage时须显示未知。本轮三个`agent.loop`的metadata实际已包含`status=TOOL_ERROR`、`iterations=1`，当前站内代理不读取metadata；未来只白名单映射这两个固定技术字段，不能开放自由metadata。保留仅安全元数据的隐私边界，不把旧trace或模型目录GET200算作新任务成功。
+4. 用有效学生会话对task列表、详情及observability做有界只读请求，应拒绝。SSE新连接 `/api/agent/api/v1/warning/stream` 预期同样拒绝；本轮实际返回hello后又收到其他学生终态，已确认缺口。回归还须验证已有连接在注销、角色撤销和会话替换后停止事件分发，当前此生命周期修复尚未执行。
+5. 只有真实终态及有效方案后测试一次PDF与明确标注“合成演示验收、未实施真实干预”的反馈。当前三个任务没有产物，正常PDF/反馈均记为**依赖阻塞、未执行**，不能说测试失败或用假终态补齐。
+
+只读运行验证命令（VM，命令本身不输出秘密）：
+
+```bash
+k3s kubectl -n educare get deployments -o custom-columns=NAME:.metadata.name,DESIRED:.spec.replicas,READY:.status.readyReplicas,AVAILABLE:.status.availableReplicas
+```
+
+以下SQL应通过既有受限MySQL客户端配置执行；只输出任务元数据及产物长度，不打印完整模型/工具资料。当前已确认FAILED的`completed_at`为空，具体逐任务证据以报告为准：
+
+```sql
+SELECT id, student_id, status, completed_at IS NULL AS completion_time_missing,
+       CHAR_LENGTH(COALESCE(risk_analysis_result, '')) AS risk_bytes,
+       CHAR_LENGTH(COALESCE(intervention_plan, '')) AS plan_bytes,
+       CHAR_LENGTH(COALESCE(compliance_audit, '')) AS audit_bytes
+FROM agent_task WHERE id IN (3, 4, 5) ORDER BY id;
+```
+
+已验证基础路径：MCP七工具目录成功、Groq models经httpx GET200且模型存在、17个Deployment Ready。独立RAG公开合成查询HTTP200、0.462秒；embedding缓存从不存在新增为1024维非零有限向量，证明Cloudflare BGE-M3真实调用，dense召回三个chunk且fallback=false，机械通路验收（本地测试产物，不入库：`./docs/production-tests/2026-10-11/RAG_PROBE.json`）已通过。这不是失败Agent已执行RAG或检索质量通过的证据。Milvus逻辑`count(*)`严格核验仅**3条逻辑活跃合成探针（物理9）**，case/psychology/policy各1条、success0；物理统计含旧/删除记录，不称九条有效知识。存储source非空、非URL且为测试marker，[KnowledgeChunk](./ai-inference-service/app/api/rag.py)只有source_db没有source，需记录来源标识投影缺口，不能说有效URL被删除或为探针编造链接。
+
+预警表格视觉复现：1023px浏览器窗口进入 `/agent/warning`，查看“创建时间”和固定“操作”列；已观察到表头“操作创建时间”与时间覆盖“查看报告”，需要横滚。拟保障固定列背景/层叠不透底及横滚可用，受影响仅Warning.vue，无架构影响。修复后需在该实际宽度及较宽窗口检验表头/按钮可读和横滚中固定列遮挡，**回归待执行**。
+
+修复后的通过判据（**待执行**）：学生SSE拒绝且无其他学生事件；权限/会话变更关闭或失效既有连接；至少一次已授权真实Agent工具调用成功、合法risk/plan落库，按风险等级正确审核；所有终态有完成时间且同一时刻跨页面/PDF/trace一致；HTTP/error code/失败阶段能安全关联task/trace，站内status/iterations白名单如实显示；RAG来源按真实存储标识投影并区分URL；正常PDF与反馈完成后才计入成功；预警表格固定列在实际1023px窗口和横滚中不透底、按钮可读可用。机械探针通过不能替代真实知识相关性验收。
+
+排错与待实施顺序：先修SSE角色/事件scope/会话生命周期，再补固定失败字段和安全HTTP状态关联，然后核验生产首轮实际协议并针对证据修复，最后统一终态时间与RFC3339时区。`TOOL_ERROR`是当前loop结果名，首轮异常不代表MCP已被调用；本轮没有准确HTTP状态日志，不从旧400/429、模型目录成功或工作负载Ready推断根因。保留严格schema、最终产物校验、共享冷却/重试上限以及不采集内容；不打印全env、JWT、供应商原始请求/响应或心理资料。
+
+回滚：本轮没有新镜像、配置或迁移可回滚，保留三个失败任务和真实操作记录，不删除数据库行、重建PVC、清Redis或切换旧schema来消除失败。未来修复发布前须确认无在途Agent/PDF，留准确原镜像/配置；若引入失败字段迁移，保留向后兼容列和数据，只按验证过的发布计划恢复应用，不做在线破坏性降级。该未来回滚预案及修复回归尚未执行；R-5.2/R-5.3/R-5.4/R-6/B-2状态不因本次基础验收改变。
+
+## AI-PROD-FIX-20261011：AI权限、诊断及来源修复（2026-10-11）
+
+当前已发布：受影响后端完整回归、生产兼容迁移、五组件更新和公开语料导入/精确旧探针隔离完成；随后GROQ-SCHEMA-FIX-20261011已定位并修复严格schema编译400；完整学生产物仍待具体资料授权验收。以下执行预案未逐项注明结果时，应以末尾实际证据及AI_FIX_REPORT为准。历史复现见[AI_REPORT](./docs/production-tests/2026-10-11/AI_REPORT.md)，修复映射与最新结果统一维护于[AI_FIX_REPORT](./docs/production-tests/2026-10-11/AI_FIX_REPORT.md)。不以本地Mock响应、Ready、模型目录200或提交task成功替代真实生成验收。
+
+启动前提：保留当前17个Deployment、准确旧镜像/公开源码和VM私有数据库备份，确认无在途Agent/PDF后才进入发布维护；使用既有受限MySQL配置与ADMIN_TOKEN，不打印env/JWT/钥匙或业务正文。新增四列先迁移，再发布依赖该实体的agent-service；同步frontend、受影响Python/MCP及data-service制品。没有更换供应商、收费资源、TLS/PVC/凭据或业务初始化的需求。数据库备份及恢复验证、镜像更新和实际生产结果尚未执行时写“待验证”。
+
+已执行的目标回归：SSE/会话26项、前端28项及build通过，Python59项中58通过/1真实Langfuse SDK可选依赖测试跳过，公开语料工具4项通过；实际Spring AI本机HTTP transport的选项合并/序列化及安全错误分类通过。可复现命令（项目根；运行环境需JDK21、项目Node及Python最小依赖；命令自身不构成已通过证据）：
+
+```bash
+cd backend
+mvn -pl agent-service -am test -Dtest=WarningSseSecurityTest,AgentSelfAuthFilterTest,StructuredRequestTransportTest,LlmRequestPolicyTest,AgentTaskTerminalTest,RagSnapshotCollectorTest,LangfuseObservationServiceTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+```bash
+cd frontend
+npm run test:agent-report
+npm run test:observability
+VITE_AI_ENABLED=true VITE_API_BASE_URL=/api VITE_LANGFUSE_URL=https://jp.cloud.langfuse.com npm run build
+```
+
+```bash
+cd ai-inference-service
+../.local-run/ai-fix-20261011/python-venv/bin/python -m unittest discover -s tests -v
+```
+
+```bash
+python3 scripts/public-rag-corpus-test.py
+python3 scripts/public-rag-corpus.py check
+```
+
+SQL迁移流程（**生产及隔离恢复/幂等已通过**）：沿用版本化迁移工具，不对已有数据库使用`--initialize`、不重放种子。新文件[20261011_01_agent_diagnostics.sql](./sql/migrations/20261011_01_agent_diagnostics.sql)与[10_agent_diagnostics.sql](./sql/init/10_agent_diagnostics.sql)新增failure_code/failure_stage/failure_http_status/trace_id；对旧空终态使用其既有updated_at补近似完成时间，不改写历史状态、原因或trace。应保留原updated_at，不让其ON UPDATE属性将历史待办变为迁移执行时间。迁移前后保存任务元数据摘要和库备份，不下载完整合成业务行到公开目录。
+
+```bash
+python3 scripts/apply-sql-migrations.py --transport k3s --target deployment/mysql --namespace educare --database edu_portrait
+```
+
+通过受限数据库连接做如下只读验证，并重跑迁移证明幂等（**本批次已通过**）：
+
+```sql
+SELECT COUNT(*) AS diagnostic_column_count FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='agent_task'
+  AND COLUMN_NAME IN ('failure_code','failure_stage','failure_http_status','trace_id');
+SELECT id,status,completed_at,updated_at,failure_code,failure_stage,failure_http_status,trace_id
+FROM agent_task WHERE id IN (3,4,5) ORDER BY id;
+SELECT COUNT(*) AS missing_terminal_end FROM agent_task
+WHERE deleted=0 AND status IN ('COMPLETED','FAILED','REJECTED') AND completed_at IS NULL;
+```
+
+通过判据：四列存在；旧三失败行仍FAILED，新增原因/HTTP/trace保持未知，旧空完成时间等于迁移前updated_at近似值，updated_at保留；新增真实终态同条SQL写UTC结束，重复complete/fail不覆盖时间、状态或首次诊断，活动/逻辑删除任务不被标完。迁移已应用的文件不得事后改checksum；必要修正另建增量迁移。
+
+公开语料流程（**本批次已实际导入12条、精确隔离3探针**）：先核验/私有备份现有Milvus逻辑行、原source及向量；若隔离旧探针，只处理已确认探针的精确chunk_id并记录数量，不能删来源未知文档。工具只替换自己的12个稳定doc_id，不重建collection。审核`export`中的公共正文、来源、非商业用途及虚构场景标记后，再在应用Pod内通过本机管理API导入：
+
+```bash
+python3 scripts/public-rag-corpus.py export
+k3s kubectl -n educare exec -i deployment/ai-inference-service -- python - apply --expected-sha256 81606c2d5827f7a38ad09a10ff9f37b0c3309fbeb3e87cf81ba68395835eecbd < scripts/public-rag-corpus.py
+```
+
+ADMIN_TOKEN来自Pod的既有私有环境，不传命令行；配置缺失就失败，禁止为导入放开鉴权。工具无重定向、单次请求有界，不调用Groq；12份公共正文由应用发往既有Cloudflare embedding，真实入库条数与费用额度需实际核验。重复相同payload应skipped，metadata修正应替换而非静默跳过，成功upsert更新collection revision使API/MCP检索缓存不读旧结果。现有source64字节、title255字节、content4096字节边界超出会422；应迁移schema或调整合法切片，不能裁坏URL。原已经截断的来源不能从标题补造。
+
+导入验收（**API/MCP小样本和来源已通过，完整dense baseline及真实报告仍待验证**）：逻辑有效doc/chunk至少本批12条，policy/psychology/case各4，success0如实保留；针对挂科/资助/保密转介/压力睡眠/宿舍适应做公共查询，记录是否命中适当collection、doc_id及完整source_url，fallback/精排/实际vector维度与cache分别验证。API、MCP、Java snapshot、报告应保持同一出处；URL为空保持未知，非URLmarker不渲染成链接。来源只支持所述原则，演示场景不能显示为真实成功个案；少量公开知识及机械召回不能替代完整dense质量baseline与专业审核。
+
+生产复验（**1/4/5的角色/列表报告待办观测/视觉已通过；新生成产物/trace/成功PDF与反馈仍待验证**）：
+
+1. 有效学生SSE新握手403，无hello及他人事件；管理员/获准教职工正常连接，JWT失效、注销、会话替换或撤权后下一事件不再发送，最迟下次30秒心跳清理。Redis不可用新握手503、旧连接关闭，不能fail-open；前端EOF退避重连，401/403停止。
+2. 在新的具体外发授权内，先有界真实协议诊断，再运行具体合成学生任务；记录实际安全HTTP类别与失败阶段。如仍失败，按INPUT_BUDGET/OUTPUT_BUDGET/COOLDOWN_UNAVAILABLE/PROVIDER_JSON_SCHEMA/RATE_LIMIT/NETWORK/TOOL/FINAL_VALIDATION区分，不记录原始error/failed_generation或完整请求。Groq模型目录成功不代表JSON生成支持当前请求。
+3. 至少一次真实MCP工具执行及合法risk/plan产物落库；按风险决定RAG/审核或合理短路。新task.trace_id与真实Langfuse根trace对应，页面/观测显示固定状态、iterations、类别/阶段/HTTP；DEFAULT不是任务成功。旧未知原因不被推断填充，内容捕获保持关闭。
+4. 同一任务列表、报告、Agent待办、观测及PDF均显示Asia/Shanghai UTC+8，API为Z；别把学期/问卷校园历史日期再次加8小时。失败终态有结束时间，近似历史补值不宣称精确耗时。
+5. 1023×1104、宽桌面、收起侧栏和横向滚动检查固定列背景、表头及“查看报告”按钮；截图不含登录凭据。真实有效终态后再做一次成功PDF/中文排版和明确演示的反馈，不用假成功任务绕过依赖。
+
+外发约束：协议探针原先因工程MCP/schema授权不足被拒绝；用户随后明确授权，GROQ-SCHEMA-FIX-20261011已执行两次公开协议诊断并修复schema400。原学生三次及本次两次工程协议次数均已用完，新的完整学生验收仍待具体资料授权；不跨用途复用或将等待时间当批准。
+
+回滚预案（**待验证**）：恢复发布前实际保存的准确应用镜像与公开源码，先确认健康/角色边界再恢复外部请求；保留新增兼容列和旧失败任务，不DROP列、清Redis或重建PVC。语料只回滚本批明确doc_id并恢复旧探针私有原向量/出处快照；回滚后更新检索revision或等待对应缓存到期，不能flush所有会话缓存。没有VM真实备份和镜像标签证据时不得填造路径或声称演练通过。R-5.2/R-5.3/R-5.4/R-6/B-2保持未完成。
+
+### AI-PROD-FIX-20261011补记：固定旧探针两阶段隔离（2026-10-11）
+
+[隔离工具](./scripts/public-rag-probe-quarantine.py)与[10项离线回归](./scripts/public-rag-probe-quarantine-test.py)已完成本地验证；以下backup/apply已生产执行通过；restore仍**待验证**。范围只有三个精确chunk_id：`accept_case_20261007_0000`、`accept_policy_20261007_0000`、`accept_psychology_20261007_0000`。必须同时匹配旧source `synthetic-acceptance-20261007`及已核对的旧固定标题/正文；任何同ID不同来源、重复行、改动正文、非有限/非1024维向量都停止。没有处理带其他后缀历史探针、未知source、公开新语料或success集合的需求。
+
+本地只读审核及离线测试：
+
+```bash
+python3 scripts/public-rag-probe-quarantine.py check
+python3 scripts/public-rag-probe-quarantine-test.py
+```
+
+维护期不要同时upsert这三个固定文档。将已审核的脚本复制到当前ai-inference-service Pod `/tmp/public-rag-probe-quarantine.py`，在原Pod的`/app`配置环境运行，先只读backup。以下命令在VM执行；运行前按实际部署目录选择私有VM目的地，工具文件也须先复制到Pod。不得把完整备份写入Git、公开测试目录、聊天或页面：
+
+```bash
+k3s kubectl -n educare exec deployment/ai-inference-service -- env PYTHONPATH=/app python /tmp/public-rag-probe-quarantine.py backup --file /tmp/rag-quarantine/probes.json
+```
+
+backup输出仅`backup_sha256`、行数、维度和`mutation=false`；文件内保存实际PK、chunk_id/title/content/source和实际向量，不包含账户密钥。文件0600、所在目录0700，新建排他文件+fsync+checksum读回，路径含symlink会拒绝。Pod临时目录不能作为唯一耐久备份，先复制到VM：
+
+```bash
+install -d -m 0700 /opt/resource-profile/.local-run/ai-fix-20261011/rag-backup
+k3s kubectl -n educare exec deployment/ai-inference-service -- cat /tmp/rag-quarantine/probes.json > /opt/resource-profile/.local-run/ai-fix-20261011/rag-backup/probes.json
+chmod 0600 /opt/resource-profile/.local-run/ai-fix-20261011/rag-backup/probes.json
+sha256sum /opt/resource-profile/.local-run/ai-fix-20261011/rag-backup/probes.json
+```
+
+确认VM文件的SHA256等于backup输出，再把该真实值作为下列占位符替换，不从工具fixture digest或公开语料digest代替私有备份digest：
+
+```bash
+k3s kubectl -n educare exec deployment/ai-inference-service -- env PYTHONPATH=/app python /tmp/public-rag-probe-quarantine.py apply --file /tmp/rag-quarantine/probes.json --expected-sha256 <实际私有备份SHA256>
+```
+
+apply在变更前重验三集合映射和完整记录；只按实际PK+source+精确chunk_id删除、flush并Strong查询确认消失。Redis需可用，持有专用短时互斥锁；每集合前后分别轮换`edu:rag:revision:{collection}`，清该固定doc旧/current两版幂等hash，绝不FLUSHDB/SCAN全缓存。后轮revision防止变更窗口重新填充旧结果。通过输出是`verified=true`、首次`changed_rows=3`且`revision_updated=true`，之后逻辑活跃计数应只反映公开知识，不用num_entities物理统计证明删除。
+
+遇到失败只输出固定`error_code`与`partial_mutation_possible`，保留备份并检查当前状态。Redis异常在变更前停止；变更后的异常不能当作隔离成功，可用同一digest再次apply，已经精确消失的行跳过并刷新revision。记录被别人修改或身份冲突时停止人工核查，不能绕过校验或扩大删除条件。
+
+必要时把VM耐久备份安全复制回当前Pod相同私有路径（0600、父目录0700），使用同一SHA256执行`restore`子命令。恢复无需调用Cloudflare/Groq，直接写回备份里的实际向量与字段，再Strong核对并刷新revision；有同身份不同资料时拒绝覆盖。Milvus `auto_id=true`不能复用原物理PK，因此新物理ID不同，逻辑chunk_id/source/title/content及实际向量相等是恢复通过判据。重复restore会核验既有相同资料而跳过；不清空collection/PVC，也不修改旧失败Agent任务。
+
+### AI-PROD-FIX-20261011实际交付记录（2026-10-11）
+
+部署/API（本地测试产物，不入库：`./docs/production-tests/2026-10-11/AI_FIX_DEPLOYMENT.json`）、SSE角色（本地测试产物，不入库：`./docs/production-tests/2026-10-11/AI_FIX_SSE_ROLES.json`）、公开RAG（本地测试产物，不入库：`./docs/production-tests/2026-10-11/RAG_FIX_REGRESSION.json`）、重复导入（本地测试产物，不入库：`./docs/production-tests/2026-10-11/AI_FIX_CORPUS_IDEMPOTENCE.json`）及UI/截图清单（本地测试产物，不入库：`./docs/production-tests/2026-10-11/AI_FIX_UI.json`）已实际验证。17/17服务、17/17 Pod Ready、0重启；agent/frontend最终v2，data/Python/knowledge MCP v1。SSE匿名401、学生header/query403、teacher200且注销4,979ms EOF、旧JWT401；管理员失败PDF创建HTTP200/业务409、缺失任务404、导出表无新增；任务UTC Z与校园UTC8跨页面一致，旧结束时间仅近似补齐。真实新业务warning推送未生成、真实新失败Cloud trace关联待授权。
+
+验证环境JDK21：受影响后端common/data/agent clean verify381及安全覆盖门通过；后续终态11含新增3、导出真实MVC7/package及四套Export34通过。前端目标28/build/lint通过，Python58通过/1可选真实SDK测试跳过，公共语料4和探针工具10通过。首轮HTTP fixture仅本机，不冒充Groq或生产七工具schema接受。
+
+首次前端产物漏VITE_AI_ENABLED，已补发frontend v2并实际恢复入口。发布构建须带上述AI=true、API=/api和既有Cloud URL，不能只在Pod里设VITE值；发布后验菜单及任务路由。导出排错若Result业务码409，表示无有效COMPLETED/REJECTED产物，不应重试创建或改FAILED为成功；[ExportController](./backend/agent-service/src/main/java/com/edu/agent/controller/ExportController.java)已保留该业务码，未知异常只记录类名，不读取日志原始模型正文。
+
+VM实际耐久私有备份位于/opt/resource-profile/.local-run/kamatera/prod-ai-fix-20261011-v1/，文件database-before.sql.gz、source-before.tar.gz、rag-probe-backup.json；该批次migration-pass.json和部署证据保存SHA及通过判据。MySQL恢复到自建隔离库、重复迁移、20表记录数及历史updated_at保留已通过，隔离库已清理。旧三探针备份SHA256为2f79823172b662c544d7590d5c991d52e94ad45392c80e16a5c2f9f0f56603c8，private文件0600，实际精确changed_rows=3、revision更新，0embedding/Groq；向量NumPy兼容修正后再执行，未扩大删除条件。后续restore需从该VM备份复制至当前Pod私有路径，使用同一digest；auto-ID会变化、逻辑字段及实际向量必须相等，**生产restore仍未演练**。
+
+回滚使用已保存pre-prod-ai-fix-20261011-v1准确旧镜像及源码，保留兼容新增列和真实FAILED任务。frontend v1为遗漏AI开关的中间制品，最终恢复宜用发布前稳定pre镜像；agent v1仍保留核心修复，但导出code修补在v2。**应用镜像回滚待验证**，不能因有标签就宣称已演练。正常成功PDF/反馈需新的合法模型产物，R-5.2/R-5.3/R-5.4/R-6/B-2继续未完成。测试角色会话已注销、临时浏览器/尺寸覆盖和本机凭据副本已清理。
+
+## GROQ-SCHEMA-FIX-20261011：严格schema首轮400（2026-10-11）
+
+复现及边界见[诊断修复报告](./docs/production-tests/2026-10-11/GROQ_SCHEMA_FIX_REPORT.md)。启动前提：既有Groq配置、两个生产MCP可tools/list、明确工程协议外发授权；此次最多2次且已用完。禁止把协议诊断自动升级为新学生资料外发。第1次400明确定位 `/properties/action/anyOf` 的无properties包装；第2次仅展平后200。离线生成请求与成功请求JSON相等、响应Draft202012Validator有效。验证命令：JDK21下 `mvn -o -Daether.syncContext.named.factory=noop -pl agent-service -am verify`，实际common80+agent307共387，0失败/错误/跳过；schema red/green及固定400/nullcode类别通过。不得因为公开query有空格改写重复外发；仅规范空白，仍要求实际schema、工具名、参数类型和终止状态。
+
+发布预案：保留实际运行v2镜像与两份源码，只把两处class替换入原JAR，核对原/新rootfs、配置及entry摘要，更新agent-service为prod-ai-fix-20261011-v3；不重建其他服务、不重放初始化或修改既有新增列。检查17部署Ready/0重启、匿名入口401、历史FAILED/结束时间和任务数量未变；新学生任务/trace/成功PDF仍待授权验收。必要时set image回v2并核对就绪，schema400将随之恢复；不DROP列/PVC。生产发布及上述只读结果通过，实际运行JAR与审核制品摘要相等、17/17 Ready/0重启、登录200/匿名task及SSE401、旧FAILED3个/终态缺失0/导出0；部署证据（本地测试产物，不入库：`./docs/production-tests/2026-10-11/GROQ_SCHEMA_DEPLOYMENT.json`）。应用回滚仍未演练。
+
+## AI-FULL-ACCEPT-20261011：完整学生Agent、PDF和反馈验收（2026-10-11）
+
+本轮授权已取得，沿用方柏言（346）、吴亦竹（750）、罗卓嘉（175）的合成资料，最多3个完整Agent任务。第1次task6/student750已真实首轮FAILED：PROVIDER_JSON_SCHEMA / LLM_REQUEST / HTTP400，trace=e058fadc0cbc4c82a44e292251055bf9、工具执行0；失败计入额度，剩余2次待修复上线后继续。既有两次工程协议诊断额度已用完，不另行外发协议探针。Groq、Cloudflare及Langfuse仍沿用已选提供商；Langfuse内容采集关闭。
+
+排错前提已核对：agent v3运行JAR摘要一致，structured=true、Groq GPT-OSS-120B/low/max_tokens2400/输入预算18000/cache_prompt=false。实际McpSchema.Tool → SyncMcpToolCallback（provider noPrefix）→ responseFormat与上一轮Groq200请求schema结构相等，canonical SHA256为48bdc5fa9f435bd9a2926d9e0ae4a7266da8e703eb95a75176dc054c9fd32da1；in-memory transport connect/send/unmarshal及model/tool全0。task6现有诊断不能区分schema编译与生成校验拒绝，不把adapter差异或上一轮包装问题直接写成本次根因。
+
+[提示构造](./backend/agent-service/src/main/java/com/edu/agent/core/AgentLoop.java)已确认缺字段示例、字符串final_answer与可省略plan字段指令和[严格schema](./backend/agent-service/src/main/java/com/edu/agent/core/AgentLoopOutputSchema.java)冲突。修复目标为完整四字段示例、未用字段null、最终对象直接嵌入及工具参数与实际schema一致。[错误处理](./backend/agent-service/src/main/java/com/edu/agent/config/LlmResponseErrorHandler.java)/[类型化异常](./backend/agent-service/src/main/java/com/edu/agent/config/LlmCallException.java)新增reason仅允许SCHEMA_COMPILATION、JSON_GENERATION、UNKNOWN；原始正文、failed_generation、请求及业务资料不进入日志/API/数据库。不关闭strict、不伪造终态、不无限重试。
+
+修复回归命令（JDK21，离线，不调用模型；本条新增修复验证当前**待验证**）：
+
+```bash
+cd backend
+mvn -o -Daether.syncContext.named.factory=noop -pl agent-service -am test -Dtest=AgentLoopOutputSchemaTest,LlmFailureDiagnosticsTest,LlmCallExceptionTest,AgentLoopFailureReasonTest -Dsurefire.failIfNoSpecifiedTests=false
+mvn -o -Daether.syncContext.named.factory=noop -pl agent-service -am verify
+```
+
+通过判据：严格schema/本地产物校验保留，所有严格模式示例与必填/可空契约一致，reason只从类型化固定标记读取、未知归UNKNOWN，日志无原始正文/cause/学生资料，回归0失败/错误。离线fixture不替代真实完整生成。发布只更新agent-service审核制品与对应源码，保存当前v3回滚点；不重放数据库初始化、不改凭据/PVC/其他服务。核对新运行JAR摘要、17/17就绪及鉴权边界；新修复发布当前**待验证**。
+
+剩余2次任务串行执行，遵守共享冷却、有界429重试与deadline；分别记录触发时间、真实task/trace、阶段及产物校验。若仍400只检查固定reason，不读取供应商自由正文；低风险合法短路按原行为评估，不编造方案。仅对合法产物发起一次PDF创建、有限轮询、下载及文件/页内容核验；FAILED应业务409且无导出写入。反馈使用实际任务提交明确演示反馈并读回/月报核验，不伪造已发生干预效果。新成功任务、PDF、反馈及新trace/报告知识来源链当前全部**待验证**，R-5.2/R-5.3/R-5.4/R-6与B-2仍未完成。
+
+回滚预案（尚未演练）：
+
+```bash
+k3s kubectl -n educare set image deployment/agent-service agent-service=edu-portrait-kamatera-agent-service:prod-ai-fix-20261011-v3
+k3s kubectl -n educare rollout status deployment/agent-service --timeout=600s
+```
+
+同步恢复发布前保存的对应源码，确认运行摘要与v3相等；保留task6及后续真实任务、兼容列、知识库和会话数据，不删表/重置PVC。回滚v3只恢复增量之前行为，不保证解决本次生成400。验收后正式注销测试会话、验证旧JWT401并清理临时浏览器/凭据副本；实际结果在[执行计划](./docs/educare/EXECUTION_PLAN.md)及本轮测试报告同步补记。
+
+### AI-FULL-ACCEPT-20261011进展与下一增量（2026-10-11）
+
+v4提示/三值reason修复已发布：common80+agent336=416项回归通过，最小包6个旧entry+1新增枚举、57,407字节，SHA256=`84619aec50955dd6e58566dbd28828ca9acaedf2a8948e39be8232538cb992f7`，私有deployment-v4.json保存原始发布证据。task7/student175实际UTC07:29:33开始、07:29:37终止，FAILED/iter1、PROVIDER_JSON_SCHEMA / LLM_REQUEST / HTTP400、trace=`628dfb900e364f9090217c163b625d5d`，安全日志reason=JSON_GENERATION。这里只能确认这个任务的生成JSON校验拒绝，不能恢复task6旧子型或把提示矛盾写成根因。最多3次授权任务现已用2，**仅剩1次**，正常PDF/反馈继续依赖真实合法产物。
+
+实际v3类和193依赖的127.0.0.1 HTTP fixture与已200的protocol-request-2完整结构一致（包含messages及选项），strict=true/json_schema/无tools/stream=false；配置及拦截器六类v3/v4 manifest/local target SHA逐字节相等。fixture没有Groq、MCP或业务调用，只排除本地使用不同类或序列化选项的猜测，**不宣称捕获失败生产任务线上请求**。私有结构/摘要证据位于.local-run/ai-accept-20261011，报告只保留固定结论，不复制完整请求至公开文档。
+
+下一增量方案正在落地、回归和v5发布**待验证**：
+
+- [LlmRequestPolicy](./backend/agent-service/src/main/java/com/edu/agent/config/LlmRequestPolicy.java)产出白名单请求契约指标；[LlmResponseErrorHandler](./backend/agent-service/src/main/java/com/edu/agent/config/LlmResponseErrorHandler.java)有界提取失败JSON结构。禁止日志/持久层保存原始正文、失败JSON字段值、系统提示、工具参数、师生档案或密钥；未知形态归固定UNKNOWN，不开放任意字符串诊断。
+- [AgentTaskServiceImpl](./backend/agent-service/src/main/java/com/edu/agent/service/impl/AgentTaskServiceImpl.java)明确首轮调用档案工具action及真实学生ID，后续只能根据实际观察结果推进，不预填工具观察或风险。
+- [AgentLoop](./backend/agent-service/src/main/java/com/edu/agent/core/AgentLoop.java)仅HTTP400且JSON_GENERATION在整个run纠错1次；同一max8轮/900秒deadline，跨轮不能重置，最后一轮不得越额调用。二次拒绝、编译错误、UNKNOWN或其他错误均失败；不在HTTP层泛化重试所有400，原429有界策略保持。固定纠错提示不携带供应商失败JSON，不改变strict、最终产物和审核校验。
+
+JDK21下使用上节离线目标命令和模块verify；增加本次请求契约白名单/失败结构内容隔离、首轮提示、跨轮仅一次纠错、错误类型限制、轮次/deadline上限回归。**新回归待执行，不沿用416旧结果冒充通过**。发布前核对新制品与实际基线并保存v4源码/镜像，不初始化数据库、不改API/兼容列；v5发布、17/17只读复核与最后任务目前均待验证。
+
+v5若需回滚，当前直接增量回滚点为`edu-portrait-kamatera-agent-service:prod-ai-accept-20261011-v4`，配合上节set image/rollout方法及对应源码，保留v3更早备份。应用回滚未演练，v4已实证仍有生成400，回滚不能宣称恢复成功。最后一次任务后只对合法产物验PDF/真实演示反馈并注销会话；失败仍保留真实终态，不额外补授权任务。R-5/R-6/B-2保持未完成。
+
+### AI-FULL-ACCEPT-20261011最终验收补记（2026-10-11）
+
+v5发布及新增回归已实际完成：common80+agent370=450项verify全部通过；包4个class变更、无new entry，81,778字节，SHA256=`205e3946f05b08588fc49bfd8c1e90386b1bbdd35558e137fbb0d7b8003b914c`。上节本增量回归/发布待验证状态以此更新为准；[报告](./docs/production-tests/2026-10-11/AI_FULL_ACCEPTANCE_REPORT.md)与安全证据（本地测试产物，不入库：`./docs/production-tests/2026-10-11/AI_FULL_ACCEPTANCE.json`）保存具体通过及失败范围，私有发布原始证据仍在.local-run/ai-accept-20261011。
+
+task8/student346实际UTC07:38:50开始、07:39:51结束，FAILED/iter2、trace=`f6e6f8a52f7b47e48739656fb61f7b7d`；两轮均类型化JSON_GENERATION/HTTP400。有限纠错确实只执行1次，第二次拒绝终止同一任务。两条HTTP策略交接前固定日志为JSON_SCHEMA、strict=TRUE、react_schema=true、tools_present=false、stream=false、max_tokens2400。两条失败结构日志为json_parsed=true、thought/plan/action/final_answer四字段存在标记全false；未记录根类型，也无参数或嵌套final校验结果。排错只据这些固定结构指标，不读取/复制原始failed_generation，不推断具体根JSON形态、确切根因或供应商bug；固定交接日志不当作完整线上报文抓包。
+
+业务工具执行0、风险/方案/审核产物均空，RAG未执行；没有可用于PDF或反馈的合法报告。task6/7/8三个本轮授权任务已全部用完，正常PDF/反馈成功路径是**依赖阻塞、未验收**，本轮创建数均0，不能用FAILED任务、假产物或假反馈强行验证。修复450项回归与发布通过并未关闭完整生成故障；AI-PROD-FIX、R-5.2/R-5.3/R-5.4/R-6/B-2保持未完成。后续外部模型或学生资料实测必须取得新的明确授权，不能静默再触发任务；离线诊断可继续。
+
+v5必要回滚的准确目标仍为`edu-portrait-kamatera-agent-service:prod-ai-accept-20261011-v4`，同步恢复v4对应源码并核对运行摘要；保留v3更早备份、诊断列及task6/7/8真实历史，不重放初始化、删除记录或重置PVC。应用回滚未演练，回退v4不能保证业务成功。最终17服务健康、实际产物表计数及测试会话清理由另次只读核查据实补记，当前不预写通过。
+
+AI-FULL-ACCEPT-20261011收尾实测（2026-10-11）：[最终验收报告](./docs/production-tests/2026-10-11/AI_FULL_ACCEPTANCE_REPORT.md)及安全证据（本地测试产物，不入库：`./docs/production-tests/2026-10-11/AI_FULL_ACCEPTANCE.json`）已汇总。实际运行Agent v5 JAR SHA256 03599cb00f989cef0e1706185be5e48d5a4ecdd1a5479ac35ef6cd901c9a9073与审核制品相等，17/17部署和17/17 Pod Ready、0重启；3新任务均FAILED、终态结束时间无缺失、导出/反馈各0。task8真实站内trace为2轮/61,299ms/模型请求失败，DEFAULT级别不表示成功。测试管理员已正常注销、旧JWT401、Redis会话撤销，临时浏览器及本机/服务器临时凭据副本已清理。完整生成、成功PDF/反馈仍依赖阻塞，次数已用完；R-5/R-6/B-2及主修复任务保持未完成，新的模型外发须新有界授权；回滚未演练。
+
+AI-FULL-ACCEPT-20261011下一步候选（2026-10-11）：[两份A/B工程请求](./docs/production-tests/2026-10-11/AI_NEXT_DIAGNOSTIC_PLAN.md)已离线准备；唯一差异为action候选从7工具缩至档案工具，消息/最终schema/选项保持相同，虚构ID0示例经schema校验通过；v5类/资源/依赖一致，本机stub2次、Groq/MCP/业务调用0。外发前核对私有候选摘要；获新授权后每份只1请求、无自动重试/工具执行，HTTP200且完整schema/约定profile action及ID0/null-final通过才记协议通过；400/429据实失败。新外发、完整Agent、PDF及反馈均待验证，纯诊断不改变生产配置，无应用回滚步骤。
+
+### GROQ-400-CAUSE-20261011（2026-10-11）
+
+[原因报告](./docs/production-tests/2026-10-11/GROQ_400_CAUSE_REPORT.md)及脱敏证据（本地测试产物，不入库：`./docs/production-tests/2026-10-11/GROQ_400_CAUSE_EVIDENCE.json`）记录16次工程请求：9个严格200、7个生成校验400、0个HTTP429。A与相同字节O均400；B/K缩工具或仅删raw Schema不足；原A只删system工具文字目录的L成功，实际编译M/独立N/发布后P均成功。400为JSON_GENERATION，固定Schema编译拒绝前缀未出现；B/E/G/I/K/O失败正文为空，不能定位具体内部JSON路径。与先前Schema编译400及429分别排查，不因本轮400降低类型或安全规则。
+
+前提：JDK21、配置模型openai/gpt-oss-120b、现有私有Groq密钥。只发送工程系统/技能提示、工具定义与虚构ID0，不创建学生任务、读取档案或执行返回action/RAG。每份冻结摘要并预占一次，无自动重试；按token重置时间发送。保存固定类型/校验/用量/耗时，不留供应商正文/自由错误文本或密钥。用户已明确允许本轮后续工程请求，历史第三次外发自动审批拒绝已解除；该权限不新增学生完整任务额度。
+
+本机验证命令：`cd backend && mvn -o -Daether.syncContext.named.factory=noop -pl agent-service -am verify`（JDK21）。最终精确候选452例：common80+agent372，失败/错误/跳过均0、覆盖门通过；[提示测试](./backend/agent-service/src/test/java/com/edu/agent/core/AgentLoopPromptContractTest.java)及[真实Spring AI本机传输测试](./backend/agent-service/src/test/java/com/edu/agent/config/StructuredRequestTransportTest.java)确认strict文字目录删除，而正式工具名称、整数类型、必需字段、封闭args、非strict完整目录和空工具提示保留。实际MCP adapter/编译类捕获M，与L逐值相等、相对A只删2413字符工具目录；10类等verify JAR。M/N真实200且schema/profile/ID0/null-final通过后才发布；O原始对照仍400，没有发布失败的K候选。
+
+已发布：`edu-portrait-kamatera-agent-service:prod-ai-accept-20261011-v6`，UTC11:52:40；制品仅更新AgentLoop.class及1源文件，不添加JAR条目，不改DB/PVC/环境或密钥。运行JAR SHA256 `3ecbf71001e7f7e20213798d3c3cb6bbe24da86dff4e3a732f58ea394856471d`与审计制品相等，10使用类等M；UTC12:07:08全部17部署/17 Pod就绪、0重启，登录200及未认证业务401。UTC12:09:54最后工程P为200/919ms，严格Schema及profile ID0/空final通过，未执行action。发布门和部署后工程门均已实测通过，不能把它们当完整学生Agent/P4/RAG/PDF/反馈通过。
+
+回滚：`k3s kubectl -n educare set image deployment/agent-service agent-service=edu-portrait-kamatera-agent-service:prod-ai-accept-20261011-v5`，随后检查rollout与实际运行JAR/就绪；保留v6阶段的source-before对应原源文件。回v5只恢复原服务版本，会恢复其已知AI400；回滚步骤本轮**未演练**。旧task6/7/8仍FAILED，完整业务与R-5/R-6/B-2待新相应授权和真实验收。
+
+## AI-PROD-RETEST-20261011（2026-10-11）：生产复测与剩余问题
+
+结果与证据：[报告](./docs/production-tests/2026-10-11/retest/REPORT.md)、安全JSON（本地测试产物，不入库：`./docs/production-tests/2026-10-11/retest/EVIDENCE.json`）。运行基线17部署/17 Pod、0重启、8 PVC、10应用健康通过；角色45/45、管理员53/58，共103断言98通过。新task9/10/11均FAILED/PROVIDER_JSON_SCHEMA/LLM_REQUEST/400，completedAt有UTC Z，日志带任务标识的iter1/3为JSON_GENERATION，iter2档案成功205/223/213 Java长度单位。无RAG/风险/方案/审核；失败导出业务409，正常PDF/反馈不能执行。工程A–P已通过的单轮对照仅属历史工程判据。
+
+只读复现前提：现有有效管理员会话和真实授权角色，访问当前公网/api；不能在聊天或报告保存JWT、密码、Secret值或模型正文。已实际执行各一次：GET `/agent/api/v1/task/9223372036854775807`→业务500（RT-02，应404）；GET `/agent/api/v1/task/list?page=1&size=3&status=NOT_A_STATUS`→业务500（RT-03，应400）。正常task列表page/size、用户列表、学生/教师与dashboard统计通过。不要用HTTP200代替Result.code检查。修复后须验证这些边界、正常过滤，以及其他riskLevel输入，不把通用500全局改成400。
+
+页面复现已执行：预警中心查看task11→上方安全失败诊断/HTTP400/完成时间正确，阶段1“未执行”（RT-04，实际已执行但无产物）；导出按钮禁用、反馈隐藏。点“查看站内追踪”→精确trace `910687d3225649f589a02f6671166203`仅一条agent.loop，LLM_ERROR、3轮、400与任务吻合，model/token未知；显示全部有另trace的llm.chat，但无共同标识不作任务归属（RT-05）。学生登录到问卷正常，仍有固定数据面板标签，点击被守卫拦截返回问卷（RT-06）。1023×1104截图证明固定操作列不透底、退出弹窗居中；管理员/学生测试会话均已注销，临时页签已关闭。
+
+后续验证**待执行**：RT-01必须覆盖真实首轮、工具Observation后请求、RAG来源、严格产物和真实P4；本轮三次task额度全部使用，不运行历史smoke脚本偷偷创建第四个任务。新增范围明确后，在有效方案上验证真实PDF内容/版面/权限、示例反馈单次提交/绑定/月报/CSV。RT-04验证运行中/失败/历史无诊断/低风险跳审/空召回语义；RT-05验证共同trace与父span、并发及异步上下文隔离、异常清理、未知token、代理无正文；RT-06验证角色切换及固定首页。对应源码和后续选择均见报告§2，相关controller/UI/trace回归尚未修改或执行；R-5/R-6/B-2保持未完成。
+
+排错限制：九条安全HTTP契约和六条拒绝结构没有task tag，只是精确时间窗证据，不能按顺序强行绑定任务或推断生成正文。档案未截断不代表其他尚未执行的大工具没有截断风险；无429只限本轮。可选Secret开关读取/写本地被自动审批拒绝，停止且未绕过；实际权限与会话门已通过功能请求，未知开关值继续标未知。
+
+测试helper排错（已执行）：MySQL JSON_TABLE的CTE推导参数需在函数边界CAST AS JSON（1210/HY000）；Pod按实际app.kubernetes.io/name选择器；Python解析K8s纳秒时间先截到微秒；默认日志到选中任务终态后2秒，排除后来任务。仅修测试helper，真实SQL/限定日志已成功，此工具问题不计生产应用缺陷。
+
+本轮没有新应用/数据库/配置部署，**无需应用回滚**。失败task9/10/11与证据保留，不为让报表通过删除或回填假结果。未来修复应记录新制品与对应源码，必要时回退本轮现有v6基线；该回退未演练，v6仍有真实业务400，不能当AI恢复方案，也不要回退此前已通过的SSE/会话安全改动。
+
+## PAGE-PERF-PLAN-20261012（2026-10-12）：区分页面加载与冷启动
+
+[报告](./docs/production-tests/2026-10-12/PAGE_PERFORMANCE_PLAN.md)、固定字段证据（本地测试产物，不入库：`./docs/production-tests/2026-10-12/PAGE_PERFORMANCE_EVIDENCE.json`）记录已执行只读检查：17/17 Ready、0重启，前端约30.6小时/gateway与auth约70.8小时；内部HTML14–17ms，客户端HTML1.03/1.86s，公共JS压缩232,728bytes、GET1.71/1.28s、HTTP2 200/0redirect。实际响应header为gzip与public,max-age=31536000,immutable。请求独立采样，不加总成浏览器首屏；未登录/读取资料/调用模型，也未抓取过去那次浏览器等待。
+
+复核命令（前述测量已执行；今后采样另记时间）：`curl --compressed -sS --max-time 20 -o /dev/null -w 'dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total} bytes=%{size_download}\n' https://resource-profile.45-130-165-168.nip.io/login`。这些时间多为累计值，计算各段要相减；TTFB不是纯后端CPU。测资源必须从当前HTML提取真实hash URL，不猜旧文件；保持域名/SNI，不绕过证书。
+
+后续通过判据/排错：先分“登录框显示前”“点击登录后”“缓存会话恢复”，各测浏览器冷/暖缓存至少3次，记录固定资源timing/可见时间，登录API独列。候选代码回归验证图标/弹窗/菜单、静态压缩字节/依赖与暖缓存；验证timeout/429/5xx/取消/总截止预算、写入不重复、401不清新会话；CDN验证只静态缓存、API不共享、SPA/TLS/登录/SSE保持。上述浏览器采样、实现/回归/部署/CDN均**待验证**，不能标成已提速。本轮无生产变更无需回滚；将来发布保留当前frontend镜像及源码并验证回退，回滚未演练。完整AI400/R-5/R-6/B-2保持未完成。
+
+## PAGE-PERF-FIX-20261013（2026-10-13）：前端加速验证与发布
+
+[交付报告](./docs/production-tests/2026-10-13/PAGE_PERFORMANCE_FIX_REPORT.md)、脱敏证据（本地测试产物，不入库：`./docs/production-tests/2026-10-13/PAGE_PERFORMANCE_EVIDENCE.json`）与浏览器检查（本地测试产物，不入库：`./docs/production-tests/2026-10-13/UI_CHECKS.json`）均为已执行结果：v3在2026-10-13T01:39:46Z部署，102新文件/33旧JS、17/17 Ready、Caddy/PVC及其他镜像保持；实际登录JS/CSS正文315213→164191B，9资源。没有稳定cold/warm FCP/LCP采样，不承诺固定打开秒数。
+
+复核（本轮已执行）：在frontend目录执行npm test、npm run lint:check、npm run size:check。生产build前设置VITE_AI_ENABLED=true、VITE_API_BASE_URL=/api、VITE_SSE_BASE_URL=/api、VITE_LANGFUSE_URL=https://jp.cloud.langfuse.com、VITE_REQUEST_PROFILE=standard、VITE_ENABLE_SERVICE_WARMUP=false、VITE_PREWARM_URLS为空，再npm run build。检查预算门≤200KiB/≤12资源且无chart/table；42请求与27会话回归通过。新[真实模块循环测试](./frontend/tests/request-default-cycle.test.mjs)与[严格timer测试](./frontend/tests/request-policy.test.mjs)分别用旧写法阴性控制复现TDZ和Illegal invocation；只跑Node默认timer不能覆盖Window接收者限制。
+
+实际浏览器判据已通过：先临时仅loopback预览、/api同源代理现有生产API，匿名首帧→admin登录→80教师列表→居中弹窗→注销；发布后在生产新tab复验同流程，student落地问卷/菜单限制与注销通过。现有学生固定数据面板标签RT-06不因本轮通过而关闭。遇到#app空时核对实际hash及真实模块环，不只看HTTP200；登录200却UI无跳转时检查Budget.finish timer自由调用，不先改密码或重发POST。预览进程/测试tabs已关闭，测试会话已注销，凭据/JWT不输出。
+
+最终镜像edu-portrait-kamatera-frontend:prod-page-perf-20261013-v3；精确回滚目标edu-portrait-kamatera-frontend:prod-ai-fix-20261011-v2。在服务器执行k3s kubectl -n educare set image deployment/frontend frontend=edu-portrait-kamatera-frontend:prod-ai-fix-20261011-v2，随后rollout status与匿名登录、表格、退出和17服务检查。v1/v2真实回滚已成功并核对原镜像/rootfs/静态与页面，不能回到失败v1/v2。保留证书PVC/ConfigMap/Secret/数据库，勿运行全栈publish或重放初始化来发布前端。
+
+冻结制品位于/opt/resource-profile/.local-run/page-perf-20261013/prod-page-perf-20261013-v3；同源前端103文件归档在/opt/resource-profile/.local-run/kamatera/page-perf-incoming-20261013-v3/frontend-source.tar，SHA见证据。主服务器源码目录未覆盖，未来重建必须先同步当前已审阅源码，避免旧host源码恢复长重试或大首屏包。CDN未实施；全AI400/R-5/R-6/B-2与主下一步不变，不触发新的模型任务。
+
+## JAVA-AI-MIGRATION-20261015（2026-10-15）：Java AI 运行时迁移与验收
+
+实现与契约见 [迁移记录](./docs/educare/JAVA_AI_MIGRATION_20261015.md)。构建前提 JDK 21、Maven；运行前提 Redis、Milvus 2.4 REST v2、OpenAI 兼容 embedding、agent-service。两个知识服务使用 [Dockerfile.knowledge](./docker/Dockerfile.knowledge)：8090 API/兼容生成，8095 `KNOWLEDGE_MCP_ENABLED=true`、`KNOWLEDGE_API_ENABLED=false`。保留历史服务名 `ai-inference-service`，它现在代表 Java jar。
+
+### 本地验证
+
+```bash
+cd backend
+mvn clean verify
+# 独立知识边界复验：
+mvn -pl knowledge-service test
+```
+
+部署工具测试：在隔离 Python 环境安装 `scripts/requirements-cloud.txt` 后执行 `python scripts/test-cloud-deploy.py`、`python scripts/test-k3s-deploy.py`。全后端 2026-10-15 首轮 724 测试、零失败/错误/跳过；后续新增恢复幂等回归与最终数量以迁移记录为准。实际 HTTP/MCP 测试使用随机回环端口与合成依赖；真实 Milvus 和生产模型不在这些测试中。
+
+### 部署与通过判据（待验证）
+
+1. 导入维护窗口停止知识写入，保存旧 agent 与两个 Python 服务镜像、环境/清单、完整文档及 Milvus 备份。禁止新旧导入服务并行写；旧 Python 不识别新写锁。
+2. 构建 agent 和 knowledge Java 镜像；先启动8090/8095，再启动 agent（仅兼容生成请求依赖 agent，知识服务启动不依赖它）。所有内部端口继续使用私网。配置 `EDUCARE_INTERNAL_TOKEN`、`EDUCARE_ADMIN_TOKEN`、`EDUCARE_MCP_TOKEN`，缺失分别返回503、不匹配401。
+3. `python scripts/k3s-deploy.py init-rag` 或现有 Cloud `init-rag` 调用本地 admin 鉴权的 Java 初始化接口；已有集合只验证/加载，不删改 schema。维度不匹配时停止迁移，不能切换 embedding 模型后复用旧向量。
+4. 用已授权合成文档验证 none/fixed_size/sentence 导入、同请求 skipped、来源修订重新写入、三 MCP 工具/旧 HTTP 检索结果一致、未知/空来源不编造、真实零召回为空；确认重启后仍可检索。然后验证合法/缺失/错误凭证和8095写接口不存在。
+5. 单独授权模型验收后执行完整 AgentLoop、四维审核、报告/PDF/反馈与 legacy 对比，检查 Langfuse `llm.audit/plan/risk/chat`、模型/用量、内容默认关闭；保留 R-5/R-6 未完成，不能把单元测试替代生产证据。
+6. 核验两个知识容器的进程均为 Java，无 Python/uvicorn/FastMCP；复测 JVM 内存、服务 Ready、错误率和延迟后，才可以声明生产 Python 退役。
+
+### 排错与回滚
+
+- `/health` 只代表进程存活；真实 Redis/Milvus/embedding 检索单独验收。依赖故障返回503，不能误判为空召回成功。
+- 401/503：核对调用方对应内部、MCP、admin 凭证；不要把凭证放入日志/聊天。eval runner 通过环境 `EDUCARE_INTERNAL_TOKEN` 附头，CI 使用 `EVAL_INTERNAL_TOKEN` secret。Cloud/本地容器的 `AGENT_SERVICE_URL` 指向agent内部地址；Render显式使用现有agent地址。
+- `Milvus embedding schema mismatch`：核对模型/维度与原集合，先恢复匹配配置，禁止删除集合排错。REST业务错误即使HTTP200也算失败。
+- 部分导入失败：旧数据保留但可能多出新片段；检查写锁释放/15分钟租约，重新提交同一完整 doc_id+原文+metadata+策略，不能只补片段。写前清除旧幂等hash，失败后不会误跳过恢复。集合级锁期间检索返回503，导入建议使用维护窗口。
+- 回滚需成套恢复旧agent、两个知识镜像与清单；本轮不改Milvus schema。停写后检查是否有未完成导入，必要时按备份恢复目标文档。新Java缓存使用独立命名空间，revision与旧版本共享。不要删除全部Redis键或清空Milvus。
+- `verify_prompt_cache.sh` 现在读Java全局累计计数，运行期间须隔离其它生成请求；Groq等不提供本地slot cache指标的供应商不适用该通过阈值。
+
+### LOCAL-JAVA-AI-TEST-20261015（2026-10-15）：隔离真实依赖回归
+
+脚本与合成数据环境：`scripts/local-java-ai/compose.yaml`、`embedding_fixture.py`、`smoke.py`。不要使用生产 .env，勿操作其他 Compose 项目。测试 fixture 是固定 1024 维非零向量，仅验证协议和持久化，不能证明语义召回质量。
+
+```bash
+# JDK 21 + Maven 构建；Dockerfile 的 context 必须是 backend
+mvn -f backend/pom.xml -pl knowledge-service -am verify
+docker build -f docker/Dockerfile.knowledge -t resource-profile-knowledge:local-migration-20261015 backend
+# 单独终端保持 fixture 存活
+python3 scripts/local-java-ai/embedding_fixture.py
+# 使用全新合成测试卷；smoke.py 正常模式要求空库
+docker compose -f scripts/local-java-ai/compose.yaml up -d
+python3 scripts/local-java-ai/smoke.py --output /tmp/rp-java-smoke.json
+docker compose -f scripts/local-java-ai/compose.yaml restart redis milvus api mcp
+python3 scripts/local-java-ai/smoke.py --persist --output /tmp/rp-java-persistence.json
+# 只停止本测试项目；保留数据卷供复查
+docker compose -f scripts/local-java-ai/compose.yaml stop
+```
+
+通过判据：初始化幂等、即时检索非空、原文档精确替换且子文档保留、失败嵌入保留旧文档、三种分块、三 MCP 工具、鉴权与 MCP-only 边界、重启持久化均通过。若 `Milvus operation failed`，先核对业务成功码；若导入后立即为空，检查实际运行 JAR 是否包含强一致性 gRPC 读取。禁止用等待几秒作为修复。JRE 镜像下载若报 short read/unexpected EOF 是构建未完成，不能记为镜像已验证。实际结果与未完成项见 `docs/educare/LOCAL_JAVA_AI_TEST_20261015.md`；本地测试不执行生产部署。修复回退可还原本节涉及源码/POM并重新构建，但旧 REST 版本存在已确认的数据可见性缺陷，不能据此批准生产切流。
+
+### BUSINESS-INTEGRATION-20261015（2026-10-15）：推送与合并验证
+
+整合分支 `codex/java-ai-business-integration-20261015`，目标 `main`。推送前执行 JDK21全后端 `mvn clean verify`，前端 `npm test` / `lint:check` / `build` / `size:check`，部署与SQL工具回归及 `scripts/test-preflight-prod.sh`，检查候选提交不含真实凭据和原始测试产物。远端 main 的新增提交合入后重新执行受影响回归，再检查PR CI；实际结果见 `docs/educare/BUSINESS_INTEGRATION_20261015.md`。远端评测变量当前未启用模型调用。Render配置仍含checksPass自动部署规则，合并可能触发仍绑定仓库的Render服务；当前生产Kamatera的发布仍须独立验证，不据PR合并宣称已发布。回退使用经审查的Git revert，不删除数据卷或自动逆执行SQL。

@@ -1,5 +1,6 @@
 <template>
   <div class="mental-container">
+    <p>状态比例按最近30天测评记录计算；今日完成量按业务时区 UTC+8 的答卷提交时间计算。</p>
     <!-- 统计卡片 -->
     <div class="stats-grid">
       <div v-for="s in statCards" :key="s.label" class="glass-card stat-tile">
@@ -23,7 +24,7 @@
       <section class="glass-panel">
         <header class="panel-head">
           <span class="panel-title">心理预警</span>
-          <span class="row-action" @click="notReady">查看全部</span>
+          <span class="row-action" @click="openWarnings">查看全部</span>
         </header>
         <div class="panel-body table-scroll-inner">
           <ChartState
@@ -41,6 +42,7 @@
                   <th>学院</th>
                   <th>级别</th>
                   <th>时间</th>
+                  <th>处置状态</th>
                   <th class="col-right">操作</th>
                 </tr>
               </thead>
@@ -52,8 +54,10 @@
                     <span class="badge" :style="levelStyle(w.level)">{{ w.level }}</span>
                   </td>
                   <td class="tnum">{{ w.time }}</td>
+                  <td>{{ warningStatusLabel(w.warningStatus) }}</td>
                   <td class="col-right">
-                    <span class="row-action" @click="notReady">处理</span>
+                    <span v-if="canWrite" class="row-action" @click="openHandle(w)">处理</span>
+                    <span v-else>仅授权心理人员可处理</span>
                   </td>
                 </tr>
               </tbody>
@@ -85,6 +89,82 @@
         </div>
       </section>
     </div>
+    <el-dialog v-model="warningsVisible" title="心理预警列表" width="900px">
+      <el-select
+        v-model="warningFilter"
+        clearable
+        placeholder="全部状态"
+        @change="changeWarningFilter"
+      >
+        <el-option
+          v-for="status in ['OPEN', 'IN_PROGRESS', 'RESOLVED']"
+          :key="status"
+          :label="warningStatusLabel(status)"
+          :value="status"
+        />
+      </el-select>
+      <el-alert v-if="warningsError" type="error" :closable="false" :title="warningsError"
+        ><el-button link @click="fetchWarnings">重新加载</el-button></el-alert
+      >
+      <el-table v-else v-loading="warningsLoading" :data="warningRows">
+        <el-table-column prop="name" label="姓名" /><el-table-column prop="dept" label="学院" />
+        <el-table-column prop="level" label="级别" width="90" /><el-table-column
+          prop="time"
+          label="测评时间"
+          min-width="160"
+        />
+        <el-table-column label="状态"
+          ><template #default="{ row }">{{
+            warningStatusLabel(row.warningStatus)
+          }}</template></el-table-column
+        >
+        <el-table-column
+          v-if="canWrite"
+          prop="warningNote"
+          label="处置说明"
+          min-width="160"
+          show-overflow-tooltip
+        />
+        <el-table-column v-if="canWrite" label="操作"
+          ><template #default="{ row }"
+            ><el-button link @click="openHandle(row)">处理</el-button></template
+          ></el-table-column
+        >
+      </el-table>
+      <el-pagination
+        v-model:current-page="warningPage"
+        :page-size="10"
+        :total="warningTotal"
+        layout="total, prev, pager, next"
+        @current-change="fetchWarnings"
+      />
+    </el-dialog>
+    <el-dialog v-model="handleVisible" title="处置心理预警" width="540px">
+      <el-form label-width="90px">
+        <el-form-item label="状态"
+          ><el-select v-model="handleForm.status"
+            ><el-option
+              v-for="status in ['OPEN', 'IN_PROGRESS', 'RESOLVED']"
+              :key="status"
+              :label="warningStatusLabel(status)"
+              :value="status" /></el-select
+        ></el-form-item>
+        <el-form-item label="处置说明"
+          ><el-input
+            v-model="handleForm.note"
+            type="textarea"
+            :rows="4"
+            maxlength="1000"
+            show-word-limit
+        /></el-form-item>
+      </el-form>
+      <template #footer
+        ><el-button @click="handleVisible = false">取消</el-button
+        ><el-button type="primary" :loading="handling" @click="saveHandle"
+          >保存</el-button
+        ></template
+      >
+    </el-dialog>
   </div>
 </template>
 
@@ -92,7 +172,8 @@
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
-import { getMentalOverview } from '@/api/mental'
+import { getMentalOverview, getMentalWarnings, handleMentalWarning } from '@/api/mental'
+import { useUserStore } from '@/store/modules/user'
 import ChartState from '@/views/dashboard/components/ChartState.vue'
 
 // 与全局 token 保持一致：实色用于图表与进度条，-deep 变体用于文字
@@ -104,13 +185,83 @@ const trendChartRef = ref<HTMLElement>()
 let trendChart: echarts.ECharts | null = null
 
 const loading = ref(false)
+const userStore = useUserStore()
+const canWrite = computed(() =>
+  userStore.userRoles.some((role: string) => ['admin', 'psychologist'].includes(role))
+)
+const warningsVisible = ref(false)
+const warningRows = ref<any[]>([])
+const warningPage = ref(1)
+const warningTotal = ref(0)
+const warningFilter = ref('')
+const warningsLoading = ref(false)
+const warningsError = ref('')
+let warningSequence = 0
+const handleVisible = ref(false)
+const handling = ref(false)
+const handleForm = reactive({ id: 0, status: 'OPEN', note: '' })
+const warningStatusLabel = (status: string) =>
+  ({ OPEN: '待处理', IN_PROGRESS: '处理中', RESOLVED: '已处理' })[status] || '待处理'
+const fetchWarnings = async () => {
+  const sequence = ++warningSequence
+  warningsLoading.value = true
+  warningsError.value = ''
+  try {
+    const res = await getMentalWarnings({
+      page: warningPage.value,
+      size: 10,
+      status: warningFilter.value || undefined
+    })
+    if (sequence === warningSequence) {
+      warningRows.value = res.data.records || []
+      warningTotal.value = Number(res.data.total) || 0
+    }
+  } catch (e) {
+    if (sequence === warningSequence)
+      warningsError.value = (e as any)?.message || '预警列表加载失败，请重试'
+  } finally {
+    if (sequence === warningSequence) warningsLoading.value = false
+  }
+}
+const changeWarningFilter = () => {
+  warningPage.value = 1
+  fetchWarnings()
+}
+const openWarnings = () => {
+  warningsVisible.value = true
+  fetchWarnings()
+}
+const openHandle = (row: any) => {
+  if (!canWrite.value) return
+  handleForm.id = row.id
+  handleForm.status = row.warningStatus || 'OPEN'
+  handleForm.note = row.warningNote || ''
+  handleVisible.value = true
+}
+const saveHandle = async () => {
+  if (!canWrite.value || handling.value) return
+  if (handleForm.status !== 'OPEN' && !handleForm.note.trim()) {
+    ElMessage.warning('请填写处置说明')
+    return
+  }
+  handling.value = true
+  try {
+    await handleMentalWarning(handleForm.id, { status: handleForm.status, note: handleForm.note })
+    handleVisible.value = false
+    ElMessage.success('处置已保存')
+    await Promise.all([fetchData(), fetchWarnings()])
+  } finally {
+    handling.value = false
+  }
+}
 const loadError = ref(false)
 
 const overviewData = reactive({
   goodRate: 0,
   attentionRate: 0,
   interventionRate: 0,
-  todayCompleted: 0
+  todayCompleted: 0,
+  recentAssessmentCount: 0
 })
 
 const warningList = ref<any[]>([])
@@ -119,8 +270,8 @@ const trendData = ref<any[]>([])
 const statCards = computed(() => [
   {
     label: '心理状态良好',
-    value: overviewData.goodRate,
-    unit: '%',
+    value: overviewData.recentAssessmentCount ? overviewData.goodRate : '—',
+    unit: overviewData.recentAssessmentCount ? '%' : '',
     color: 'var(--success-deep)',
     tint: 'var(--success-tint)',
     icon: 'CircleCheck',
@@ -128,8 +279,8 @@ const statCards = computed(() => [
   },
   {
     label: '需要关注',
-    value: overviewData.attentionRate,
-    unit: '%',
+    value: overviewData.recentAssessmentCount ? overviewData.attentionRate : '—',
+    unit: overviewData.recentAssessmentCount ? '%' : '',
     color: 'var(--warning-deep)',
     tint: 'var(--warning-tint)',
     icon: 'Warning',
@@ -137,8 +288,8 @@ const statCards = computed(() => [
   },
   {
     label: '需要干预',
-    value: overviewData.interventionRate,
-    unit: '%',
+    value: overviewData.recentAssessmentCount ? overviewData.interventionRate : '—',
+    unit: overviewData.recentAssessmentCount ? '%' : '',
     color: 'var(--error-deep)',
     tint: 'var(--error-tint)',
     icon: 'Bell',
@@ -165,10 +316,6 @@ const levelStyle = (level: string) =>
   level === '高危' || level === '重度'
     ? { background: 'var(--error-tint)', color: 'var(--error-deep)' }
     : { background: 'var(--warning-tint)', color: 'var(--warning-deep)' }
-
-const notReady = () => {
-  ElMessage.info('该功能暂未开放')
-}
 
 const initTrendChart = () => {
   if (!trendChartRef.value) return
@@ -257,6 +404,7 @@ const fetchData = async () => {
     overviewData.attentionRate = data.attentionRate || 0
     overviewData.interventionRate = data.interventionRate || 0
     overviewData.todayCompleted = data.todayCompleted || 0
+    overviewData.recentAssessmentCount = Number(data.recentAssessmentCount) || 0
     warningList.value = data.warningList || []
     trendData.value = data.trendData || []
   } catch (e) {

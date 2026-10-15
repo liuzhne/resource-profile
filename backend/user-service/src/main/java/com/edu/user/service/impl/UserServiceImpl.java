@@ -16,6 +16,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Page<User> list(Integer page, Integer size, String username, Integer role, Integer status) {
+        if (page == null || page < 1 || size == null || size < 1 || size > 100)
+            throw new com.edu.common.exception.BusinessException(400, "分页参数无效");
         Page<User> pageParam = new Page<>(page, size);
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
 
@@ -25,6 +27,7 @@ public class UserServiceImpl implements UserService {
         if (status != null) {
             wrapper.eq(User::getStatus, status);
         }
+        if (role != null) wrapper.apply("EXISTS (SELECT 1 FROM sys_user_role ur JOIN sys_role r ON r.id=ur.role_id WHERE ur.user_id=sys_user.id AND r.id={0} AND r.deleted=0 AND r.status=1)", role);
 
         wrapper.orderByDesc(User::getCreateTime);
         return userMapper.selectPage(pageParam, wrapper);

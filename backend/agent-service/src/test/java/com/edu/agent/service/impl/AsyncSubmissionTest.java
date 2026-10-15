@@ -42,7 +42,11 @@ class AsyncSubmissionTest {
         AgentTaskServiceImpl service = triggerService(task -> { throw new RejectedExecutionException(); }, mapper);
         doReturn(42L).when(service).createTask(7L);
         assertThrows(BusinessException.class, () -> service.triggerTask(7L));
-        verify(mapper).updateById(argThat((AgentTask task) -> task.getId() == 42L && task.getStatus() == TaskStatus.FAILED));
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AgentTask>> update = org.mockito.ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper.class);
+        verify(mapper).update(isNull(), update.capture());
+        assertTrue(update.getValue().getParamNameValuePairs().containsValue(TaskStatus.FAILED));
+        assertTrue(update.getValue().getParamNameValuePairs().containsValue("QUEUE_FULL"));
+        assertTrue(update.getValue().getSqlSet().contains("COALESCE(completed_at,UTC_TIMESTAMP())"));
         verify(service, never()).asyncExecute(anyLong());
     }
 
@@ -52,14 +56,15 @@ class AsyncSubmissionTest {
         ValueOperations<String, String> values = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(values);
         when(values.setIfAbsent(anyString(), anyString(), anyLong(), eq(TimeUnit.SECONDS))).thenReturn(true);
-        return spy(new AgentTaskServiceImpl(mapper, null, null, null, redis, null, null, null, null, null, executor));
+        return spy(new AgentTaskServiceImpl(mapper, null, null, null, null, redis, null, null, null, null, null, executor));
     }
 
     @Test
     void pdfSubmissionOnlyEnqueues() {
         AgentTaskMapper source = mock(AgentTaskMapper.class);
         AgentExportTaskMapper jobs = mock(AgentExportTaskMapper.class);
-        when(source.selectById(7L)).thenReturn(new AgentTask());
+        AgentTask completed = new AgentTask(); completed.setStatus(com.edu.agent.enums.TaskStatus.COMPLETED);
+        when(source.selectById(7L)).thenReturn(completed);
         doAnswer(invocation -> { ((AgentExportTask) invocation.getArgument(0)).setId(99L); return 1; }).when(jobs).insert(any(AgentExportTask.class));
         List<Runnable> queue = new ArrayList<>();
         ExportServiceImpl service = spy(new ExportServiceImpl(jobs, source, mock(TemplateEngine.class), mock(ResourceLoader.class), queue::add));

@@ -1,5 +1,8 @@
 <template>
   <div class="page-container">
+    <el-alert v-if="loadError" type="error" :closable="false" :title="loadError"
+      ><el-button link @click="fetchData">重新加载</el-button></el-alert
+    >
     <el-card>
       <template #header>
         <div class="card-header">
@@ -18,7 +21,7 @@
         </div>
       </template>
 
-      <el-empty v-if="!loading && rows.length === 0" description="暂无学生提交" />
+      <el-empty v-if="!loading && !loadError && rows.length === 0" description="暂无学生提交" />
       <el-table v-else v-loading="loading" :data="rows" stripe>
         <el-table-column type="index" label="#" width="50" />
         <el-table-column prop="studentNo" label="学号" width="120" />
@@ -46,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCompletionList, getQuestionnaireDetail } from '@/api/mental'
 import { usePermission } from '@/directives/permission'
@@ -55,16 +58,22 @@ const { hasRole } = usePermission()
 
 const route = useRoute()
 const router = useRouter()
-const questionnaireId = Number(route.params.id)
+const questionnaireId = computed(() => Number(route.params.id))
+let loadSequence = 0
 
 const loading = ref(false)
+const loadError = ref('')
 const rows = ref<any[]>([])
 const questionnaire = ref<any>(null)
 
 const avgScore = computed(() => {
   if (rows.value.length === 0) return null
-  const sum = rows.value.reduce((acc, r) => acc + (Number(r.score) || 0), 0)
-  return Math.round((sum / rows.value.length) * 10) / 10
+  const scored = rows.value.filter(
+    (row) => row.score !== null && row.score !== undefined && Number.isFinite(Number(row.score))
+  )
+  if (!scored.length) return null
+  const sum = scored.reduce((acc, row) => acc + Number(row.score), 0)
+  return Math.round((sum / scored.length) * 10) / 10
 })
 
 const levelTagColor = (l: string) => {
@@ -75,24 +84,36 @@ const levelTagColor = (l: string) => {
 }
 
 const fetchData = async () => {
+  const id = questionnaireId.value
+  const sequence = ++loadSequence
   loading.value = true
+  loadError.value = ''
   try {
     const [meta, completion] = await Promise.all([
-      getQuestionnaireDetail(questionnaireId),
-      getCompletionList(questionnaireId)
+      getQuestionnaireDetail(id),
+      getCompletionList(id)
     ])
+    if (sequence !== loadSequence || id !== questionnaireId.value) return
     questionnaire.value = meta.data
     rows.value = completion.data || []
   } catch (e) {
-    console.error('加载完成情况失败', e)
+    if (sequence === loadSequence) loadError.value = (e as any)?.message || '数据加载失败，请重试'
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 
 const goBack = () => router.push('/mental/questionnaire')
 
-onMounted(fetchData)
+watch(
+  questionnaireId,
+  () => {
+    rows.value = []
+    questionnaire.value = null
+    fetchData()
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped lang="scss">

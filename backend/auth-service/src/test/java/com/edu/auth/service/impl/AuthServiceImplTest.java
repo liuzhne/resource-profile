@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -28,6 +29,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -37,7 +40,7 @@ import static org.mockito.Mockito.when;
  *   ② 禁用账号 403；
  *   ③ 登录成功写 Redis 会话白名单 token:{id}（网关 check-session 依据，登出即吊销）；
  *   ④ JWT claims 携带 roles（驱动 FieldPermissionAdvice 字段级权限）；
- *   ⑤ logout 删白名单 key（令牌吊销）。
+ *   ⑤ logout 原子比较并删除本次令牌的会话，不撤销较新的登录。
  */
 class AuthServiceImplTest {
 
@@ -60,6 +63,8 @@ class AuthServiceImplTest {
         jwtUtil = mock(JwtUtil.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         authService = new AuthServiceImpl(userMapper, roleMapper, redisTemplate, passwordEncoder, jwtUtil);
+        when(roleMapper.lockIdentityAdminRole()).thenReturn(List.of(1L));
+        when(userMapper.selectByIdForUpdate(42L)).thenReturn(activeUser());
     }
 
     private User activeUser() {
@@ -76,6 +81,7 @@ class AuthServiceImplTest {
         LoginRequest r = new LoginRequest();
         r.setUsername(username);
         r.setPassword(password);
+        r.setRemember(true);
         return r;
     }
 
@@ -134,6 +140,7 @@ class AuthServiceImplTest {
         when(passwordEncoder.matches("pw", "$2a$10$hash")).thenReturn(true);
         when(roleMapper.selectRolesByUserId(42L)).thenReturn(List.of(role("counselor")));
         when(jwtUtil.generateAccessToken(eq("42"), any())).thenReturn("access-tok");
+        when(redisTemplate.execute(any(RedisScript.class), eq(List.of("token:42", "refresh:42")), eq("access-tok"), any())).thenReturn(1L);
         when(jwtUtil.generateRefreshToken("42")).thenReturn("refresh-tok");
 
         LoginResponse resp = authService.login(req("alice", "pw"));
@@ -142,7 +149,8 @@ class AuthServiceImplTest {
         assertThat(resp.getRefreshToken()).isEqualTo("refresh-tok");
         assertThat(resp.getExpiresIn()).isEqualTo(24 * 60 * 60L);
         // 会话白名单：key=token:{id}、TTL 24h，是网关 check-session 与登出吊销的依据
-        verify(valueOps).set("token:42", "access-tok", 24L, TimeUnit.HOURS);
+        verify(redisTemplate).execute(any(RedisScript.class), eq(List.of("token:42", "refresh:42")), eq("access-tok"), eq("refresh-tok"));
+        verify(userMapper).recordLogin(42L, "alice", "counselor", "unknown", 1);
     }
 
     @Test
@@ -153,6 +161,7 @@ class AuthServiceImplTest {
         when(roleMapper.selectRolesByUserId(42L))
                 .thenReturn(List.of(role("counselor"), role("teacher")));
         when(jwtUtil.generateAccessToken(eq("42"), any())).thenReturn("access-tok");
+        when(redisTemplate.execute(any(RedisScript.class), eq(List.of("token:42", "refresh:42")), eq("access-tok"), any())).thenReturn(1L);
 
         authService.login(req("alice", "pw"));
 
@@ -164,9 +173,68 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void logout_deletesRedisWhitelistKey() {
-        authService.logout(42L);
-        verify(redisTemplate).delete("token:42");
+    @SuppressWarnings("unchecked")
+    void logout_executesAtomicComparisonWithThePresentedToken() {
+        when(redisTemplate.execute(any(RedisScript.class), eq(List.of("token:42", "refresh:42")), eq("access-tok")))
+                .thenReturn(1L);
+
+        authService.logout(42L, "access-tok");
+
+        ArgumentCaptor<RedisScript<Long>> script = ArgumentCaptor.forClass(RedisScript.class);
+        verify(redisTemplate).execute(script.capture(), eq(List.of("token:42", "refresh:42")), eq("access-tok"));
+        assertThat(script.getValue().getResultType()).isEqualTo(Long.class);
+        assertThat(script.getValue().getScriptAsString()).contains(
+                "if redis.call('GET', KEYS[1]) == ARGV[1] then",
+                "return redis.call('DEL', KEYS[1])", "return 0");
+        // The single Lua invocation is the only Redis operation; no racy GET + DEL.
+        verifyNoMoreInteractions(redisTemplate);
+        verifyNoInteractions(valueOps);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void logout_alreadyRevokedOrReplacedSessionIsAnIdempotentSuccess() {
+        when(redisTemplate.execute(any(RedisScript.class), eq(List.of("token:42", "refresh:42")), eq("old-access")))
+                .thenReturn(0L);
+
+        authService.logout(42L, "old-access");
+
+        verify(redisTemplate).execute(any(RedisScript.class), eq(List.of("token:42", "refresh:42")), eq("old-access"));
+        verifyNoMoreInteractions(redisTemplate);
+        verifyNoInteractions(valueOps);
+    }
+
+    @Test
+    void logout_missingUserOrTokenCannotRevokeAnySession() {
+        for (Long userId : new Long[]{null, 0L, -1L}) {
+            assertThatThrownBy(() -> authService.logout(userId, "access-tok"))
+                    .isInstanceOfSatisfying(BusinessException.class,
+                            error -> assertThat(error.getCode()).isEqualTo(401));
+        }
+        for (String token : new String[]{null, "", " "}) {
+            assertThatThrownBy(() -> authService.logout(42L, token))
+                    .isInstanceOfSatisfying(BusinessException.class,
+                            error -> assertThat(error.getCode()).isEqualTo(401));
+        }
+        verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
+    void logout_missingRedisConfirmationCannotReportSuccess() {
+        assertThatThrownBy(() -> authService.logout(42L, "access-tok"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getCode()).isEqualTo(503));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void logout_redisFailurePropagatesSoTheClientCanRetry() {
+        when(redisTemplate.execute(any(RedisScript.class), eq(List.of("token:42", "refresh:42")), eq("access-tok")))
+                .thenThrow(new IllegalStateException("test redis unavailable"));
+
+        assertThatThrownBy(() -> authService.logout(42L, "access-tok"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("test redis unavailable");
     }
 
     @Test
@@ -196,17 +264,23 @@ class AuthServiceImplTest {
 
     @Test
     void refreshToken_issuesNewTokenAndUpdatesRedisWhitelist() {
+        when(jwtUtil.validateToken("refresh-old")).thenReturn(true);
+        when(jwtUtil.getClaim("refresh-old", "tokenUse")).thenReturn("refresh");
         when(jwtUtil.getSubject("refresh-old")).thenReturn("42");
+        when(redisTemplate.getExpire("refresh:42", TimeUnit.SECONDS)).thenReturn(3600L);
+        when(jwtUtil.getExpiration("refresh-old")).thenReturn(new java.util.Date(System.currentTimeMillis() + 3600000L));
         when(userMapper.selectById(42L)).thenReturn(activeUser());
         when(roleMapper.selectRolesByUserId(42L)).thenReturn(List.of(role("counselor")));
         when(jwtUtil.generateAccessToken(eq("42"), any())).thenReturn("access-new");
-        when(jwtUtil.generateRefreshToken("42")).thenReturn("refresh-new");
+        when(jwtUtil.generateRefreshTokenUntil(eq("42"), any(java.util.Date.class))).thenReturn("refresh-new");
+        when(redisTemplate.execute(any(RedisScript.class), eq(List.of("refresh:42", "token:42")), eq("refresh-old"), eq("refresh-new"), eq("access-new"))).thenReturn(1L);
 
         LoginResponse resp = authService.refreshToken("refresh-old");
 
         assertThat(resp.getToken()).isEqualTo("access-new");
         assertThat(resp.getRefreshToken()).isEqualTo("refresh-new");
         // 刷新同样刷新会话白名单，旧 access token 被新值覆盖
-        verify(valueOps).set("token:42", "access-new", 24L, TimeUnit.HOURS);
+        assertThat(resp.getExpiresIn()).isBetween(3598L, 3600L);
+        verify(redisTemplate).execute(any(RedisScript.class), eq(List.of("refresh:42", "token:42")), eq("refresh-old"), eq("refresh-new"), eq("access-new"));
     }
 }

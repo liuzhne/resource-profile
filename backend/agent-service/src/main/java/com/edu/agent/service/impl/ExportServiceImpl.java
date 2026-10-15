@@ -9,6 +9,7 @@ import com.edu.agent.entity.AgentTask;
 import com.edu.agent.mapper.AgentExportTaskMapper;
 import com.edu.agent.mapper.AgentTaskMapper;
 import com.edu.agent.service.ExportService;
+import com.edu.agent.service.PlanViewNormalizer;
 import com.edu.common.exception.BusinessException;
 import com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
@@ -108,6 +109,11 @@ public class ExportServiceImpl implements ExportService {
             throw new IllegalArgumentException("任务不存在: " + taskId);
         }
 
+        if (source.getDeleted() != null && source.getDeleted() != 0
+                || !(source.getStatus() == com.edu.agent.enums.TaskStatus.COMPLETED
+                || source.getStatus() == com.edu.agent.enums.TaskStatus.REJECTED)) {
+            throw new BusinessException(409, "仅完成或审核拒绝的报告可以导出");
+        }
         AgentExportTask job = new AgentExportTask();
         job.setTaskId(taskId);
         job.setUserId(userId == null ? 0L : userId);
@@ -174,24 +180,31 @@ public class ExportServiceImpl implements ExportService {
 
     // ==================== 渲染细节 ====================
 
-    private String renderHtml(AgentTask source) {
+    String renderHtml(AgentTask source) {
+        String normalizedPlan = PlanViewNormalizer.toJson(PlanViewNormalizer.normalize(source.getInterventionPlan()));
         Context ctx = new Context();
         ctx.setVariable("task", source);
+        ctx.setVariable("taskCreatedAtLocal", source.getCreatedAt() == null ? null : source.getCreatedAt().plusHours(8));
+        ctx.setVariable("taskCompletedAtLocal", source.getCompletedAt() == null ? null : source.getCompletedAt().plusHours(8));
         ctx.setVariable("risk", parseObj(source.getRiskAnalysisResult()));
         ctx.setVariable("knowledgeChunks", parseChunks(source.getRetrievedKnowledge()));
-        ctx.setVariable("plan", parseObj(source.getInterventionPlan()));
+        ctx.setVariable("knowledge", parseObj(source.getRetrievedKnowledge()));
+        ctx.setVariable("knowledgeSearches", parseArr(source.getRetrievedKnowledge(), "searches"));
+        ctx.setVariable("plan", parseObj(normalizedPlan));
+        ctx.setVariable("planInvalid", source.getInterventionPlan() != null && !source.getInterventionPlan().isBlank() && normalizedPlan == null);
         ctx.setVariable("audit", parseObj(source.getComplianceAudit()));
         ctx.setVariable("auditItems", parseArr(source.getComplianceAudit(), "audit_items"));
-        ctx.setVariable("immediateActions", parseArr(source.getInterventionPlan(), "immediate_actions"));
-        ctx.setVariable("longTermPlan", parseArr(source.getInterventionPlan(), "long_term_plan"));
-        ctx.setVariable("resources", parseArr(source.getInterventionPlan(), "resources"));
+        ctx.setVariable("immediateActions", parseArr(normalizedPlan, "immediate_actions"));
+        ctx.setVariable("longTermPlan", parseArr(normalizedPlan, "long_term_plan"));
+        ctx.setVariable("resources", parseArr(normalizedPlan, "resources"));
+        ctx.setVariable("references", parseStringArr(normalizedPlan, "references"));
         ctx.setVariable("redactedSuggestions",
                 parseStringArr(source.getComplianceAudit(), "redacted_suggestions"));
         ctx.setVariable("keyIndicators",
                 parseStringArr(source.getRiskAnalysisResult(), "key_indicators"));
         ctx.setVariable("interventionTypes",
                 parseStringArr(source.getRiskAnalysisResult(), "recommended_intervention_types"));
-        ctx.setVariable("generatedAt", LocalDateTime.now());
+        ctx.setVariable("generatedAt", LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")));
         return templateEngine.process("report", ctx);
     }
 

@@ -1,0 +1,6 @@
+# Optional fallback: JDK 21 on host, real dependencies in Docker.
+services:
+  redis:
+    ports: ['127.0.0.1:16379:6379']
+  milvus:
+    ports: ['127.0.0.1:19539:19530']

@@ -10,7 +10,10 @@
         </div>
       </template>
 
-      <el-empty v-if="!loading && list.length === 0" description="当前没有可作答的问卷" />
+      <el-alert v-if="loadError" type="error" :closable="false" :title="loadError"
+        ><el-button link @click="fetchData">重新加载</el-button></el-alert
+      >
+      <el-empty v-else-if="!loading && list.length === 0" description="当前没有可作答的问卷" />
       <el-row v-else v-loading="loading" :gutter="16">
         <el-col
           v-for="item in list"
@@ -60,19 +63,21 @@ const router = useRouter()
 const userStore = useUserStore()
 const list = ref<any[]>([])
 const loading = ref(false)
+const loadError = ref('')
 
 const fetchData = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const userId = userStore.userInfo?.id
     if (!userId) {
-      ElMessage.error('未登录或缺少用户信息')
+      loadError.value = '未登录或缺少用户信息'
       return
     }
     const res = await studentListQuestionnaires(userId)
     list.value = res.data || []
   } catch (e) {
-    console.error('加载问卷失败', e)
+    loadError.value = (e as any)?.message || '加载问卷失败，请重试'
   } finally {
     loading.value = false
   }

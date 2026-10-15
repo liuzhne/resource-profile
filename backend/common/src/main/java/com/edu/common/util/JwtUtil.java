@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -46,14 +47,34 @@ public class JwtUtil {
      * 生成访问令牌
      */
     public String generateAccessToken(String subject, Map<String, Object> claims) {
-        return generateToken(subject, claims, jwtProperties.getAccessTokenExpire());
+        Map<String, Object> typedClaims = new java.util.HashMap<>(claims == null ? Map.of() : claims);
+        typedClaims.put("tokenUse", "access");
+        return generateToken(subject, typedClaims, jwtProperties.getAccessTokenExpire());
     }
 
     /**
      * 生成刷新令牌
      */
     public String generateRefreshToken(String subject) {
-        return generateToken(subject, null, jwtProperties.getRefreshTokenExpire());
+        return generateRefreshToken(subject, jwtProperties.getRefreshTokenExpire());
+    }
+
+    public String generateRefreshToken(String subject, long lifetimeMillis) {
+        if (lifetimeMillis <= 0 || lifetimeMillis > jwtProperties.getRefreshTokenExpire()) {
+            throw new IllegalArgumentException("刷新会话有效期无效");
+        }
+        return generateToken(subject, Map.of("tokenUse", "refresh"), lifetimeMillis);
+    }
+
+    /** Rotation preserves the original absolute deadline rather than restarting a duration. */
+    public String generateRefreshTokenUntil(String subject, Date absoluteExpiry) {
+        Date now = new Date();
+        if (absoluteExpiry == null || !absoluteExpiry.after(now)
+                || absoluteExpiry.getTime() - now.getTime() > jwtProperties.getRefreshTokenExpire()) {
+            throw new IllegalArgumentException("刷新会话绝对有效期无效");
+        }
+        return Jwts.builder().subject(subject).issuedAt(now).expiration(new Date(absoluteExpiry.getTime()))
+                .claim("tokenUse", "refresh").id(UUID.randomUUID().toString()).signWith(key).compact();
     }
 
     /**
@@ -73,7 +94,9 @@ public class JwtUtil {
             claims.forEach(builder::claim);
         }
 
-        return builder.compact();
+        // iat/exp are encoded at second precision. A fresh issuer-owned jti keeps
+        // same-user logins and refreshes distinct even when they happen in one second.
+        return builder.id(UUID.randomUUID().toString()).compact();
     }
 
     /**

@@ -11,7 +11,7 @@
 
     <div class="value-row">
       <span class="value tnum">
-        <CountTo :end="value" :duration="1600" />
+        <CountTo v-if="value != null" :end="value" :duration="1600" /><span v-else>—</span>
       </span>
       <span v-if="suffix" class="suffix">{{ suffix }}</span>
     </div>
@@ -29,7 +29,7 @@ import CountTo from './CountTo.vue'
 
 interface Props {
   title: string
-  value: number
+  value: number | null
   icon: string
   /** 图标前景色，用 -deep 变体保证浅底对比度 */
   color: string

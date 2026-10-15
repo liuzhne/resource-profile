@@ -88,6 +88,11 @@ services:
       # 未配置 LLM 供应商前隐藏 AI 预警与 LLM 追踪入口。
       - key: VITE_AI_ENABLED
         value: "true"
+      # 只有明确的休眠部署启用长预算与预热；Kamatera 构建使用 standard。
+      - key: VITE_REQUEST_PROFILE
+        value: "render"
+      - key: VITE_ENABLE_SERVICE_WARMUP
+        value: "true"
       # Long-lived SSE must bypass the static site's buffering external rewrite.
       - key: VITE_SSE_BASE_URL
         value: "https://edu-portrait-gateway.onrender.com"
@@ -374,7 +379,7 @@ services:
       - key: MCP_KNOWLEDGE_RAG_URL
         value: https://edu-portrait-ai-inference.onrender.com
       - key: MCP_KNOWLEDGE_RAG_ENDPOINT
-        value: /mcp/
+        value: /mcp
       - key: STUDENT_SERVICE_URL
         value: https://edu-portrait-student.onrender.com
       - key: MENTAL_SERVICE_URL
@@ -442,18 +447,24 @@ services:
   - type: web
     name: edu-portrait-ai-inference
     runtime: docker
-    dockerContext: ./ai-inference-service
-    dockerfilePath: ./ai-inference-service/Dockerfile
+    dockerContext: ./backend
+    dockerfilePath: ./docker/Dockerfile.knowledge
     branch: main
     autoDeployTrigger: checksPass
     buildFilter:
       paths:
-        - ai-inference-service/**
+        - backend/knowledge-service/**
+        - backend/pom.xml
+        - docker/Dockerfile.knowledge
     plan: free
     envVars:
       - fromGroup: edu-portrait-common-env
       - key: PORT
         value: "8090"
+      - key: KNOWLEDGE_MCP_ENABLED
+        value: "true"
+      - key: AGENT_SERVICE_URL
+        value: https://edu-portrait-agent.onrender.com
       - key: LLM_BASE_URL
         value: https://api.groq.com/openai/v1
       - key: LLM_MODEL

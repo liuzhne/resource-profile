@@ -2,6 +2,7 @@ package com.edu.mental.service;
 
 import com.edu.mental.dto.SubmitAnswerRequest;
 import com.edu.mental.entity.MentalAssessment;
+import com.edu.mental.dto.MentalHistoryDto;
 
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,8 @@ public interface MentalAssessmentService {
 
     /** 学生我的评估历史 */
     List<MentalAssessment> myHistory(Long userId);
+
+    List<MentalHistoryDto> historyForStudent(Long studentId);
 
     /** 单次评估详情（含原始答卷） */
     Map<String, Object> getMyAssessmentDetail(Long userId, Long assessmentId);

@@ -127,16 +127,25 @@ INSERT INTO sys_user (username, password, nickname, user_type, status) VALUES
 ('teacher', '$2a$10$OnV5fZmbtiEpppXjdpYrI.P02/zX9BnS0RRT/3F5oD5bY56bK0Z8.', '测试教师', 1, 1),
 ('student', '$2a$10$ng9lo6M8mJbf0xeT22Jx.OpKMNFls8YHpsnWIgDNTdXEq/0ZrBlxS', '测试学生', 2, 1);
 
+-- Additional public demo portraits have separate disabled accounts; no shared identity or usable default password.
+INSERT INTO sys_user(username,password,nickname,user_type,status) VALUES
+('student_demo_2',CONCAT('!disabled!',SHA2(UUID(),256)),'示例学生2（待开通）',2,0),
+('student_demo_3',CONCAT('!disabled!',SHA2(UUID(),256)),'示例学生3（待开通）',2,0),
+('student_demo_4',CONCAT('!disabled!',SHA2(UUID(),256)),'示例学生4（待开通）',2,0);
+
 INSERT INTO sys_role (name, code, description) VALUES
 ('系统管理员', 'admin', '拥有系统所有权限'),
 ('教师', 'teacher', '可以查看教师画像和学生信息'),
 ('学生', 'student', '可以查看自己的画像信息'),
-('心理健康教师', 'mental_teacher', '可以管理心理健康相关功能');
+('心理健康教师', 'psychologist', '可以管理心理健康相关功能');
 
 INSERT INTO sys_user_role (user_id, role_id) VALUES
 (1, 1),
 (2, 2),
-(3, 3);
+(3, 3),
+(4, 3),
+(5, 3),
+(6, 3);
 
 -- 问卷表
 CREATE TABLE IF NOT EXISTS mental_questionnaire (
@@ -218,9 +227,9 @@ INSERT INTO teacher_info (user_id, employee_id, name, gender, dept_name, title, 
 -- 插入默认学生数据
 INSERT INTO student_info (user_id, student_id, name, gender, dept_name, major_name, grade, class_name, status) VALUES
 (3, 'S2024001', '赵同学', 1, '计算机学院', '计算机科学与技术', '2024', '1班', 1),
-(3, 'S2024002', '钱同学', 0, '计算机学院', '软件工程', '2024', '2班', 1),
-(3, 'S2024003', '孙同学', 1, '软件学院', '人工智能', '2023', '1班', 1),
-(3, 'S2024004', '周同学', 0, '软件学院', '数据科学', '2023', '2班', 1);
+(4, 'S2024002', '钱同学', 0, '计算机学院', '软件工程', '2024', '2班', 1),
+(5, 'S2024003', '孙同学', 1, '软件学院', '人工智能', '2023', '1班', 1),
+(6, 'S2024004', '周同学', 0, '软件学院', '数据科学', '2023', '2班', 1);
 
 -- 插入默认问卷数据
 INSERT INTO mental_questionnaire (title, type, description, questions, start_time, end_time, status) VALUES
@@ -235,12 +244,7 @@ INSERT INTO mental_assessment (student_id, questionnaire_id, score, level, resul
 (3, 1, 45, '中度', '心理压力较大，需关注', '建议预约心理咨询', 1),
 (4, 1, 35, '高危', '严重心理问题预警', '建议立即寻求专业帮助', 1);
 
--- 插入登录日志数据
-INSERT INTO sys_login_log (user_id, username, role, ip, login_time, status) VALUES
-(1, 'admin', '管理员', '192.168.1.102', DATE_SUB(NOW(), INTERVAL 10 MINUTE), 1),
-(2, 'teacher', '教师', '192.168.1.100', DATE_SUB(NOW(), INTERVAL 30 MINUTE), 1),
-(3, 'student', '学生', '192.168.1.101', DATE_SUB(NOW(), INTERVAL 45 MINUTE), 1),
-(1, 'admin', '管理员', '192.168.1.103', DATE_SUB(NOW(), INTERVAL 2 HOUR), 1);
+-- Login logs start empty; only actual authentication events are recorded.
 
 INSERT INTO sys_permission (name, code, type, parent_id, sort_order, icon, path) VALUES
 ('数据面板', 'dashboard', 1, 0, 1, 'DataLine', '/dashboard'),

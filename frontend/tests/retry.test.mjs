@@ -1,86 +1,143 @@
-// 冷启动重试决策的回归护栏：判错会导致写操作重复执行（如新增学生落库两条）。
-// 纯 node 运行，不依赖测试框架：npm run test:retry
+// Replay/budget policy; request-policy.test.mjs also exercises actual Axios interceptors offline.
+import assert from 'node:assert/strict'
 import {
   shouldRetry,
-  isColdStartFailure,
+  isTransientFailure,
   retryDelay,
   MAX_RETRY,
-  RETRY_DELAYS
+  RETRY_DELAYS,
+  resolveRequestProfile,
+  resolveRequestPolicy,
+  loginRequestOptions,
+  serviceWarmupEnabled,
+  retryAfterDelay
 } from '../src/utils/retry.js'
 
-let pass = 0,
-  fail = 0
-const ok = (name, cond) => {
-  cond ? pass++ : (fail++, console.log('  ✗ ' + name))
+let count = 0
+const check = (name, run) => {
+  run()
+  count++
+  console.log(`  ✓ ${name}`)
 }
-
-const timeout = { code: 'ECONNABORTED', message: 'timeout' }
-const netdown = { message: 'Network Error' }
-const r = (s) => ({ response: { status: s } })
-const cfg = (o = {}) => ({ method: 'get', ...o })
-
-// —— 429：任何方法都必须重试（请求未抵达应用）——
-ok('429 + GET 重试', shouldRetry(r(429), cfg({ method: 'get' })) === true)
-ok('429 + POST 重试', shouldRetry(r(429), cfg({ method: 'post' })) === true)
-ok('429 + DELETE 重试', shouldRetry(r(429), cfg({ method: 'delete' })) === true)
-
-// —— 安全关键：非幂等写操作超时绝不重试 ——
-ok('POST 超时 不重试', shouldRetry(timeout, cfg({ method: 'post' })) === false)
-ok('PUT 超时 不重试', shouldRetry(timeout, cfg({ method: 'put' })) === false)
-ok('DELETE 超时 不重试', shouldRetry(timeout, cfg({ method: 'delete' })) === false)
-ok('POST 断网 不重试', shouldRetry(netdown, cfg({ method: 'post' })) === false)
-ok('POST 503 不重试', shouldRetry(r(503), cfg({ method: 'post' })) === false)
-
-// —— 幂等方法超时可重试 ——
-ok('GET 超时 重试', shouldRetry(timeout, cfg({ method: 'get' })) === true)
-ok('GET 断网 重试', shouldRetry(netdown, cfg({ method: 'get' })) === true)
-ok('GET 502 重试', shouldRetry(r(502), cfg({ method: 'get' })) === true)
-ok('GET 504 重试', shouldRetry(r(504), cfg({ method: 'get' })) === true)
-
-// —— 显式 opt-in（登录）——
-ok(
-  'POST+retryUnsafe 超时 重试',
-  shouldRetry(timeout, cfg({ method: 'post', retryUnsafe: true })) === true
+const config = (options = {}) => ({ method: 'get', ...options })
+const failure = (status) => ({ response: { status } })
+check('standard is explicit bounded 15s/30s and two short retries', () => {
+  const policy = resolveRequestPolicy(config())
+  assert.equal(policy.timeout, 15000)
+  assert.equal(policy.budget, 30000)
+  assert.equal(policy.maxRetry, 2)
+  assert.deepEqual(RETRY_DELAYS, [250, 750])
+  assert.equal(MAX_RETRY, RETRY_DELAYS.length)
+  assert.equal(retryDelay(99), 750)
+})
+for (const method of ['post', 'put', 'patch', 'delete']) {
+  check(
+    `${method}: 429, gateway failure, timeout and retryUnsafe never authorize write replay`,
+    () => {
+      for (const error of [
+        failure(429),
+        failure(503),
+        { code: 'ECONNABORTED' },
+        { code: 'ERR_NETWORK' }
+      ]) {
+        assert.equal(shouldRetry(error, config({ method, retry: true, retryUnsafe: true })), false)
+      }
+    }
+  )
+}
+check('only read methods replay known transient transport failures', () => {
+  for (const method of ['GET', 'head', 'options']) {
+    for (const error of [
+      failure(429),
+      failure(502),
+      failure(503),
+      failure(504),
+      { code: 'ETIMEDOUT' },
+      { code: 'ERR_NETWORK' }
+    ]) {
+      assert.equal(shouldRetry(error, config({ method })), true)
+    }
+  }
+  assert.equal(shouldRetry(new Error('application failure'), config()), false)
+  for (const status of [400, 401, 403, 404, 409, 500])
+    assert.equal(shouldRetry(failure(status), config()), false)
+  assert.equal(shouldRetry(failure(503), config({ method: 42 })), false)
+})
+check('cancel, exhausted budget and caller disabling retry are terminal', () => {
+  for (const code of ['ERR_CANCELED', 'ERR_REQUEST_BUDGET']) {
+    assert.equal(isTransientFailure({ code }), false)
+    assert.equal(shouldRetry({ code }, config()), false)
+  }
+  assert.equal(shouldRetry(failure(503), config({ retry: false })), false)
+  assert.equal(shouldRetry(failure(503), config({ __retryCount: 2 })), false)
+  assert.equal(shouldRetry(failure(503), config({ signal: { aborted: true } })), false)
+  assert.equal(shouldRetry(failure(503), undefined), false)
+})
+check(
+  'explicit long operations and binary downloads retain time and do not automatically replay',
+  () => {
+    const long = resolveRequestPolicy(config({ timeout: 120000 }))
+    assert.equal(long.timeout, 120000)
+    assert.equal(long.budget, 120000)
+    assert.equal(long.maxRetry, 0)
+    const binary = resolveRequestPolicy(config({ responseType: 'blob', timeout: 15000 }))
+    assert.equal(binary.timeout, 60000)
+    assert.equal(binary.budget, 90000)
+    assert.equal(binary.maxRetry, 0)
+    const explicit = resolveRequestPolicy(
+      config({ timeout: 90000, requestBudgetMs: 100000, retry: false })
+    )
+    assert.equal(explicit.timeout, 90000)
+    assert.equal(explicit.budget, 100000)
+    assert.equal(explicit.maxRetry, 0)
+  }
 )
-
-// —— 业务错误不该重试 ——
-ok('400 不重试', shouldRetry(r(400), cfg({ method: 'get' })) === false)
-ok('401 不重试', shouldRetry(r(401), cfg({ method: 'get' })) === false)
-ok('404 不重试', shouldRetry(r(404), cfg({ method: 'get' })) === false)
-ok('500 不重试', shouldRetry(r(500), cfg({ method: 'get' })) === false)
-
-// —— 次数上限与显式关闭 ——
-ok('达上限不再重试', shouldRetry(r(429), cfg({ __retryCount: MAX_RETRY })) === false)
-ok('retry:false 关闭', shouldRetry(r(429), cfg({ retry: false })) === false)
-ok('无 config 不重试', shouldRetry(r(429), undefined) === false)
-
-// —— 冷启动判定 ——
-ok('429 属冷启动', isColdStartFailure(r(429)) === true)
-ok('超时属冷启动', isColdStartFailure(timeout) === true)
-ok('503 属冷启动', isColdStartFailure(r(503)) === true)
-ok('400 非冷启动', isColdStartFailure(r(400)) === false)
-
-// —— 退避 ——
-// 退避不得缩短（允许末段进入平台期，避免间隔被无限拉长）
-ok(
-  '退避不递减',
-  RETRY_DELAYS.every((d, i) => i === 0 || d >= RETRY_DELAYS[i - 1])
+check('login is 15s/30s with no POST replay; legacy Render is only explicit', () => {
+  assert.deepEqual(loginRequestOptions(), { timeout: 15000, requestBudgetMs: 30000, retry: false })
+  assert.equal(resolveRequestProfile({ VITE_REQUEST_PROFILE: 'standard' }).timeout, 15000)
+  const legacy = resolveRequestProfile({ VITE_REQUEST_PROFILE: 'render' })
+  assert.equal(legacy.timeout, 60000)
+  assert.equal(legacy.budget, 240000)
+  assert.equal(legacy.maxRetry, 6)
+  assert.deepEqual(loginRequestOptions({ VITE_REQUEST_PROFILE: 'render' }), {
+    timeout: 180000,
+    requestBudgetMs: 240000,
+    retry: false
+  })
+})
+check(
+  'invalid and overflowing timeout/budget values cannot create unbounded or wrapped timers',
+  () => {
+    for (const value of [0, -1, Infinity, NaN, 2147483648]) {
+      const policy = resolveRequestPolicy(config({ timeout: value, requestBudgetMs: value }))
+      assert.equal(policy.timeout, 15000)
+      assert.equal(policy.budget, 30000)
+    }
+  }
 )
-ok(
-  'retryDelay 对齐表',
-  RETRY_DELAYS.every((d, i) => retryDelay(i + 1) === d)
-)
-ok('超出用末值', retryDelay(99) === RETRY_DELAYS[RETRY_DELAYS.length - 1])
-ok('次数与时间表一致', MAX_RETRY === RETRY_DELAYS.length)
-
-// —— 窗口必须覆盖完整冷启动（回归护栏）——
-// 实测 2026-09-13：Render 把首个请求挂住约 114s 后返回 429，唤醒在后台继续；
-// auth-service 端到端冷启动约 157s。窗口若短于 157s，重试撑不到服务就绪，
-// 表现为「无论点多少次都失败」（#8 的 7s 与 #10 的 131s 都栽在这里）。
-const COLD_START_MS = 157000
-const windowMs = RETRY_DELAYS.reduce((a, b) => a + b, 0)
-ok(`重试窗口 ${windowMs / 1000}s 覆盖 ${COLD_START_MS / 1000}s 冷启动`, windowMs >= COLD_START_MS)
-ok('重试次数与时间表长度一致', MAX_RETRY === RETRY_DELAYS.length)
-
-console.log(`\n通过 ${pass} / ${pass + fail}`)
-process.exit(fail ? 1 : 0)
+check('service warmup requires both the explicit Render profile and enable flag', () => {
+  assert.equal(serviceWarmupEnabled({}), false)
+  assert.equal(serviceWarmupEnabled({ VITE_ENABLE_SERVICE_WARMUP: 'true' }), false)
+  assert.equal(serviceWarmupEnabled({ VITE_REQUEST_PROFILE: 'render' }), false)
+  assert.equal(
+    serviceWarmupEnabled({ VITE_REQUEST_PROFILE: 'render', VITE_ENABLE_SERVICE_WARMUP: 'true' }),
+    true
+  )
+})
+check('read Retry-After delays respect server floor without changing write safety', () => {
+  const policy = resolveRequestPolicy(config())
+  assert.equal(retryAfterDelay({ response: { headers: { 'retry-after': '2' } } }, 1, policy), 2000)
+  assert.equal(retryAfterDelay({ response: { headers: { 'retry-after': 'bad' } } }, 1, policy), 250)
+  assert.equal(
+    retryAfterDelay(
+      { response: { headers: { 'retry-after': 'Tue, 13 Oct 2026 00:00:02 GMT' } } },
+      1,
+      policy,
+      Date.parse('2026-10-13T00:00:00Z')
+    ),
+    2000
+  )
+})
+console.log(`\n政策检查 ${count} / ${count}`)
+await import('./request-policy.test.mjs')
+await import('./request-default-cycle.test.mjs')

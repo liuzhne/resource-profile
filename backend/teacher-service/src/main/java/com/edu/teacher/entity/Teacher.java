@@ -23,32 +23,49 @@ public class Teacher {
 
     private String name;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Integer gender;
 
-    @TableField("birth_date")
+    @TableField(value = "birth_date", updateStrategy = FieldStrategy.ALWAYS)
     @SensitiveField(Sensitivity.HIGH)
     private LocalDate birthDate;
 
     @TableField("dept_id")
     private Long deptId;
 
-    @TableField("dept_name")
+    @TableField(value = "dept_name", updateStrategy = FieldStrategy.ALWAYS)
     private String deptName;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String title;
 
     @SensitiveField(Sensitivity.MEDIUM)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String education;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String school;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String major;
 
-    @TableField("research_area")
+    @TableField(value = "research_area", updateStrategy = FieldStrategy.ALWAYS)
     private String researchArea;
 
-    @TableField("join_date")
+    @TableField(value = "join_date", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate joinDate;
+
+    @SensitiveField(Sensitivity.HIGH)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String political;
+
+    @SensitiveField(Sensitivity.HIGH)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String phone;
+
+    @SensitiveField(Sensitivity.HIGH)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String email;
 
     private Integer status;
 

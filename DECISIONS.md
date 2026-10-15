@@ -1,9 +1,90 @@
 # Resource-Profile 架构与工程决策
 
-> 最近更新：2026-10-05
+> 最近更新：2026-10-11
 > 记录范围：当前仍有效的项目级决策。历史阶段细节见 [`docs/educare/EXECUTION_PLAN.md`](./docs/educare/EXECUTION_PLAN.md) §6。
 
 每条记录包含背景、选择、放弃方案和后果。被替换的决策不得直接删除，应改为“已取代”并链接新决策。
+
+## ADR-038：Langfuse v4 上报及默认内容边界（LANGFUSE-OTLP-20261007）
+
+- 日期：2026-10-07。
+- 背景：用户已填好 Cloud JP 凭据，认证 HTTP 200；现有 Java legacy ingestion 与 Python v2 无法满足 Cloud 2026-11-16 后的生命周期。旧采集同时包含师生提示词、回复和工具摘要，直接启用云采集会改变数据出站边界。
+- 选择：Java 保留异步 `traceGeneration` 契约，以现有 RestClient/Jackson 发送完成的 OTLP HTTP/JSON span；Python固定经过依赖解析验证的新 SDK、显式映射 HOST 为 base_url、退出时 shutdown/flush。均保留配置缺失关闭和失败不影响业务。使用 Basic 及 ingestion version 4；默认 `LANGFUSE_CAPTURE_CONTENT=false`，不采集 I/O 与自由文本工具元数据。
+- 原因：修正实际停用风险，同时保留现有业务调用和部署变量；内容默认关闭可以验证模型、用量、延迟而不新增真实师生内容传输。
+- 放弃方案：只填密钥或继续 legacy 不解决停用；升级所有 AI 依赖会扩大兼容风险；为当前两个 Java 调用新增全套分布式 trace 及 Maven SDK 超出迁移需要；只省略 update 的 input 但继续装饰器自动采集仍会泄漏内容。
+- 代价与约束：Java Agent/LLM仍为独立trace，Python仅raw generation，未新增RAG/MCP span；内容关闭限制依赖文本的在线评估。三供应商配置同步原VM，内部九项凭据相等、0600回滚保留，无新增收费资源。Java20项、Python41项真实SDK及部署27项回归通过；重建两镜像、16私有服务、Milvus初始化、合成RAG/双MCP均已有实际证据。公开SQL全行和Milvus全内容来源核验后，自动审批仍要求明确数据外传授权；用户授权具体公开示例资料向Groq传输后仅触发一次。Agent第二轮遇HTTP400 JSON校验与429限流，约20秒FAILED；实际Cloud `llm.chat`、`agent.loop`、`llm.audit`记录的模型/usage/timing及I/O关闭均通过，因此只完成R-5.1，不完成完整生成、质量或生产门。选择保留故障证据和原参数，放弃无证据改协议/开启付费/自动重复示例任务；后续须隔离供应商错误复现并验证最终产物。
+- 公网阶段：Caddy经既有发布门启动；外部HTTPS/TLSv1.3、登录200/匿名401/内部403、仅22/80/443可达及20项业务鉴权通过。默认内容采集关闭，实际应用trace确认无I/O；网站可用不替代完整AI与生产验收。临时RAG验收使用固定合成文档和独立持久化/新查询检查，避免缓存旧ID造成假失败；无架构影响，未宣称生产缓存即时失效。
+- 协议证据：新 OTLP v4 合成三 span 接口返回200；v2查询三条、父子/模型/用量均正确，无 input/output。见 [官方迁移](https://langfuse.com/integrations/native/opentelemetry/migration-to-v4)、[OTLP映射](https://langfuse.com/integrations/native/opentelemetry)，操作见 RUNBOOK 同名记录。
+
+## ADR-037：Langfuse Cloud 账户准备与旧 ingestion 迁移计划（LANGFUSE-CLOUD-SETUP-20261007）
+
+- 日期：2026-10-07。
+- 状态：历史账户准备方案，已由 [ADR-038](#adr-038langfuse-v4-上报及默认内容边界langfuse-otlp-20261007) 的实际迁移与验收取代；下列v2/内容描述只代表准备时状态。
+- 背景：用户准备配置Langfuse；当前 [Java客户端](./backend/agent-service/src/main/java/com/edu/agent/config/LangfuseClient.java) 直接调用 `/api/public/ingestion`，[Python依赖](./ai-inference-service/requirements.txt) 固定 `langfuse>=2.36,<3.0`。官方宣布Cloud trace/observation旧ingestion将于2026-11-16停用，仅填key不能解决长期兼容性。
+- 选择：推荐Cloud Hobby、日本区域，用专用项目生成Public/Secret Key，当前工程合同仍为 `LANGFUSE_HOST`、`LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY`。HOST填所选区域站点根地址，JP为 `https://jp.cloud.langfuse.com`。长期接入须将Java改为OTLP/OpenTelemetry、Python迁移受支持的新SDK，明确映射新版 `LANGFUSE_BASE_URL`，保留异步/fail-soft与无凭据关闭行为。
+- 原因：Cloud Hobby无需信用卡、每月50000 units与30天历史访问窗口，能够避免增加当前VM的自建可观测工作负载；JP是亚洲部署的区域选择，未测量网络延迟。账户可以先准备，trace功能必须完成迁移和真实验收后才能视为长期可用。
+- 放弃方案：仅替换HOST/重启现有v2代码不能消除接口停用；直接升级所有Python依赖可能破坏现有LangChain/FastAPI契约；额外部署旧版Langfuse会增加维护及生命周期负担，本次不创建。
+- 代价与约束：Java当前LLM调用与AgentLoop汇总是并列trace，不保证跨微服务父子关联；Python仅已装饰的raw risk/plan/audit调用覆盖，不能宣称RAG/MCP/embedding都有trace。当前会发送prompt、模型回复及部分工具汇总，首次只使用合成演示数据；真实师生数据的脱敏与字段边界须在启用其云trace前落实。Langfuse两项key与模型供应商key不同，私下保存，不使用聊天传递。迁移/trace验证未执行，R-5/R-6不变。
+- 来源（2026-10-07）：[Cloud定价](https://langfuse.com/pricing)、[接入及区域地址](https://langfuse.com/docs/observability/get-started)、[旧ingestion停用说明](https://langfuse.com/docs/api-and-data-platform/features/public-api)。实际配置与验收见 RUNBOOK 同名记录及 [Kamatera手册](./docs/deployment/KAMATERA_DEPLOYMENT.md)。
+
+## ADR-036：供应商探针使用明确客户端标识（GROQ-PROBE-UA-20261007）
+
+- 日期：2026-10-07。
+- 背景：核对剩余配置时，本地 Groq key 已填写，但默认 urllib 模型目录请求和生成请求均返回 403；目录响应确认边缘错误 1010。明确 HTTP User-Agent 后目录可见选定模型，同一 JSON/low 生成请求返回 200，不能将客户端拦截误报为无效 key。
+- 选择：[scripts/k3s-deploy.py](./scripts/k3s-deploy.py) 的 `provider_request` 统一发送 `ResourceProfile-DeploymentCheck/1.0`；保留 Bearer 认证、受信 TLS、原有响应检查和错误脱敏。公开运维脚本同步到已授权 VM 并保留旧版本，未写入/同步 API Key 或更改业务工作负载。
+- 原因：修正已实际复现的探针假失败，避免在发布门中无端要求换 key 或换模型；不改变业务客户端或服务架构。
+- 放弃方案：重复轮换有效 key、切换模型和盲目重试 403不能解决当前请求特征问题；关闭 TLS 或记录完整错误内容会削弱认证/凭据边界。
+- 验证与约束：本地默认目录请求 403/1010、显式标识目录200且目标模型存在；真实 JSON_OBJECT/low 生成200、Cloudflare 中文合成输入返回有限非零1024维向量；修正后的真实探针通过、既有13项离线回归通过。不能把本地探针成功推断为 VM 的认证或完整业务成功；VM 两个模型 key 仍为占位值，剩余部署与 trace/HTTPS 验收见 RUNBOOK。401/403仍可能有其他认证/权限原因，不把本次样本当作所有403的解释。
+- 入口与凭据约束：域名已经解析到 VM，public 区尚未声明 http/https 服务，选择在发布前显式准备对应规则并验证外部80/443及受信TLS，放弃现在修改未发布的入口或关闭防火墙。Cloudflare `EMBEDDING_API_KEY` 保存原始 token，由现有 Python 客户端自动添加 `Authorization: Bearer`；不得把 curl 的 `-H` 或 Bearer 前缀写进 key 字段。本次未修改上述规则或密钥。
+
+## ADR-035：沿用 Groq 免费生成并补齐 Cloudflare embedding（GROQ-CLOUDFLARE-DEPLOY-20261006）
+
+- 日期：2026-10-06。
+- 状态（2026-10-07）：用户已确认选用；本地与 VM 的非秘密部署参数及真实 Account ID 已填写并静态核对，API Key/内部凭据未改动；模型 key 本地已设置、VM 仍为占位值，真实模型/RAG 验收及公网入口未完成。
+- 背景：Kamatera 全栈部署的聊天与向量配置仍是占位值；用户要求免费且适合当前项目，并沿用现有 LLM 提供商。仓库 [render.yaml](./render.yaml) 已使用 Groq `openai/gpt-oss-120b`，公开 API 未提供本项目所需 embedding。
+- 选择：生成继续采用 Groq，保留 `JSON_OBJECT`、reasoning effort `low`、最大输出 1200 与关闭 llama.cpp 专用 `cache_prompt` 字段；向量采用 Cloudflare Workers AI `@cf/baai/bge-m3`，独立 token、OpenAI 兼容端点和 1024 维。仅使用 dense 检索，不恢复已删除的 Hybrid/ModelRouter 能力。
+- 原因：复用现有 Spring AI/LangChain 调用契约与 ReAct 配置，不需要本机 GPU；BGE-M3 的多语言与维度规格符合中文知识库部署方向。免费方案无需为此次模型接入新增付款方式；端到端速度、中文检索质量和真实 JSON 输出仍须实测。
+- 放弃方案：Gemini 有免费生成与 embedding，但当前 Java 路径、URL 门禁和 embedding 默认 3072 维需要适配；OpenRouter 零充值免费模型仅 50 次/日，对多轮 Agent 的余量更少；Cerebras 已改为验证付款方式后 US$5/30 天试用，不能当作持续免费层。未自动开通任何收费计划。
+- 代价与约束：两套账户凭据；免费额度不保证 SLA 或任意并发。Groq 当前公开免费上限 30 次/分钟、1000 次/日、8000 tokens/分钟、200000 tokens/日，组织共享、以控制台实际限制为准；画像任务可多次调用模型。Cloudflare 全账户 Workers AI 共享 10000 neurons/日，Free 超额会失败。相同维度不代表相同向量空间，旧知识必须用选定模型重新嵌入后验收。
+- 来源（2026-10-06 核查）：[Groq 额度](https://console.groq.com/docs/rate-limits)、[Cloudflare 定价](https://developers.cloudflare.com/workers-ai/platform/pricing/)、[BGE-M3 规格](https://huggingface.co/BAAI/bge-m3)、[Gemini 定价](https://ai.google.dev/gemini-api/docs/pricing)、[OpenRouter 限额](https://openrouter.zendesk.com/hc/en-us/articles/39501163636379-OpenRouter-Rate-Limits-What-You-Need-to-Know)、[Cerebras 试用](https://inference-docs.cerebras.ai/support/rate-limits)。操作与回滚见 RUNBOOK 同名记录和 [Kamatera 手册](./docs/deployment/KAMATERA_DEPLOYMENT.md)。
+- 参数落实边界：本次仅写既有供应商的公开参数并保留 API Key；Account ID 不猜测。Java 的 JSON_OBJECT/low 映射通过；Python 客户端没有对应选项，保留现有提示词与解析，未扩大为 SDK 行为修复。Python temperature 0.3/timeout 120 秒由现有清单固定，私有文件显式记录相同值不代表任意修改均会透传。静态解析使用合成 key/Account ID，不能代替真实供应商或结构化输出验收。
+- 2026-10-07 / GROQ-CLOUDFLARE-DEPLOY-20261006：用户提供 Account ID 后，仅更新两侧 `EMBEDDING_BASE_URL`，其余字段保持原值。选择保留凭据符合此次“API-key 之外其他参数”的范围，不将本地设置状态当作远端已认证。实际本地 K3s `check` 通过；API、知识检索与上线仍待验证。
+
+## ADR-034：单节点 K3s 与有界 HPA（K3S-HPA-DEPLOY-20261006）
+
+- 日期：2026-10-06。
+- 状态：用户已明确选择 K3s + HPA；清单与安全门已实现，实际集群/业务/HPA 1→2→1通过，完整AI/公网验收待真实模型配置。
+- 背景：用户要求容器随负载弹性扩缩容，Compose 固定副本不能提供 HPA；现有 Kamatera 单机预算不能默认扩展收费 VM。
+- 选择：本次部署采用 [`k8s/workloads.json`](./k8s/workloads.json) 和 [`scripts/k3s-deploy.py`](./scripts/k3s-deploy.py)，17 工作负载沿用 ADR-033 的同机内网/鉴权契约，Docker 构建后导入 K3s containerd。关闭 Traefik/ServiceLB，只有 Caddy hostPort 80/443 公开；Kubernetes 管理经本地 SSH，节点 API/Flannel/kubelet 不对公网放行。SELinux Enforcing、官方 K3s 策略、Secret 加密存储、默认账号真实 bcrypt 改密与 TLS/模型发布门保持有效。
+- 原因：metrics-server 与 CPU requests 为 HPA 提供真实指标，先仅 data-service 1–2 副本、CPU 70%、缩容窗口 300 秒，验证指标/负载/回缩后再扩大。基线 requests 1.8 CPU / 9.1875 GiB，最高 limits 17.75 GiB，为系统和控制面保留预算。
+- 放弃方案：同时运行 Compose/K3s 会冲突入口并重复资源；所有 Java 服务一起翻倍超过单机余量；managed Kubernetes、多台节点或 VM autoscaler 会新增费用；直接给 agent/MCP/AI 灌库增加副本缺少任务恢复、文件共享、会话及并发写入证据。SSE 已有 Redis fan-out，但缩容排空仍需验收。
+- 代价与约束：HPA 不增加 4 核/24 GB 容量，不是节点 HA；8 个 local-path PVC 共申请 46 GiB，仅在本节点持久化。单例 Recreate 升级有中断。Secret 与私有清单需 0600/忽略，不复制 kubeconfig 到聊天。SQL/字体 hostPath 使用持久 SELinux 标签，不能照搬 Compose Z 选项。模型配置待用户提供，不以 dummy key 绕过全栈门。
+- 验证：13 项离线清单/秘密/发布/密码边界测试通过；实际 Node Ready、metrics-server、5 PVC/基础设施和12服务Ready，三角色登录/权限/退出撤销20项通过；HPA受控负载1→2通过、自动回缩1已验。双 MCP、TLS、LLM/RAG与完整恢复待验证。步骤及回滚见 [`k8s/README.md`](./k8s/README.md) 和 [Kamatera 手册](./docs/deployment/KAMATERA_DEPLOYMENT.md)。R-5/R-6 不因部署准备完成自动更新。
+
+## ADR-033：Kamatera 试用承载完整单机内网栈（KAMATERA-DEPLOY-20261006）
+
+- 日期：2026-10-06。
+- 状态：用户已创建 `resource-profile-sg`（45.130.165.168，Rocky 9.8），US$10 押金到账、试用配置已核验；正式运行编排已由 ADR-034 的 K3s 取代，Compose 保留备选。
+- 背景：用户只有预付卡，Oracle 注册验证受阻；完整栈的当前内存预算超过常见免费小实例，仍希望微服务通过内网互调。Kamatera 官方 [付款说明](https://www.kamatera.com/faq/answer/which-payment-methods-do-you-accept/) 接受带持卡人姓名的预付卡，但具体卡片能否通过验证须以注册结果为准。
+- 选择：使用新加坡 Rocky Linux 9 64-bit 单机，控制台已选择 Type A 4 核 / 24 GB / 100 GB、无托管与每日备份附加服务，月付报价 US$92、含 1000 GB 流量（超额 US$0.01/GB）。以 [`docker/docker-compose.cloud.yml`](./docker/docker-compose.cloud.yml) 和 [`scripts/cloud_deploy.py`](./scripts/cloud_deploy.py) 作为原 Compose 共享实现（本次运行方式由 ADR-034 取代），Kamatera 与 OCI 提供薄入口，避免复制全栈造成配置漂移。复用 ADR-032 的私网、随机凭据、默认账号改密和 TLS 发布门禁；源码与私有配置分开通过 SSH 上传，初始使用演示数据库，不迁移真实心理/学生记录。入口与费用流程见 [Kamatera 部署手册](./docs/deployment/KAMATERA_DEPLOYMENT.md)。
+- 原因：资源预算覆盖当前完整栈，同机容器网络避免跨服务公网往返；明确预付卡政策提高注册可行性。平台费用无需修改业务代码或削减 RAG。
+- 部署阻塞修复：[`main.py`](./ai-inference-service/app/main.py) 导入了 `rag_upsert` 但未注册路由，导致真实应用灌库 404；旧 HTTP 测试手工组装路由掩盖了问题。选择在生产 `create_app()` 注册既有 router，并将 [HTTP 回归](./ai-inference-service/tests/test_http_integration.py) 改为实际应用构建，验证正常写入及 401/503/422 拒绝路径。放弃在部署脚本绕过 HTTP 直接写向量库或只测试手工 router 的方案，避免绕过管理 token 与幂等逻辑；不扩大公网路由。
+- 上传边界：只归档可构建运行的源码/配置；独立构建发现白名单误排 `com/edu/data`、提示词和自动配置元数据，已修正并增加完整生产源码/POM/资源覆盖检查。拒绝上传整个 checkout 或 Git 历史，避免夹带本地配置/数据；字体与新秘密单独通过 SSH 传输，采用带 OFL 的官方静态 TrueType、只读挂载，避免把 OTF 改扩展名或变量字体当作 PDFBox 可用静态字体。
+- Rocky 适配：按用户运维偏好使用 Rocky 9，并保留 SELinux Enforcing 和 Docker SELinux 支持。三个只读 bind 使用 `Z`，共享工具先校验来源，采用能执行 relabel 的 legacy bind 路径；放弃 `create_host_path:false` 的 Mount API 路径（当前 Compose 可遗漏 relabel），也放弃关闭 SELinux 或 privileged 容器来绕过权限。Milvus `configs.content` 由 Compose 注入容器层、模式 0600，避免增加宿主秘密文件。代价是必须通过部署入口启动，且需在实际 Rocky 主机验证标签、只读访问及 firewalld/Docker 规则。
+- 放弃方案：Oracle 仍要求当前无法完成的银行卡验证；长期免费小实例没有完整栈容量依据；多个免费 Web Service 仍存在公网往返和休眠；CPU 主机本地运行 14B 模型未经容量验证。仅停机不能结束计费，费用告警也不是硬性封顶。
+- 代价与约束：根据 [试用条款](https://www.kamatera.com/faq/answer/what-are-the-terms-of-the-free-trial/)，试用为 30 天、单台服务器配置不超过 US$100、1 TB 流量，到期自动转收费。创建前核对实际报价、试用标记及所有附加项；US$10 押金由账号所有者自行完成，免费部署授权不包含超额或续费授权。最终公钥/凭据设置与创建条款由用户接手。Type A CPU 资源不保证，尚不能承诺性能。模型 API 用量独立计算；域名、外部生成及 embedding 接口待确定。历史凭据轮换 B-2 与 R-5/R-6 继续独立验收。
+- 验证：Python 最小环境 32 项、部署工具 13 项通过；安全包独立解压后 JDK21 全后端 `package -DskipTests`、前端生产构建、Python factory/import/401 与 JAR 关键资源检查通过。官方静态字体以项目 OpenHTMLToPDF/PDFBox 实际渲染和双 PNG 视觉检查通过，提取文本存在 U+F9E4 兼容字，NFKC 后断言通过。Compose/Caddy 静态检查见手册；可选 chat/MCP SDK 替身不是实际模型证据。账号/押金/主机创建及 SSH 跨通道身份校验已通过，Rocky Enforcing、Docker SELinux/hello-world 和 firewalld 实测通过；Linux 镜像构建进行中。实际容器、TLS/模型/RAG/恢复待验证，不宣称已上线。
+
+## ADR-032：OCI 单主机内网编排，分阶段开放入口（OCI-DEPLOY-20261006）
+
+- 日期：2026-10-06。
+- 状态：单机编排方案保留；OCI 平台选择已由 ADR-033 取代，未创建 OCI 资源。
+- 背景：Render 免费 Web Service 的互调经过公网；现有基础 Compose 也未包含完整业务服务，无法作为完整 OCI 迁移入口。免费 CPU 主机不适合同时承载当前大模型，生成与 embedding 供应商可能使用不同密钥。
+- 选择：新增独立 [`docker/docker-compose.oci.yml`](./docker/docker-compose.oci.yml)，补齐 9 Java + 2 Python 与数据层，禁用 Nacos，使用 Docker DNS 显式 URL。前端由 Caddy 处理同源 API/SSE 与自动 TLS；仅入口发布 80/443。保留 AgentLoop、双 MCP、dense RAG 和各层鉴权，默认不启用可选 reranker。增加独立 embedding key，空值兼容共享模型 key。
+- 原因：把业务与数据库/MCP 往返移回一台主机内网，降低跨服务公网延迟，并保留现有领域与安全契约。[`scripts/oci-deploy.py`](./scripts/oci-deploy.py) 将私网启动、默认账号改密和公网发布分开，避免新建数据库默认密码直接暴露。
+- 放弃方案：继续分散到免费公网 Web Service 仍保留网络和休眠成本；将现有 Compose 当作完整生产栈会缺失业务容器；直接 `up` 开公网会暴露默认种子密码；在 12 GB 免费 VM 上承诺完整 Milvus 栈没有容量依据；静默去掉 RAG 或改用付费 shape 不满足用户目标；本机 14B 模型复制到免费 CPU 主机缺少可用推理容量。
+- 代价与约束：单主机非高可用；内存上限合计 17.25 GiB，目标 24 GiB、启动门 ≥20 GiB，真实容量仍待验证。Oracle 纯免费与付费租户 A1 月度免费用量不同，账号升级和超额度不能自动授权。外部模型 API 有独立额度与数据处理边界，迁移真实学生/心理数据前明确授权。新部署凭据私有保存；历史凭据轮换 B-2 仍未完成。暂不撤除现有 Render 服务。
+- 验证：本地 Python 30 项、部署安全 7 项通过；Compose 17 服务/端口/profile/DNS/内存断言、前端构建、Caddy validate/adapt 通过。ARM manifest 已核验；完整镜像构建、容器、OCI、受信任 HTTPS、真实 LLM/RAG/trace 与恢复均待验证。见 [OCI 部署手册](./docs/deployment/OCI_DEPLOYMENT.md)，R-5/R-6 状态不变。
 
 ## ADR-001：业务微服务使用 Spring Boot + Nacos
 
@@ -477,6 +558,8 @@
 
 | 日期/标识 | 变更 | 决策影响 |
 |---|---|---|
+| 2026-10-06 / K3S-HPA-DEPLOY-20261006 | K3s/Secret/PVC、分阶段业务与data HPA | Node/metrics、12私有服务、11镜像、默认改密/三角色鉴权20项、MySQL隔离还原20表通过；HPA1→2已验，自动回缩1已验；完整AI/TLS待模型配置 |
+| 2026-10-06 / KAMATERA-DEPLOY-20261006 | 新增 ADR-033，选择 Kamatera 30 天试用；复用单机部署配置 | 取代 ADR-032 的 OCI 平台选择，保留业务/安全契约；试用到期、模型用量和 CPU 保证边界明确 |
 | 2026-09-01 / DOC-BASELINE | 从当前实现与执行计划整理有效决策，并建立修复文档规则 | 新增 ADR-001~014；未改变运行时代码 |
 | 2026-09-01 / RENDER-DEPLOY-20260901 | 新增 ADR-015，明确 Render 预览调用链与数据层授权边界 | 禁止把免费 Web Service MySQL/Redis 误报为可用生产数据层 |
 | 2026-09-01 / AIVEN-RENDER-20260901 | 新增 ADR-016，拍板 Aiven MySQL、Render Key Value 与无 LLM 降级模式 | 取代 ADR-015 中待确认的数据层分支 |
@@ -583,3 +666,219 @@ PERF-500MS-20260916 启动回归修正（2026-09-16）：日志证实首轮Agent
   stub 验证通过，覆盖非默认共享凭证与特殊字符、无凭证输出/临时配置残留、PID 归属/陈旧记录与无关进程安全。
   npm 生产依赖 audit 0 vulnerabilities；Render/Compose/backend-CI YAML 解析与 JDK 21/POM/自动配置清单联合断言通过。
   未执行真实全栈、GPU 或生产验收。
+
+2026-10-06 / K3S-HPA-DEPLOY-20261006 实机验收补充：K3s Node/metrics与12私有服务Ready；11镜像原生构建导入、三角色业务鉴权20项通过，data HPA在受控CPU负载下自动1→2→1，保持300秒缩容稳定窗口、无手工scale。MySQL合成快照在隔离库还原比对20表通过；备份留在VM，本地导出因自动审批要求明确数据导出授权而未执行。临时域名已解析配置，完整模型/embedding配置缺失，AI/MCP/RAG与HTTPS公网发布仍待验证，R-5/R-6不变。详见k8s/README.md与Kamatera手册；回滚停frontend并保留PVC。
+
+## 维护记录：SSH-PASSWORD-STATE-20261006（2026-10-06）
+
+背景：将“创建页未输入/部署未保存root密码”理解为“服务器无密码”缺少运行证据，客户端只用公钥也不证明服务器禁止密码。选择只检查passwd -S root及按当前连接条件的sshd -T；结果PS、PermitRootLogin/PasswordAuthentication/PubkeyAuthentication=yes、PermitEmptyPasswords=no。保留现有密钥登录，不在用户询问密码位置时自动改凭据。放弃读取密码哈希或尝试恢复明文（不能提供原密码），也不擅自重置以消除不确定性；若用户需要密码，须明确选择后在其SSH终端执行passwd私下设置。实际密码来源仍未知，没有进行重设或SSH配置修复；操作见[部署手册](./docs/deployment/KAMATERA_DEPLOYMENT.md)。
+
+2026-10-07 / LANGFUSE-OTLP-20261007 最终运行快照：17/17 Deployment Ready，frontend Ready；data HPA当前/目标均1、上限2，指标可用且ScalingActive=true。只读快照未施加新负载，不替代既有1→2→1扩缩容证据。
+
+2026-10-07 / LANGFUSE-OTLP-20261007 私网最终复验：修正版 `--stage private-ai` 全部8项通过，Agent触发次数0；三库固定合成文档持久化、1024维有效向量、非fallback检索、双MCP鉴权/工具及Python生成有效。既有upsert按固定doc前缀替换同批旧合成chunk，行数每库由2变1；此前全部行已核验为相同公开合成文本，没有删未知资料或清Redis。VM私有结果 `k3s-ai-acceptance-20261007-private-ai.json` 为0600；该阶段不代表完整Agent通过。
+
+## 维护记录：LOGIN-CREDENTIAL-UI-20261007（2026-10-07）
+
+背景：生产登录页仍显示“默认账号：admin / admin”，且表单硬编码相同账号和密码，即使种子密码已轮换也会暴露错误的默认登录习惯。选择在[登录组件](./frontend/src/views/login/index.vue)永久移除提示/样式并把两个初始值置空；放弃仅CSS隐藏（仍留在产物）和只删提示（仍预填密码），也不保留生产/开发开关。代价是开发者须自行输入专用测试凭据；未新增账号、修改密码或禁用正常浏览器密码管理器。仅更新Kamatera前端镜像，保持既有鉴权与数据；本地构建、体积门、组件lint（零错误/警告）通过；旧源码及镜像已留回滚，新前端Ready且浏览器实际确认提示消失、两输入为空，HTTPS/login200、health200及匿名API401通过。回滚和判据见RUNBOOK。
+
+## 维护记录：PROD-SMOKE-20261007（2026-10-07）
+
+背景：[本轮实测报告](./docs/production-tests/2026-10-07/REPORT.md)同时检查公网、三角色 API 和浏览器，发现 API 正式注销正常但 UI 退出未撤销令牌；学生统一落地教职工 dashboard；用户分页 total=0；唯一新授权 Agent 再次遇 Groq JSON/限流失败。基础健康不构成全功能通过。
+
+选择的修复方向（均**未落地/待验证**）：显式 UI 退出调用现有注销接口并等待结果，保留失效令牌的本地清理；按角色使用已存在的学生入口并限制路由/菜单；在 user-service 按其他模块模式注册分页插件；先隔离固定合成 JSON 请求错误，再按实际共享额度验证队列、token 预算及有界退避。对应代码见 ARCHITECTURE 同标识记录与报告。
+
+评估并放弃：降低网关会话/角色检查不能修复 UI 调用缺失；给学生开放全校数据会破坏授权边界；把当前页长度当 total 会掩盖数据库分页问题；无因果证据就改协议/参数、无限重试或收费升级会扩大不确定性与代价。保留默认不采集 Langfuse 内容及所选模型组合。
+
+代价与约束：正确退出增加一次服务端请求，并需处理注销失败；角色入口涉及路由/导航体验；分页修复要验证数据库 count/limit 与相邻页；模型方案需具体请求证据及新一轮明确外发授权。当前只记录诊断，不在冒烟中重建或部署修复；失败 Agent 记录保留作审计，测试会话清理。所有学生示例记录同一 owner，因此 foreign 档案用例跳过，不能弱化断言后算绿；密码键/内容/bcrypt 计数均 0，未发现该项泄漏。R-5/R-6、B-2状态不因基础通过改变。
+
+
+## 维护记录：PROD-FIX-20261007（2026-10-07）
+
+- 背景：已实测的四项故障见 [PROD-SMOKE-20261007](./docs/production-tests/2026-10-07/REPORT.md)，用户授权修复和重新部署。代码审查另发现旧请求 401 误清新前端状态，以及后端旧 JWT 注销无条件删新 Redis 会话的竞态；这两项属于同一注销边界。
+- 选择：前后端按指定会话撤销，主动注销固定原 token、不自动重试；失败如实提示并保留可重试状态，401 使用本地清理避免递归。真实角色驱动学生落地、路由和递归菜单，全校数据后端权限保留。user-service 注册真实分页插件，使用实际 SQL 而非模拟 total 进行回归。代码见 [store](./frontend/src/store/modules/user.js)、[导航](./frontend/src/router/access.js)、[分页配置](./backend/user-service/src/main/java/com/edu/user/config/MyBatisPlusConfig.java)。
+- 用户页补充：原页面静态记录没有消费接口，选择只读接入真实 records/total、账号和状态筛选；后端未实现的 role 过滤移除，userType 仅标记账户类型。放弃用 records.length 修正 total、假部门及扩大到 CRUD，实现与授权范围一致。
+- 模型依据与实施：固定无个人资料探针证明 JSON_OBJECT/1200 与严格 ReAct JSON_SCHEMA/2400 都能 HTTP200，8000 token 限制有当时真实响应头证据；所以不将 1200、reasoning low 或 JSON_OBJECT 单独断言为既有 400 根因。保持 ReAct、采用动态严格 schema 和最终产物二次校验；可选工具 null 按默认值处理。Java/Python raw 共用 Redis DB0 冷却、60s 间隔、180s 请求预算；永久 400 不重试，429 遵守 Retry-After 至多 3 次/单次最多 120s，无叠加 SDK 重试。独立任务池 1/排队 2 与 MCP 并行池分离，loop 900s/锁 1200s、队满 FAILED/503、有限 HTTP/Feign 等待。选择这些有限等待以约束免费共享额度及线程占用，不切原生工具协议、不默认风险值伪造成功。
+- 放弃方案：仅藏退出提示不能撤销会话；学生开放全校面板破坏授权；前端 records.length 冒充 total 不能分页；无限重试/默认 MEDIUM/关闭 validator 会伪造 AI 成功；付费升级或改平台不属于已授权修复。
+- 代价和约束：单例组件升级有短暂中断，三批发布前保留旧镜像/配置与源文件，不动 PVC。模型队列和等待提高任务延迟，队列不持久化、不做重启恢复；Redis 仅协调本项目，无法保证同组织其他应用不会造成 429。维持 Langfuse 不采集内容，同时关闭模型原文/SQL 参数日志；不降低既有权限或内部鉴权。
+- 实测：common75/auth27/user11/agent114、Python50、前端93、K3s13 项通过，三个发布批次 Ready；真实 UI 注销旧 JWT401、旧新会话竞态、新学生入口及真实 MySQL/页面 total 通过。新镜像纯合成 Groq200/JSON及冷却、Cloud新 trace空I/O通过；完整学生 Agent 未再触发，等新授权，不将合成探针算 R-5.2。详见 [修复报告及限制](./docs/production-tests/2026-10-07/FIX_REPORT.md)；上节 PROD-SMOKE 的待实施项是保留的历史快照。
+
+## 维护记录：LOGOUT-DIALOG-CSS-20261007（2026-10-07）
+
+背景：用户指出退出确认框在左上角且看不到正常卡片；真实生产复现为透明、全宽、overlay static，前一轮只检查退出行为，漏掉视觉问题。Navbar 显式导入服务对象，Element Plus模板解析器不会为已声明对象补CSS。选择在 [main.js](./frontend/src/main.js) 自定义样式前导入 message-box/message 的官方 `style/css`，自动包含弹窗依赖，统一覆盖所有现有服务式调用。
+
+放弃：写一个仅修坐标的 scoped/CSS补丁不能恢复缺失的卡片/图标/关闭布局，并可能不命中 body teleport；全量 Element Plus CSS 增加不必要样式且扩大影响；改用另一弹窗会重复既有确认/撤销流程。代价是约9KB未压缩服务样式，JS结构和体积预算保持。没有新增业务写入口或变更注销逻辑。
+
+实际：93项前端回归、构建、体积门及目标lint通过；唯一前端镜像更新后Ready，公开CSS含所需选择器，真实浏览器居中白色卡片、取消/关闭保留登录、确认回登录全部通过，临时测试会话注销。报告与回滚见 RUNBOOK 同标识；本次没有触发学生Agent或改变其授权状态。
+
+## 维护记录：FIELD-CONTRACT-AUDIT-20261007（2026-10-07）
+
+背景：用户指出教师政治面貌无表字段、无接口返回，要求全面查找同类问题。只查列名会漏掉已有能力未接、JSON属性形态、派生统计口径、未落实请求参数以及合法脱敏；反过来会误把正常空值当成缺列。
+
+选择：按UI→API→controller/service/DTO/entity/SQL逐层核对，并只读生产列元数据。覆盖22视图、7前端API模块、20表220列，按独立问题组去重61项，区分42项契约缺陷/语义错配、18项未开放/来源能力缺口和1项权限UI适配。具体证据、影响、修复建议及误报边界见[完整报告](./docs/audits/FIELD_CONTRACT_AUDIT_2026_10_07.md)和JSON清单（本地测试产物，不入库：`./docs/audits/FIELD_CONTRACT_AUDIT_2026_10_07.json`）。同组件详情路由身份问题涉及7页但只计1项，方案的不同结构错配分别列项。
+
+审计时提出的修复方向（实施状态现见下方 FIELD-CONTRACT-FIX-20261007）：先统一服务端字段权限和学生身份范围，再修MCP分析输入、问卷计分/历史、版本化ReAct/legacy方案DTO及UI/PDF，最后按业务口径交付新来源。政治面貌与排名需先决定采集/计算规则；教师账号联系方式不等于个人教师联系方式；共享账号不能直接加UNIQUE(user_id)，须确认绑定模型及存量数据。保留空值语义，禁止未知成绩当零分、总分冒充因子分、假人数或缺数据冒充未执行。
+
+放弃方案：给所有占位批量加可空列不能修复现有API和JSON契约；前端隐藏敏感内容不能代替API/PDF裁剪；关闭脱敏填满UI破坏现有权限；直接复用管理员用户写接口不能交付普通用户资料修改；用旧冒烟截图重复报告已修复故障会混淆现状。
+
+代价与约束：这次只交付审计文档，不增加运行依赖、收费资源或数据迁移。代码静态结论与离线虚构验证不替代角色矩阵、真实存储和浏览器验收；生产只读取列定义，不盘点真实师生重复绑定。后续修复和迁移必须分别获得对应任务范围并保留回滚，R-5/R-6及完整Agent外发授权状态保持原状。
+
+## 维护记录：FIELD-CONTRACT-FIX-20261007（2026-10-07）
+
+背景：原61组审计问题混合了缺来源、既有API未接、JSON结构错配、统计口径与敏感权限缺口；把所有问题当缺列会制造重复或虚构数据。
+选择：已有成绩/账号联系先接真实API；政治面貌、个人联系、教学科研/评价/素质记录新增真实存储；GPA排名派生，未知保持null；
+心理计分集中校验并保存提交版本快照，不用当前题库伪造历史。共有账号歧义明确409，新绑定用行锁校验，现有数据需按身份核实后处理。
+放弃：默认填0、假活动、任意LIMIT1认领学生、按最新题干回显旧答卷、给共享绑定直接加UNIQUE，以及页面隐藏替代服务器脱敏。
+
+不可变方案DTO兼容ReAct/legacy；敏感risk JSON通过allowlist响应投影，PDF三端点限专业角色。
+角色目录是真实DB读取，canonical角色是授权上限，permissions进一步限制教职工业务请求；目录仅允许分配真实端点支持的权限。管理员维护权限固定，学生本人能力由身份与本人校验控制，两者不提供无效勾选。教师默认学生维护权限与实际端点一致；不允许随意角色码自动获得专业数据。
+账号/角色授权修改和登录claims发行使用admin角色行短协调锁，密码校验放在锁前，目标user锁保证绑定与删除顺序；接受小范围串行开销以保证撤销可靠。
+刷新cookie仅HTTP传送、JavaScript不可读且SameSite，7天采用原JWT与Redis的绝对截止，避免滑动延期；代价是刷新会旋转当前访问令牌。
+
+身份目录迁移保留有效旧心理角色关联；已有停用canonical角色与有效legacy冲突时拒绝迁移，需人工决策而非擅自恢复权限。
+目录DML与版本标记事务提交，SQL hash守卫防修改已执行迁移；新库种子与增量迁移分离，旧库不重置凭据、不生成虚构记录。
+无外部SMS/SSO配置，按用户回答置灰；开通/找回使用本系统申请与人工核验，不假称已发送验证码或邮件。
+完成于2026-10-07：10个应用镜像已发布，三份增量迁移通过且业务记录数保留。生产两个学生本人接口仍因既有共享账号返回409；选择保留并明确报告身份归属阻塞，待管理员核实后重绑，拒绝为让冒烟全绿而自动猜测归属。无当前开放问卷的一项模板检查保留跳过。实施、验证、限制及部署证据见[修复记录](./docs/audits/FIELD_CONTRACT_FIX_2026_10_07.md)与同名RUNBOOK。完整真实模型验收仍单独授权。
+
+## 维护记录：LANGFUSE-INLINE-20261008（2026-10-08）
+
+背景：用户要求在LLM追踪页直接显示数据，无须跳转。Cloud日本区响应头拒绝iframe，已有页面仅提供外链。用户于2026-10-08明确选择Public API与站内追踪面板。
+选择：复用已有服务器项目密钥，增加管理员专用的有界只读观测代理与本页列表，继续使用Cloud；无新基础设施、数据库或模型请求。与Cloud完整控制台相比，站内页面提供模型/耗时/token/观测级别及分页，不复制其他后台管理功能。运维数据使用字段白名单，不展示学生标识、提示词、回复或自由错误正文；代价是维护一次接口投影与UI契约。
+
+放弃恢复iframe：Cloud CSP实际拒绝；不移除其安全头、不共享Cloud登录cookie、不在浏览器保存项目secret。自托管整套控制台的认证与运维负担超过当前需求。保持真实数据语义：agent.loop未记录的模型/token为空，DEFAULT不解释为成功，独立span不能假造完整树；当前页摘要不冒充全时间段总量。读取失败显式提示配置/鉴权/限流/超时，不能用空记录掩盖故障。
+
+依据：[官方Public API](https://langfuse.com/docs/api-and-data-platform/features/public-api)、[官方v2观测契约](https://github.com/langfuse/langfuse/blob/main/fern/apis/server/definition/observations.yml)及公开页面响应头实测。验证和发布结果见[交付记录](./docs/production-tests/2026-10-08/LANGFUSE_INLINE_REPORT.md)，完整学生Agent验收及R-5/R-6不随此项自动完成。
+
+完成于2026-10-08：复用已有密钥的生产读取成功，无新增Cloud会话或基础设施。两个镜像发布后17/17工作负载Ready，21项公网检查通过；7/30天各11条、24小时0条，空窗口不作为接口失败。302项后端/126项前端及质量门通过。选择结束验证会话并撤销令牌，保留管理员正常登录入口；浏览器当前停在登录页，登录后视觉验收待验证，不能由API通过推定。
+
+发布缺陷补充：首次frontend v1入口内容仍旧，尽管镜像运行层匹配且新资源存在；选择在构建输入上更新mtime并禁用构建层缓存，以同一已测试制品生成独立v2镜像，加入导入前/上线后的逐文件SHA门。最终镜像、实际Pod与公网全部64个文件及三个HTML入口通过。固定mtime=0、同名同长度入口触发BuildKit元数据增量复用属于有官方实现支持的推断，详见交付记录；不把清浏览器缓存或再次确认Ready当成修复。代价是本次重传构建输入、前端一次Recreate，未重新触发业务/模型或改变UI源码。
+
+## 维护记录：DEMO-DATA-20261009（2026-10-09）
+
+背景：用户要在已部署生产环境演示，现有测试资料包含占位姓名、共享学生账号、缺出生/入学日期及无答卷的测评；用户确认没有真实师生/业务资料，选择1,200学生/80教师/4年级/8专业。选择显式、固定种子的完整合成业务批次，按已部署列生成并独立重算业务关系，替换已确认测试业务。比例是演示假设，遵守本科年限、校历和课程逻辑；不伪称真实学校统计或临床患病率。
+
+放弃逐表均匀随机填值：会让新生有已结课成绩、学分与绩点失配、题目/答卷/测评断链。放弃共享默认学生账号与默认密码：每档案单独账户，新增密码随机 bcrypt，明文丢弃；保留两个代表账户的凭据与权限。放弃大规模自动 init seed 与全库清空：本批次只作用于明确业务白名单，使用新 ID，保留身份安全/迁移/真实历史，代价是显式应用和短维护窗口。
+
+不生成假完成的 AI/PDF/模型观测：当前执行产物没有独立离线来源契约，完整 Agent 的演示应来自另行授权的真实运行。心理自编筛查、处置情景和校内活动明确注明合成；未知联系方式/政治面貌不硬填。需要新增演示登录时由管理员设置独立强密码，不能公开或共用生成口令。详细分布见[脚本说明](./sql/demo/README.md)，实施/验证/备份收口见[交付报告](./docs/production-tests/2026-10-09/DEMO_DATA_REPORT.md)。
+
+完成于2026-10-09：采用明确模拟规则并从明细核算，生产统计/画像/测评链90项全部通过，管理员与原始权限/历史保护成立。发现验收脚本误用Long数字比较时，选择适配已有序列化契约，放弃修改API或数据来迎合断言；原受保护历史仅新增6次真实测试登录与1次真实应用审计。安全应用幂等复验通过，备份实际恢复与试导入完成；未借此扩大为真实LLM外发授权或R-6签字。
+
+## 维护记录：AI-PROD-TEST-20261011（2026-10-11）
+
+背景：[本次生产页面测试](./docs/production-tests/2026-10-11/AI_REPORT.md)提交的三个真实分析任务均首轮 `NonTransientAiException` → loop `TOOL_ERROR` / iterations=1 → `FAILED`，未形成risk/plan/audit或RAG搜索。普通学生task/observability读取业务码403，但学生SSE实际HTTP200并收到其他学生的任务终态。另确认失败完成时间为空、任务与追踪时间展示相差8小时、页面没有可操作的失败分类。MCP七工具目录、Groq models GET200及17个工作负载Ready不能替代模型生成成功；`DEFAULT`观测级别不表示业务成功。
+
+选择的修复顺序（**仅提出方案，尚未实施、回归或部署**）：
+
+1. 先闭合 [SSE角色入口](./backend/agent-service/src/main/java/com/edu/agent/sse/WarningSseController.java)、[事件分发](./backend/agent-service/src/main/java/com/edu/agent/sse/WarningSubscriberConfig.java)与连接中的会话/权限撤销范围，使长连接遵循业务角色和数据范围，而非所有有效JWT都能接收全校终态。
+2. 为 [任务链](./backend/agent-service/src/main/java/com/edu/agent/service/impl/AgentTaskServiceImpl.java)、[模型loop](./backend/agent-service/src/main/java/com/edu/agent/core/AgentLoop.java)及 [报告视图](./frontend/src/views/agent/ReportDetail.vue)建立固定失败阶段/安全error code/实际HTTP状态与trace关联；供应商自由错误先白名单投影，保留内容采集关闭，不记录PII、提示词、模型回复、工具参数或凭据。三个Langfuse `agent.loop`已在metadata包含`status=TOOL_ERROR`/`iterations=1`，站内代理目前不取该字段；只向页面白名单映射这两个固定技术字段，不开放自由metadata，也不把`DEFAULT`当成功。
+3. 在保留隐私的条件下核对首轮真实请求协议、供应商结构校验和当前配置，取得因果证据后针对修复。保留严格schema、最终产物校验、共享冷却及有界重试；先前400/429历史不能作为本轮同一根因的证据。
+4. 统一COMPLETED/REJECTED/FAILED终态时间；API明确RFC3339时间偏移，前端按当前浏览器时区显示，保证任务列表、报告、PDF与Langfuse对同一时刻解释一致。
+
+评估并放弃：放宽鉴权或依靠菜单隐藏无法防止已实证的SSE泄露；盲目更改schema、降低校验、默认风险/方案、无限重试或付费升级不能解释首轮失败；输出完整请求、供应商错误正文或临床资料虽便于排错但会扩大敏感信息流向。重放假成功任务来测试PDF/反馈会污染真实执行证据；本轮将二者记为依赖阻塞。
+
+独立RAG公开合成探针HTTP200/0.462秒，新缓存为1024维非零有限向量，Cloudflare BGE-M3真实调用与dense三个chunk/fallback=false成立，机械通路验收（本地测试产物，不入库：`./docs/production-tests/2026-10-11/RAG_PROBE.json`）通过，但不能代替完整Agent或真实语料质量。Milvus经逻辑`count(*)`严格核验仅**3条逻辑活跃合成探针（物理9）**，case/psychology/policy各1条、success0；物理统计含旧/删除记录，不能宣称九条有效知识。[KnowledgeChunk](./ai-inference-service/app/api/rag.py)未投影存储中非空、非URL的source测试marker，后续选用真实来源标识的明确投影而不补造URL；代价是API/MCP/报告来源契约需一并回归。
+
+1023px实际窗口还确认预警表格固定操作列与创建时间透底重叠、时间覆盖“查看报告”。选择未来修复 [Warning.vue](./frontend/src/views/agent/Warning.vue) 固定列背景/层叠并保障横滚；放弃只靠扩大窗口或隐藏时间列掩盖正常演示窗口问题。无架构影响；代价是不同宽度、横滚及固定列的浏览器视觉回归，本轮未改源码、未验证修复效果。
+
+代价与后续约束：SSE范围与生命周期需新增服务器策略和角色/会话测试；结构化错误字段可能涉及兼容迁移、DTO及观测关联；时间契约可能影响历史无偏移数据的解释，迁移不得猜测改写原业务时刻。所有实施都需独立回归、生产发布及明确回滚，当前未执行这些动作。已有失败任务保留作审计；R-5.2/R-5.3/R-5.4/R-6/B-2保持未完成。
+
+## 维护记录：AI-PROD-FIX-20261011（2026-10-11）
+
+背景：用户要求依据[生产AI测试](./docs/production-tests/2026-10-11/AI_REPORT.md)分析原因并修复。七组契约/权限/能力缺口已有源码因果依据；AI-01的三个首轮模型异常仍缺准确HTTP证据，既有TOOL_ERROR命名掩盖模型阶段，不能以历史400/429替代本次根因。选择先补安全诊断并保留真实失败历史，取得新的具体外发授权后做有界协议诊断和真实任务复验；当前实现及状态见[AI_FIX_REPORT](./docs/production-tests/2026-10-11/AI_FIX_REPORT.md)。
+
+选择：SSE与普通任务统一STAFF_VIEW/agent:read，并在每条事件/心跳前复核JWT和Redis活跃会话；Redis异常不向已有连接继续发资料。既有全校教职工读取范围沿用，不在缺少教师班级映射时伪造精细授权。前端正常EOF可退避重连，401/403停止。只保存固定错误类别/阶段、合法HTTP状态及真实根trace，不存供应商原始error/failed_generation；Langfuse和站内观测只投影受限技术metadata。放弃仅隐藏学生菜单、只校验签名、开放自由metadata或记录完整请求来排错，因这些方案不能关闭已实证泄露且扩大敏感资料流向。
+
+时间选择：把既有Agent UTC语义明确为API `Z`，显示固定校园Asia/Shanghai（UTC+8）；跨业务混合待办仅在Agent分支转换，不给所有历史日期加8小时。终态与完成时间同条SQL写入，COALESCE及非终态条件防止重复交付改写原结局。旧空完成时间用既有updated_at补近似，不宣称恢复精确结束时间，不推断旧失败HTTP/category/trace。代价是新增四个向后兼容列及迁移前备份，客户端旧无偏移兼容仅限Agent记录；真实MySQL备份恢复、重复迁移与跨页面UTC8已通过；正常成功PDF仍待合法产物。
+
+知识选择：现有Milvus schema不做破坏性迁移，保留source原值并区分集合、文档标识与合法URL；超过source64字节、title255字节或未切片正文4096字节明确422，不截断损坏出处。修改正文之外的持久化metadata/切片也会替换，成功upsert刷新检索revision；删除失败停止插入。公开知识采用短原创摘要与明确虚构支持情景，12条覆盖学业/资助/校园心理保密与转介/压力/睡眠/活动/适应；7官方来源与权利说明内置于[工具manifest](./scripts/public-rag-corpus.py)。来源只支持原则，不支持该演示个案真实存在或干预成功；success保持0，空召回保持无依据，不用虚构政策或疗效填满界面。WHO压力指南摘要注明CC BY-NC-SA 3.0 IGO、非WHO翻译或认可，限当前非商业演示；公开可读不等于取得全文复制许可，商业复用应重新审查。代价是现有URL长度限制、少量起步语料及需后续专业审核/检索质量集，不以数量替代R-5.3。
+
+无架构影响的表格选择：为固定操作列补不透明背景，包含条纹、hover及高风险状态；保留横滚和时间信息。放弃要求用户扩大窗口或隐藏时间列，因无法保障实际1023px演示窗口中的按钮操作；实际1023×1104、横滚、收侧栏和1440×1000视觉回归已通过。
+
+未采用：盲目放宽JSON schema、默认MEDIUM/空方案冒充成功、无限重试、付费升级、伪造成功报告/反馈或删除失败任务。保持严格最终产物校验、供应商冷却与有界等待。协议探针的拟发送工程MCP/schema曾被自动审批以授权范围不足拒绝，尚未外发；已单独问明确授权，新的三样本资料验收也待回复。离线修复无需等待，真实外发不能以时间经过视为授权。
+
+当前验证：目标SSE26、前端28/build、Python58通过/1真实Langfuse SDK可选依赖跳过、语料工具4通过；实际Spring AI本机HTTP transport验证选项合并/序列化及安全分类。受影响后端clean verify381通过，生产迁移/发布及角色/API/UI/公开RAG复验通过；真实Agent/PDF反馈及完整质量baseline未完成。新增兼容列在镜像回滚时保留；语料回滚需私有向量备份和本批次明确doc_id，禁止重建collection或清全库来回退。R-5.2/R-5.3/R-5.4/R-6/B-2保持未完成。
+
+同标识追加：选择[两阶段探针隔离](./scripts/public-rag-probe-quarantine.py)，先备份三个固定`accept_*_20261007_0000`的实际PK、字段与1024维向量，复制到VM私有耐久存储并核对digest，然后精确删除。放弃按source前缀、`like`、物理num_entities或全集合清理，因为测试记录可有历史版本，未知资料不能推断为可删除。删除前后强一致核验并轮换cache revision，Redis不可用时停止；发生部分变更可用同一备份继续核验/执行或恢复。代价是私有完整向量快照需妥善保留、应用维护期避免并发写该固定文档，auto-ID恢复不能复用原物理PK，但逻辑身份及实际向量保留。10项离线回归通过；生产备份/隔离3条及缓存更新已实际通过；恢复演练仍未执行。
+
+同标识交付决策补记（2026-10-11）：发布选择兼容新增列先迁移、VM私有备份在隔离库恢复并重复迁移，再滚动五组件；放弃重放初始化、DROP列或删除失败任务。20表行数与历史更新时间保留，数据库恢复已演练，应用回滚及Milvus恢复仍待验证。公开12条和旧3探针隔离均实际完成，四类公开问题检索及真实缓存来源保真通过，仍不以小样本证明完整生成质量。首次backup安全拒绝NumPy数值后，规范numbers.Real为实际JSON float并新增回归，未改变精确文档范围或向量值。前端构建开关遗漏经生产复查补发v2，选择保留既有AI=true、/api、Cloud JP；今后发布需显式带构建开关并检查菜单，Pod环境不能改变已编译Vite产物。另选择保留ExportService的固定BusinessException业务409，而不吞成500；未知异常正文不返回/记录。新MVC7与四套导出34例通过，生产409/404且无导出任务写入通过。原发布时AI-01原因未知；后续用户授权的GROQ-SCHEMA-FIX-20261011已复现并修复当前严格schema400，新三样本资料外发仍待授权，不盲放宽schema/预算或伪造完整生成通过。
+
+## 维护记录：GROQ-SCHEMA-FIX-20261011（2026-10-11）
+
+[原因与证据](./docs/production-tests/2026-10-11/GROQ_SCHEMA_FIX_REPORT.md)：用户授权工程schema/system prompt外发后，第1次生产7工具schema请求HTTP400明确拒绝action.anyOf包装；仅展平后第2次HTTP200并通过本地JSON schema校验。选择最小改结构，保留工具对象、并行数组、null、strict及最终产物校验；放弃关闭strict、改模型、无限重试或凭猜测调预算，因为这些无法修复已确认编译错误且会削弱契约。code=null的400仅匹配固定schema拒绝前缀，放弃保存原始供应商消息/failed_generation或把所有invalid_request_error归为schema问题。代价是需要受支持的union结构回归；新3项schema回归及8项分类回归随common80/agent307共387通过。两次协议授权已用完，学生资料未发送，完整生成/审核/PDF仍待具体授权；不追填旧任务错误。发布/只读复验通过，实际运行制品摘要相等、17/17 Ready/0重启、旧FAILED3个/导出0且无新业务任务。保留v2回滚但承认其含旧阻断，回滚尚未演练。
+
+## 维护记录：AI-FULL-ACCEPT-20261011（2026-10-11）
+
+背景：用户已授权本轮完整学生Agent、PDF及反馈验收；最多3任务中的第1个task6/student750首轮FAILED，PROVIDER_JSON_SCHEMA / LLM_REQUEST / HTTP400，trace `e058fadc0cbc4c82a44e292251055bf9`。现有安全分类合并schema编译拒绝与生成JSON校验失败，未保存原始正文，因此不能仅凭code判断子型。实际v3 JAR及structured=true、Groq120B/low/2400/18k/cache关闭参数已核对；实际McpSchema/SyncMcpToolCallback离线生成的schema与上一轮真实200请求完全相等，排除手工fixture绕过adapter导致结构差异的猜测。本轮没有成功完整产物，PDF/反馈依赖成功生成，保持待验证。
+
+选择修复[AgentLoop](./backend/agent-service/src/main/java/com/edu/agent/core/AgentLoop.java)已确认的提示契约矛盾：严格模式完整四字段示例、未用字段null、final_answer直接嵌入对象；不再使用缺字段示例、允许字符串最终答案或将plan字段描述为可省略。保留[严格schema](./backend/agent-service/src/main/java/com/edu/agent/core/AgentLoopOutputSchema.java)、本地最终产物校验和显式MCP执行。这项修复改善指令一致性，但新真实证据前不宣称已确定task6的400根因。
+
+诊断选择：[LlmResponseErrorHandler](./backend/agent-service/src/main/java/com/edu/agent/config/LlmResponseErrorHandler.java)从最多65536字节响应识别固定schema拒绝前缀或json_validate_failed，转换为[LlmCallException](./backend/agent-service/src/main/java/com/edu/agent/config/LlmCallException.java)的SCHEMA_COMPILATION / JSON_GENERATION / UNKNOWN三值reason；AgentLoop仅记录固定reason/code/HTTP/轮次，不保留原始cause或供应商自由内容。reason只扩展运行日志，不扩展数据库、对外API或Langfuse任意metadata。代价是UNKNOWN仍无法还原失败细节，需要剩余授权任务实测，并以[分类测试](./backend/agent-service/src/test/java/com/edu/agent/config/LlmFailureDiagnosticsTest.java)、[异常测试](./backend/agent-service/src/test/java/com/edu/agent/config/LlmCallExceptionTest.java)和[日志测试](./backend/agent-service/src/test/java/com/edu/agent/core/AgentLoopFailureReasonTest.java)证明无正文外泄。
+
+评估并放弃关闭strict、改非严格JSON掩盖不合规输出、虚构COMPLETED/默认风险报告/假反馈、删除FAILED历史和无限重试；这些无法证明真实链路恢复，并破坏输出及验收边界。也不为排错记录failed_generation、系统提示、学生档案或工具观察值。本轮已用1任务、剩余2次须修复回归与上线后执行，不补额外任务，不复用已用完的两次工程协议额度；保留冷却、deadline和重试上限。回滚点为已核验的agent v3镜像及对应源码，只退应用，保留真实task6和兼容数据库列。新增修复/部署、正常报告/PDF/反馈仍待验证，R-5/R-6/B-2不据此勾选。
+
+同标识进展（2026-10-11）：v4已发布，common80/agent336共416项回归通过；57,407字节最小包仅修改6个既有entry并新增1枚举，SHA256=`84619aec50955dd6e58566dbd28828ca9acaedf2a8948e39be8232538cb992f7`。task7/student175实际UTC07:29:33至07:29:37首轮FAILED，PROVIDER_JSON_SCHEMA / LLM_REQUEST / HTTP400、trace=`628dfb900e364f9090217c163b625d5d`，固定reason明确JSON_GENERATION，故不再将这个任务当作schema编译错误。提示矛盾修复有独立契约依据但未使完整任务通过，不能把它写成已证实根因或反填task6子型。实际v3本机HTTP fixture、成功200请求及v4配置类摘要一致，排除编译配置差异猜测，但无实际失败生产请求线上内容证据，结论保留范围。
+
+选择下一增量为固定请求契约/失败JSON结构诊断，只保留白名单结构指标，不留供应商正文、failed_generation字段值、师生资料或提示内容；由[请求策略](./backend/agent-service/src/main/java/com/edu/agent/config/LlmRequestPolicy.java)与[错误处理](./backend/agent-service/src/main/java/com/edu/agent/config/LlmResponseErrorHandler.java)执行有界检查。选择[业务首轮提示](./backend/agent-service/src/main/java/com/edu/agent/service/impl/AgentTaskServiceImpl.java)明确档案工具action，减少开放起步的协议歧义，不提供虚构工具结果。选择[AgentLoop](./backend/agent-service/src/main/java/com/edu/agent/core/AgentLoop.java)对HTTP400且reason=JSON_GENERATION在整个run最多1次纠错，消耗同一max8轮及900秒deadline；二次拒绝、SCHEMA_COMPILATION、UNKNOWN或其他错误仍失败，原429有界冷却策略不变。纠错只给固定协议指引，不重放失败JSON或伪造business observation；代价是单次额外合法模型机会且剩余轮次减少，须用跨轮、多错类型和内容隔离回归验证。
+
+放弃在HTTP层对所有400自动重试、每轮重置纠错额度、关闭strict、扩大预算、无限纠错或写入假成功。保留本地最终JSON/风险规则/审核及实际工具事实；不新增数据库、API或外部服务。本轮授权已用2任务、剩1，v5新回归/发布与最后真实任务尚待验证，PDF/反馈不提前记成功。当前稳定增量回滚点可用v4及对应源码，保留v3更早备份与全部失败历史；两版本都不承诺完整生成恢复。R-5/R-6/B-2继续未完成。
+
+同标识最终验收补记（2026-10-11）：v5已发布，common80/agent370共450项verify全部通过；81,778字节制品只改4个class、无新增entry，SHA256=`205e3946f05b08588fc49bfd8c1e90386b1bbdd35558e137fbb0d7b8003b914c`，详见[实际验收报告](./docs/production-tests/2026-10-11/AI_FULL_ACCEPTANCE_REPORT.md)。task8/student346在UTC07:38:50至07:39:51运行2轮FAILED、trace=`f6e6f8a52f7b47e48739656fb61f7b7d`，两次JSON_GENERATION/HTTP400；一次纠错及二次失败关闭均按计划运行，但没有使真实任务成功，代码回归不等于业务恢复。
+
+新增固定诊断真实记录两次交接参数为JSON_SCHEMA/strict TRUE/react_schema true/tools false/stream false/2400；两次失败JSON可解析、四个ReAct顶层字段存在标记全false。选择只将这些记为实际结构证据，**不推断未记录的根类型、工具参数或嵌套final形态，不定性为供应商bug或确切根因**。没有业务工具执行、风险/方案/审核产物或RAG调用。继续保留strict、本地最终校验及真实工具事实；放弃凭可解析JSON绕过schema、将第二次拒绝转成功、继续增加纠错或构造报告测试PDF/反馈。
+
+本轮task6/7/8三个具体资料外发额度已全部用完；正常PDF/反馈因无合法报告依赖阻塞、创建均0，不能宣称成功或另建任务补足结果。继续诊断可以离线进行，新的模型或资料外发复验须取得新的明确授权，不由旧验收授权无限延展。当前AI-PROD-FIX与R-5/R-6/B-2不完结。保留v3/v4制品、源码和真实FAILED历史；v5直接回滚v4方案仍未演练，v4自身有已知生成400，不把可回滚写成可恢复成功。健康及会话清理以独立最终核查为准。
+
+AI-FULL-ACCEPT-20261011收尾实测（2026-10-11）：[最终验收报告](./docs/production-tests/2026-10-11/AI_FULL_ACCEPTANCE_REPORT.md)及安全证据（本地测试产物，不入库：`./docs/production-tests/2026-10-11/AI_FULL_ACCEPTANCE.json`）已汇总。实际运行Agent v5 JAR SHA256 03599cb00f989cef0e1706185be5e48d5a4ecdd1a5479ac35ef6cd901c9a9073与审核制品相等，17/17部署和17/17 Pod Ready、0重启；3新任务均FAILED、终态结束时间无缺失、导出/反馈各0。task8真实站内trace为2轮/61,299ms/模型请求失败，DEFAULT级别不表示成功。测试管理员已正常注销、旧JWT401、Redis会话撤销，临时浏览器及本机/服务器临时凭据副本已清理。完整生成、成功PDF/反馈仍依赖阻塞，次数已用完；R-5/R-6/B-2及主修复任务保持未完成，新的模型外发须新有界授权；回滚未演练。
+
+AI-FULL-ACCEPT-20261011下一步候选（2026-10-11）：[两份A/B工程请求](./docs/production-tests/2026-10-11/AI_NEXT_DIAGNOSTIC_PLAN.md)已离线准备；唯一差异为action候选从7工具缩至档案工具，消息/最终schema/选项保持相同，虚构ID0示例经schema校验通过；v5类/资源/依赖一致，本机stub2次、Groq/MCP/业务调用0。选择单变量比较而非改提示与schema多个因素或直接关闭strict，以隔离工具候选范围的影响；代价是每份单次结果不足以证明稳定性，且新的最多2次外发需另获授权，不能沿用已消耗额度。后续最多3次完整复验也须新授权。
+
+### GROQ-400-CAUSE-20261011（2026-10-11）
+
+背景：合法且strict的请求仍出现json_validate_failed生成400，必须把静态合法与真实生成区分。[原因报告](./docs/production-tests/2026-10-11/GROQ_400_CAUSE_REPORT.md)与证据（本地测试产物，不入库：`./docs/production-tests/2026-10-11/GROQ_400_CAUSE_EVIDENCE.json`）采用虚构ID0、固定摘要、次数预占和无自动重试进行16次对照。A/B/K/O失败否定仅缩工具或只删raw Schema；短system的C/F、删完整工具目录的H/L成功。M由实际adapter/编译类/Spring AI捕获，与L逐值相同，M/N/P均严格200；原始请求重复O仍400。因此选择仅移除system重复工具文字目录的修复，保留原user、七工具正式Schema、2400输出预算、low和所有安全规则。
+
+放弃关闭strict、泛化args类型、吞掉400、永久单工具和改为原生工具路径；暂不把ToolDefinition.description搬入formal Schema，避免引入第二兼容变量。代价：formal只有参数说明，通用新增工具及子代理选择准确率需另验；本项目基础提示/skills已解释固定七工具。本轮确认当前工程首轮的应用侧触发条件与可验证修复，没有确定Groq内部解码机理或证明全量提示永不失败。失败样本为空，不能把旧任务四字段缺失或工具提示/schema可选null表示差异直接称准确根因。
+
+[最小源码](./backend/agent-service/src/main/java/com/edu/agent/core/AgentLoop.java)、[提示契约](./backend/agent-service/src/test/java/com/edu/agent/core/AgentLoopPromptContractTest.java)及[真实传输契约](./backend/agent-service/src/test/java/com/edu/agent/config/StructuredRequestTransportTest.java)最终452项verify通过。未通过的K制品没有发布；实际v6只更新1个类/1源文件，17/17健康、运行制品一致及工程P严格通过。用户后续明确工程授权已解除历史审批阻止；旧完整学生/PDF/反馈三次额度用尽，本轮不扩大为业务数据外发，R-5/R-6/B-2保持未完成。回滚仍可回v5服务版本，但会恢复已知生成400，且本轮未演练。
+
+## AI-PROD-RETEST-20261011（2026-10-11）：按真实业务链确认剩余问题
+
+背景与证据：[复测报告](./docs/production-tests/2026-10-11/retest/REPORT.md)中task9/10/11各只触发一次，首轮及档案Observation后的第三轮均被JSON_GENERATION400拒绝；第二轮档案调用真实成功且未截断。决定继续将AI恢复和R-5/R-6视为未完成，保留FAILED历史；不将工程协议200、空检索快照、无产物PDF409或汇总DEFAULT级别当业务成功。当前不能认定具体供应商内部原因；三次完整额度已使用，不盲目增加模型请求。
+
+已提出、尚未落地的方向：RT-01按真实首轮/Observation后消息分别定位并保留strict/产物校验/有界纠错；RT-02缺失任务用业务404，RT-03非法筛选用输入400，继续既有HTTP200+Result约定，放弃只改两端点的全HTTP协议变动；RT-04无风险/方案/审核产物显示“未生成”，放弃靠产物存在或failureStage补造完整执行历史；RT-06标签条选择有权限的角色首页，路由与后端继续拦截。选择这些最小方向是因为本轮实测问题分别在错误分类、文案语义和导航，不需要新服务或数据库字段。
+
+RT-05属追踪关联能力改善：循环开始先生成真实trace/root span，同步拦截器显式继承、异步上报捕获不可变参数，明确父span；不能仅依据时间邻近关联独立llm.chat。放弃给根汇总复制某次token或扩大任意metadata/input/output来排错；代价是要处理并发隔离、嵌套上下文恢复、异常路径与未知消费量，须专项回归。现有汇总模型/token为null本身不是消费数据丢失证据。
+
+本轮完成测试/记录与三份文档同步，未实施新应用修复或部署。正常PDF/反馈、任务内RAG、P4仍依赖有效报告；后续验证判据见报告§5。可选Secret值解码被自动审批拒绝后采用实际角色/注销/匿名请求，未读配置值不宣称已验证；不为此绕过审批。修复上线后仍需新的明确完整任务范围，且保留此前安全修复与B-2凭据轮换门。
+
+## PAGE-PERF-PLAN-20261012（2026-10-12）：先优化首屏体积与异常等待
+
+背景：[实测与候选方案](./docs/production-tests/2026-10-12/PAGE_PERFORMANCE_PLAN.md)显示静态服务处理快，而客户端网络/资源有成本；公共包全量293图标存在减量空间，旧Render规则把网络失败提示为唤醒、最多6次退避共215秒。决定先建立浏览器冷/暖缓存与登录阶段基线，再优先评估按需图标/登录chunk、网络中性提示及总等待预算；当前只是方案，没有改代码/配置/部署，具体收益与用户此前等待的归因尚待测。
+
+放弃先升级CPU/RAM、删图表功能或重复开启已生效gzip/immutable缓存：当前没有服务器压力，匿名登录不加载charts。放弃只缩短每次timeout却留下长退避链、把任意HTTP429当Render边缘层未执行、或按时间延迟宣布冷启动；重试必须尊重可重放语义及会话隔离。代价是新预算需按真实请求延迟和长操作分别验证，组件拆包需平衡体积与新增请求。静态CDN列后续候选，域名要可控制，nip.io不能当自己的zone接管；API/SSE不能共享缓存，也不保证任何网络的CDN新路线更快。实施/回归/发布全部待执行，不代替AI与上线验收。
+
+## PAGE-PERF-FIX-20261013（2026-10-13）：实施首屏减量与有界等待
+
+背景：[旧性能方案](./docs/production-tests/2026-10-12/PAGE_PERFORMANCE_PLAN.md)确认当前常驻、压缩/缓存已开启，全量图标与Render长等待可优化。选择22真实图标和login-core聚合，保留9资源/两阶段预加载；完全自动拆分略小但增加资源数，后台组件过度聚合则把体积重新带回登录。放弃升级CPU/RAM、删charts或重复开启gzip；实际传输正文减少47.9%，不把体积变化称FCP/LCP降幅。
+
+选择standard默认15秒单次/30秒总预算，仅只读两次短重试；写入即使429也不重放，下载/显式timeout独立处理；Render长读/预热必须显式选择。放弃默认把网络失败说成冷启动、只缩timeout却保留长退避，以及不绑定会话的401处理。代价是必须覆盖真实Axios和浏览器原生边界，不能只用箭头fake-clock。
+
+实施中引入的两项回归已处理：eager store参数在真实三模块环触发TDZ，改lazy getter；实例属性调用Window timer导致成功响应清理失败，改自由调用包装。v1/v2均实际回滚，v3先通过真实浏览器对生产API的登录/列表/注销再发布；两类阴性控制进入回归。发布CAS拒绝或结果未知不补写/回滚，仅确认本助手切换后才对后续失败回退。保留旧hashed文件，避免旧tab懒加载404。
+
+[最终报告](./docs/production-tests/2026-10-13/PAGE_PERFORMANCE_FIX_REPORT.md)记录42请求/27会话及完整前端检查通过、17Ready与真实角色UI通过。只独立发布frontend，保留旧镜像/PVC和大量既有改动；CDN需要可控域名，本轮不创建平台/收费资源。源码在工作区和服务器归档，未来重建先同步已审阅版本；未推送及未远端跑CI。完整AI400/R-5/R-6/B-2保持未完成。
+
+## JAVA-AI-MIGRATION-20261015（2026-10-15）：统一 Java AI 运行时，保留既有向量布局
+
+背景：默认 AgentLoop 已用 Spring AI，但审核、legacy 方案、RAG 与知识 MCP 仍依赖 Python，运行时和模型策略分散。用户明确要求所有运行功能 Java 化，允许在 Spring AI 不满足时使用 Spring AI Alibaba。
+
+选择：继续使用已锁定的 Spring AI 1.1.6，ChatClient 承担生成/审核，OpenAiEmbeddingModel 承担向量调用，Spring AI MCP WebMVC 承担知识工具。上述能力均可直接实现，本轮没有引入 Alibaba 或连带升级 Boot。Milvus 现有 auto-ID/字段布局不同于默认 VectorStore，采用有界 REST v2 兼容适配；放弃立即重建集合或双写迁移，避免改变存量物理数据和引入不可逆回滚成本。保留既有服务 DNS/端口与 HTTP JSON 外形；生成兼容入口转发到 agent-service，统一限流/trace，而业务主路径直接调用 Java 服务。
+
+安全取舍：不自动回退 Python、不通过失效审核；审核只发 studentId/grade/major 元信息与方案，要求四维完整且总判定一致。知识读取与生成兼容接口改为内部凭证强制校验，导入和 MCP 分别使用 admin/MCP 凭证；8095 不暴露写 API。导入先算完向量、集合级写锁、先插后删精确旧 PK；先失效旧 hash/revision，避免失败后错误跳过修复。Milvus 无跨操作事务，部分插入/删除失败可能留重复片段，应重新导入同一完整文档；这优于先删旧文档后的数据丢失，但不能宣称事务原子性。
+
+代价：保留一个兼容存储适配层、两个 Java 进程；需要实测 JVM 内存和 Milvus 2.4 REST 行为。Python 源目录暂留作迁移对照，不再打进默认运行包；运维/eval 脚本仍使用 Python。顺带修正运行包遗漏已有 `sql/init/10_agent_diagnostics.sql`，不新建/执行数据库迁移。旧镜像和配置须成套保存以回退；本轮不自动部署、调用真实模型或改存量向量。验证与限制见 [迁移记录](./docs/educare/JAVA_AI_MIGRATION_20261015.md) 和 RUNBOOK 同标题。
+
+### LOCAL-JAVA-AI-TEST-20261015（2026-10-15）：Milvus 2.4.1 读一致性
+
+真实实例证明仅在 REST 请求中添加 `consistencyLevel: Strong` 无效：首次导入成功后立即检索为空；官方 v2.4.1 `handler_v2.go` 的 query/search 硬编码 BoundedTimestamp。因此采用官方 Java SDK 强一致性读取，保留现有集合与 REST 管理/写入接口。未选择固定 sleep（不能保证可见性）、关闭空缓存（不能避免替换漏删），也不为此升级生产 Milvus。SDK 2.4.1 默认的 rpcDeadlineMs 在客户端构造时设置绝对截止时间，改用拦截器逐 RPC 设置 30 秒，避免长运行后请求全部超时；排除未使用的 Hadoop/Parquet/云存储批量导入依赖。代价是增加 gRPC 依赖及协议适配测试；本地通过也不等于生产切流完成。
+
+### BUSINESS-INTEGRATION-20261015（2026-10-15）：整合工作区业务改动
+
+用户明确选择“当前全部业务改动”，因此整合此前尚未提交的账号权限、师生画像、心理测评、前端性能/可观测、部署/SQL工具与本次Java AI迁移，而非仅摘取迁移文件造成依赖缺失。采用独立分支整合远端 main，保留已合入的 AgentRunner 抽象和缓存修复；现有其他迁移PR不自动合并或关闭。排除密钥、临时文件、截图和原始测试结果，保留实现、回归测试与叙述文档。合并须检查本地回归与远端CI，不绕过仓库分支保护；代码合并不等于生产退役或完整模型验收。

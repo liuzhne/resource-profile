@@ -1,0 +1,2 @@
+# Local/VM deployment utilities, isolated from the application's Python environment.
+bcrypt>=4.2,<6

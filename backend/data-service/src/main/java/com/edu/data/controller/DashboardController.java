@@ -4,6 +4,7 @@ import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
 import com.edu.common.security.Roles;
 import com.edu.data.service.DashboardService;
+import com.edu.data.dto.TodoPageDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -64,4 +65,13 @@ public class DashboardController {
         }
         return Result.success(dashboardService.getRecentLogins());
     }
+    @GetMapping("/todos")
+    public Result<TodoPageDto> todos(@RequestParam(defaultValue = "10") int limit,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        if (!accessGuard.hasAnyRole(authHeader, Roles.STAFF_VIEW)) {
+            return Result.error(403, "无权查看待办事项");
+        }
+        return Result.success(dashboardService.getTodos(limit));
+    }
+
 }

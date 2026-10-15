@@ -1,249 +1,161 @@
 package com.edu.mental.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.edu.mental.dto.LevelRule;
-import com.edu.mental.dto.SubmitAnswerRequest;
-import com.edu.mental.entity.MentalAssessment;
-import com.edu.mental.entity.MentalResponse;
-import com.edu.mental.entity.Question;
-import com.edu.mental.entity.Questionnaire;
-import com.edu.mental.mapper.MentalAssessmentMapper;
-import com.edu.mental.mapper.MentalResponseMapper;
-import com.edu.mental.mapper.QuestionMapper;
-import com.edu.mental.mapper.QuestionnaireMapper;
-import com.edu.mental.mapper.StudentLookupMapper;
+import com.edu.common.exception.BusinessException;
+import com.edu.mental.dto.*;
+import com.edu.mental.entity.*;
+import com.edu.mental.mapper.*;
 import com.edu.mental.service.MentalAssessmentService;
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.edu.mental.service.MentalAnswerContract;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDate;
+import org.springframework.dao.DuplicateKeyException;
+import java.time.*;
 import java.util.*;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MentalAssessmentServiceImpl implements MentalAssessmentService {
-
-    private static final String TYPE_SINGLE = "single_choice";
-    private static final String TYPE_MULTI = "multiple_choice";
-    private static final String TYPE_TEXT = "text";
-
     private final QuestionnaireMapper questionnaireMapper;
     private final QuestionMapper questionMapper;
     private final MentalResponseMapper responseMapper;
     private final MentalAssessmentMapper assessmentMapper;
     private final StudentLookupMapper studentLookupMapper;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules().disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
 
-    @Override
-    public List<Map<String, Object>> listForStudent(Long userId) {
+    @Override public List<Map<String, Object>> listForStudent(Long userId) {
         Long studentId = resolveStudentId(userId);
-
-        LambdaQueryWrapper<Questionnaire> w = new LambdaQueryWrapper<>();
-        w.eq(Questionnaire::getStatus, 1).orderByDesc(Questionnaire::getCreateTime);
-        List<Questionnaire> all = questionnaireMapper.selectList(w);
-        LocalDate today = LocalDate.now();
-
+        var all = questionnaireMapper.selectList(new LambdaQueryWrapper<Questionnaire>()
+                .eq(Questionnaire::getStatus, 1).orderByDesc(Questionnaire::getCreateTime));
         Set<Long> answered = new HashSet<>();
-        if (studentId != null) {
-            List<MentalResponse> done = responseMapper.selectList(
-                    new LambdaQueryWrapper<MentalResponse>().eq(MentalResponse::getStudentId, studentId)
-            );
-            done.forEach(r -> answered.add(r.getQuestionnaireId()));
-        }
-
-        List<Map<String, Object>> out = new ArrayList<>();
+        if (studentId != null) responseMapper.selectList(new LambdaQueryWrapper<MentalResponse>()
+                .eq(MentalResponse::getStudentId, studentId)).forEach(r -> answered.add(r.getQuestionnaireId()));
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        List<Map<String, Object>> result = new ArrayList<>();
         for (Questionnaire q : all) {
-            boolean inWindow =
-                    (q.getStartTime() == null || !today.isBefore(q.getStartTime())) &&
-                    (q.getEndTime() == null   || !today.isAfter(q.getEndTime()));
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", q.getId());
-            row.put("title", q.getTitle());
-            row.put("type", q.getType());
-            row.put("description", q.getDescription());
-            row.put("questions", q.getQuestions());
-            row.put("startTime", q.getStartTime());
-            row.put("endTime", q.getEndTime());
-            row.put("inWindow", inWindow);
-            row.put("answered", answered.contains(q.getId()));
-            out.add(row);
+            row.put("id",q.getId()); row.put("title",q.getTitle()); row.put("type",q.getType());
+            row.put("description",q.getDescription()); row.put("questions",q.getQuestions());
+            row.put("startTime",q.getStartTime()); row.put("endTime",q.getEndTime());
+            boolean valid = (q.getStartTime()==null || !today.isBefore(q.getStartTime()))
+                    && (q.getEndTime()==null || !today.isAfter(q.getEndTime()));
+            row.put("inWindow",valid); row.put("answered",answered.contains(q.getId())); result.add(row);
         }
-        return out;
+        return result;
     }
 
-    @Override
-    @Transactional
-    public MentalAssessment submit(SubmitAnswerRequest req) {
-        if (req.getUserId() == null || req.getQuestionnaireId() == null || req.getAnswers() == null) {
-            throw new RuntimeException("提交参数不完整");
-        }
+    @Override @Transactional public MentalAssessment submit(SubmitAnswerRequest req) {
+        if (req==null || req.getUserId()==null || req.getQuestionnaireId()==null || req.getAnswers()==null)
+            throw new BusinessException(400,"提交参数不完整");
         Long studentId = resolveStudentId(req.getUserId());
-        if (studentId == null) {
-            throw new RuntimeException("当前用户未关联学生信息");
-        }
-
+        if (studentId==null) throw new BusinessException(409,"当前账号未关联学生档案，请联系管理员绑定");
         Questionnaire q = questionnaireMapper.selectById(req.getQuestionnaireId());
-        if (q == null) {
-            throw new RuntimeException("问卷不存在");
-        }
-        if (q.getStatus() == null || q.getStatus() != 1) {
-            throw new RuntimeException("问卷当前未开放");
-        }
-        LocalDate today = LocalDate.now();
-        if (q.getStartTime() != null && today.isBefore(q.getStartTime())) {
-            throw new RuntimeException("问卷尚未开始");
-        }
-        if (q.getEndTime() != null && today.isAfter(q.getEndTime())) {
-            throw new RuntimeException("问卷已结束");
-        }
-
-        Long existingResponseCount = responseMapper.selectCount(
-                new LambdaQueryWrapper<MentalResponse>()
-                        .eq(MentalResponse::getStudentId, studentId)
-                        .eq(MentalResponse::getQuestionnaireId, q.getId()));
-        if (existingResponseCount > 0) {
-            throw new RuntimeException("您已提交过该问卷");
-        }
-
-        List<Question> questions = questionMapper.selectList(
-                new LambdaQueryWrapper<Question>()
-                        .eq(Question::getQuestionnaireId, q.getId())
-                        .orderByAsc(Question::getSortOrder)
-                        .orderByAsc(Question::getId));
-        Map<Long, Question> questionMap = new HashMap<>();
-        questions.forEach(qq -> questionMap.put(qq.getId(), qq));
-
-        int totalScore = 0;
-        for (SubmitAnswerRequest.AnswerItem ans : req.getAnswers()) {
-            Question qi = questionMap.get(ans.getQuestionId());
-            if (qi == null) continue;
-            totalScore += scoreForAnswer(qi, ans);
-        }
-
-        MentalResponse resp = new MentalResponse();
-        resp.setStudentId(studentId);
-        resp.setQuestionnaireId(q.getId());
-        resp.setScore(totalScore);
-        resp.setStatus(1);
+        if (q==null) throw new BusinessException(404,"问卷不存在");
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        if (!Integer.valueOf(1).equals(q.getStatus())) throw new BusinessException(409,"问卷当前未开放");
+        if (q.getStartTime()!=null && today.isBefore(q.getStartTime())) throw new BusinessException(409,"问卷尚未开始");
+        if (q.getEndTime()!=null && today.isAfter(q.getEndTime())) throw new BusinessException(409,"问卷已结束");
+        if (responseMapper.selectCount(new LambdaQueryWrapper<MentalResponse>()
+                .eq(MentalResponse::getStudentId,studentId).eq(MentalResponse::getQuestionnaireId,q.getId()))>0)
+            throw new BusinessException(409,"您已提交过该问卷");
+        List<Question> questions = questionMapper.selectList(new LambdaQueryWrapper<Question>()
+                .eq(Question::getQuestionnaireId,q.getId()).orderByAsc(Question::getSortOrder).orderByAsc(Question::getId));
+        int score = MentalAnswerContract.score(questions,req.getAnswers());
+        List<LevelRule> rules = MentalAnswerContract.levels(q.getLevelRules());
+        LevelRule rule = rules.stream().filter(r -> r.getMinScore()<=score)
+                .max(Comparator.comparingInt(LevelRule::getMinScore))
+                .orElseThrow(() -> new BusinessException(400,"等级规则未覆盖本次得分，问卷配置需要修正"));
+        LocalDateTime now = LocalDateTime.now(BUSINESS_ZONE);
+        MentalResponse response = new MentalResponse(); response.setStudentId(studentId);
+        response.setQuestionnaireId(q.getId()); response.setScore(score); response.setStatus(1); response.setCreateTime(now);
         try {
-            resp.setAnswers(objectMapper.writeValueAsString(req.getAnswers()));
-        } catch (Exception e) {
-            throw new RuntimeException("答卷序列化失败: " + e.getMessage());
-        }
-        responseMapper.insert(resp);
-
-        LevelRule rule = pickLevelRule(parseLevelRules(q.getLevelRules()), totalScore);
-        MentalAssessment assessment = new MentalAssessment();
-        assessment.setStudentId(studentId);
-        assessment.setQuestionnaireId(q.getId());
-        assessment.setScore(totalScore);
-        assessment.setLevel(rule != null ? rule.getLevel() : "未评级");
-        assessment.setSuggestion(rule != null ? rule.getSuggestion() : null);
-        assessment.setResult("总分 " + totalScore + "，评级：" + (rule != null ? rule.getLevel() : "未评级"));
-        assessment.setStatus(1);
-        assessmentMapper.insert(assessment);
+            response.setAnswers(objectMapper.writeValueAsString(req.getAnswers()));
+            response.setQuestionnaireSnapshot(objectMapper.writeValueAsString(MentalAnswerContract.respondentSnapshot(q,questions)));
+        } catch (Exception e) { throw new BusinessException(400,"答卷格式无法保存"); }
+        try { responseMapper.insert(response); }
+        catch(DuplicateKeyException e) { throw new BusinessException(409,"您已提交过该问卷"); }
+        MentalAssessment assessment = new MentalAssessment(); assessment.setStudentId(studentId);
+        assessment.setQuestionnaireId(q.getId()); assessment.setResponseId(response.getId()); assessment.setScore(score);
+        assessment.setLevel(rule.getLevel()); assessment.setSuggestion(rule.getSuggestion());
+        assessment.setResult("总分 "+score+"，评级："+rule.getLevel()); assessment.setStatus(1);
+        assessment.setWarningStatus("OPEN"); assessment.setCreateTime(now); assessmentMapper.insert(assessment);
         return assessment;
     }
 
-    @Override
-    public List<MentalAssessment> myHistory(Long userId) {
-        Long studentId = resolveStudentId(userId);
-        if (studentId == null) return Collections.emptyList();
-        return assessmentMapper.selectList(
-                new LambdaQueryWrapper<MentalAssessment>()
-                        .eq(MentalAssessment::getStudentId, studentId)
-                        .orderByDesc(MentalAssessment::getCreateTime));
+    @Override public List<MentalAssessment> myHistory(Long userId) {
+        Long studentId=resolveStudentId(userId);
+        if(studentId==null) return List.of();
+        var rows=assessmentMapper.selectList(new LambdaQueryWrapper<MentalAssessment>()
+                .eq(MentalAssessment::getStudentId,studentId).orderByDesc(MentalAssessment::getCreateTime).orderByDesc(MentalAssessment::getId));
+        for(var row:rows) {
+            Questionnaire q=questionnaireMapper.selectById(row.getQuestionnaireId());
+            if(q!=null) {row.setQuestionnaireTitle(q.getTitle());row.setQuestionnaireType(q.getType());}
+            Questionnaire snapshot = snapshotMetadata(row.getResponseId(), row.getStudentId(), row.getQuestionnaireId());
+            if(snapshot != null) { row.setQuestionnaireTitle(snapshot.getTitle()); row.setQuestionnaireType(snapshot.getType()); }
+        }
+        return rows;
     }
 
-    @Override
-    public Map<String, Object> getMyAssessmentDetail(Long userId, Long assessmentId) {
-        Long studentId = resolveStudentId(userId);
-        MentalAssessment a = assessmentMapper.selectById(assessmentId);
-        if (a == null || studentId == null || !studentId.equals(a.getStudentId())) {
-            throw new RuntimeException("无权查看该评估");
+    @Override public List<MentalHistoryDto> historyForStudent(Long studentId) {
+        if(studentId==null || studentLookupMapper.countActiveStudent(studentId)!=1)
+            throw new BusinessException(404,"学生档案不存在");
+        List<MentalHistoryDto> rows=assessmentMapper.selectHistoryByStudentId(studentId);
+        for (var row : rows) {
+            Questionnaire snapshot = snapshotMetadata(row.getResponseId(), row.getStudentId(), row.getQuestionnaireId());
+            if(snapshot != null) { row.setQuestionnaireTitle(snapshot.getTitle()); row.setQuestionnaireType(snapshot.getType()); }
         }
-        Questionnaire q = questionnaireMapper.selectById(a.getQuestionnaireId());
-        MentalResponse resp = responseMapper.selectOne(
-                new LambdaQueryWrapper<MentalResponse>()
-                        .eq(MentalResponse::getStudentId, studentId)
-                        .eq(MentalResponse::getQuestionnaireId, a.getQuestionnaireId()));
+        return rows;
+    }
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("assessment", a);
-        out.put("questionnaire", q);
-        out.put("answersJson", resp != null ? resp.getAnswers() : null);
+    @Override public Map<String,Object> getMyAssessmentDetail(Long userId,Long assessmentId) {
+        Long studentId=resolveStudentId(userId); MentalAssessment a=assessmentMapper.selectById(assessmentId);
+        if(a==null || studentId==null || !studentId.equals(a.getStudentId())) throw new BusinessException(403,"无权查看该评估");
+        MentalResponse r=a.getResponseId()==null ? null : responseMapper.selectById(a.getResponseId());
+        if(r!=null && (!studentId.equals(r.getStudentId()) || !a.getQuestionnaireId().equals(r.getQuestionnaireId())))
+            throw new BusinessException(500,"答卷关联错误，请联系管理员");
+        Map<String,Object> out=new LinkedHashMap<>(); out.put("assessment",a);
+        if(r!=null && r.getQuestionnaireSnapshot()!=null) {
+            try {
+                QuestionnaireFullDto snapshot=objectMapper.readValue(r.getQuestionnaireSnapshot(),QuestionnaireFullDto.class);
+                // Stored snapshot is already safe, defensively strip again for any migrated snapshot.
+                var safe=MentalAnswerContract.respondentSnapshot(snapshot.getQuestionnaire(),snapshot.getQuestions());
+                out.put("questionnaire",safe.getQuestionnaire()); out.put("questions",safe.getQuestions());
+                out.put("historySnapshotAvailable",true); out.put("answersJson",r.getAnswers());
+            } catch(Exception e) { throw new BusinessException(500,"历史问卷快照损坏，请联系管理员"); }
+        } else {
+            Questionnaire current=questionnaireMapper.selectById(a.getQuestionnaireId());
+            if(current!=null) { current.setLevelRules(null); current.setCreatorId(null); }
+            out.put("questionnaire",current); out.put("questions",List.of()); out.put("answersJson",r==null?null:r.getAnswers());
+            out.put("historySnapshotAvailable",false);
+            out.put("historyNotice","历史记录没有提交时题目快照，无法保证题干及选项回显。评估摘要仍按权限提供。");
+        }
         return out;
     }
-
-    @Override
-    public List<Map<String, Object>> listCompletion(Long questionnaireId) {
+    @Override public List<Map<String,Object>> listCompletion(Long questionnaireId) {
         return responseMapper.selectCompletionByQuestionnaire(questionnaireId);
     }
-
-    /* ============== 内部辅助 ============== */
-
+    private Questionnaire snapshotMetadata(Long responseId, Long studentId, Long questionnaireId) {
+        if(responseId == null) return null;
+        MentalResponse response = responseMapper.selectById(responseId);
+        if(response == null || !Objects.equals(studentId, response.getStudentId())
+                || !Objects.equals(questionnaireId, response.getQuestionnaireId()))
+            throw new BusinessException(500, "答卷关联错误，请联系管理员");
+        if(response.getQuestionnaireSnapshot() == null) return null;
+        try {
+            QuestionnaireFullDto snapshot = objectMapper.readValue(response.getQuestionnaireSnapshot(), QuestionnaireFullDto.class);
+            if(snapshot.getQuestionnaire() == null || !Objects.equals(questionnaireId, snapshot.getQuestionnaire().getId()))
+                throw new IllegalArgumentException("snapshot identity mismatch");
+            return snapshot.getQuestionnaire();
+        } catch(Exception e) { throw new BusinessException(500, "历史问卷快照损坏，请联系管理员"); }
+    }
     private Long resolveStudentId(Long userId) {
-        if (userId == null) return null;
-        return studentLookupMapper.selectStudentIdByUserId(userId);
-    }
-
-    /** 单题计分 */
-    @SuppressWarnings("unchecked")
-    private int scoreForAnswer(Question q, SubmitAnswerRequest.AnswerItem ans) {
-        if (TYPE_TEXT.equals(q.getQuestionType())) return 0;
-        List<Integer> picked = ans.getOptionIndices();
-        if (picked == null || picked.isEmpty()) return 0;
-
-        List<Map<String, Object>> opts;
-        try {
-            opts = objectMapper.readValue(
-                    q.getOptions() == null ? "[]" : q.getOptions(),
-                    new TypeReference<List<Map<String, Object>>>() {});
-        } catch (Exception e) {
-            log.warn("解析题目选项失败 questionId={}: {}", q.getId(), e.getMessage());
-            return 0;
-        }
-
-        int s = 0;
-        for (Integer idx : picked) {
-            if (idx == null || idx < 0 || idx >= opts.size()) continue;
-            Object scoreObj = opts.get(idx).get("score");
-            if (scoreObj instanceof Number n) {
-                s += n.intValue();
-            }
-        }
-        if (TYPE_SINGLE.equals(q.getQuestionType()) && picked.size() > 1) {
-            s = 0;
-            Integer first = picked.get(0);
-            if (first != null && first >= 0 && first < opts.size()) {
-                Object scoreObj = opts.get(first).get("score");
-                if (scoreObj instanceof Number n) s = n.intValue();
-            }
-        }
-        return s;
-    }
-
-    private List<LevelRule> parseLevelRules(String json) {
-        if (json == null || json.isBlank()) return Collections.emptyList();
-        try {
-            return objectMapper.readValue(json, new TypeReference<>() {});
-        } catch (Exception e) {
-            log.warn("解析等级规则失败: {}", e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-    /** 选 minScore 最大且 ≤ totalScore 的等级 */
-    private LevelRule pickLevelRule(List<LevelRule> rules, int totalScore) {
-        if (rules == null || rules.isEmpty()) return null;
-        return rules.stream()
-                .filter(r -> r.getMinScore() != null && r.getMinScore() <= totalScore)
-                .max(Comparator.comparingInt(LevelRule::getMinScore))
-                .orElse(null);
+        if(userId==null) return null;
+        List<Long> ids=studentLookupMapper.selectStudentIdsByUserId(userId);
+        if(ids.size()>1) throw new BusinessException(409,"当前账号关联多个学生档案，请联系管理员明确绑定后再作答或查看本人记录");
+        return ids.isEmpty()?null:ids.get(0);
     }
 }

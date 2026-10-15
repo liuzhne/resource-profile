@@ -10,7 +10,8 @@ public interface AuthService {
 
     UserInfoResponse getUserInfo(Long userId);
 
-    void logout(Long userId);
+    void logout(Long userId, String accessToken);
 
     LoginResponse refreshToken(String refreshToken);
+    Long requireSession(String accessToken);
 }

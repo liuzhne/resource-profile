@@ -8,6 +8,7 @@ import com.edu.common.util.JwtUtil;
 import com.edu.mental.dto.QuestionnaireFullDto;
 import com.edu.mental.entity.Question;
 import com.edu.mental.entity.Questionnaire;
+import com.edu.mental.dto.QuestionnaireUpdateRequest;
 import com.edu.mental.mapper.MentalAssessmentMapper;
 import com.edu.mental.service.MentalAssessmentService;
 import com.edu.mental.service.QuestionService;
@@ -96,7 +97,7 @@ class MentalControllerTest {
     private List<Integer> writeCodes(String auth) {
         return List.of(
                 controller.saveQuestionnaire(new Questionnaire(), auth).getCode(),
-                controller.updateQuestionnaire(1L, new Questionnaire(), auth).getCode(),
+                controller.updateQuestionnaire(1L, new QuestionnaireUpdateRequest(), auth).getCode(),
                 controller.deleteQuestionnaire(1L, auth).getCode(),
                 controller.addQuestion(1L, new Question(), auth).getCode(),
                 controller.updateQuestion(2L, new Question(), auth).getCode(),
@@ -143,6 +144,7 @@ class MentalControllerTest {
                 Map.of("level", "正常", "count", 6),
                 Map.of("level", "中度", "count", 2),
                 Map.of("level", "高危", "count", 2)));
+        when(mentalAssessmentMapper.countSubmittedBetween(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(2L);
         List<Map<String, Object>> warnings = List.of(Map.of("name", "张三", "level", "高危"));
         when(mentalAssessmentMapper.selectWarningList()).thenReturn(warnings);
 
@@ -153,7 +155,7 @@ class MentalControllerTest {
                 .containsEntry("goodRate", 60)
                 .containsEntry("attentionRate", 20)
                 .containsEntry("interventionRate", 20)
-                .containsEntry("todayCompleted", 10)
+                .containsEntry("todayCompleted", 2L)
                 .containsEntry("warningList", warnings);
     }
 
@@ -229,7 +231,7 @@ class MentalControllerTest {
     @Test
     void writes_psychologist_ok() {
         loginAs("psychologist");
-        Questionnaire questionnaire = new Questionnaire();
+        QuestionnaireUpdateRequest questionnaire = new QuestionnaireUpdateRequest();
         Question question = new Question();
         when(questionService.save(question)).thenReturn(question);
 
@@ -241,7 +243,7 @@ class MentalControllerTest {
         assertThat(controller.deleteQuestion(8L, AUTH).getCode()).isEqualTo(200);
 
         verify(questionnaireService).save(questionnaire);
-        verify(questionnaireService).update(questionnaire);
+        verify(questionnaireService).updateMetadata(questionnaire);
         verify(questionnaireService).delete(5L);
         verify(questionService).save(question);
         verify(questionService).update(question);

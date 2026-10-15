@@ -1,0 +1,53 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "audit_passed",
+    "audit_items",
+    "redacted_suggestions",
+    "manual_review_required"
+  ],
+  "properties": {
+    "audit_passed": {
+      "type": "boolean"
+    },
+    "audit_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension",
+          "passed",
+          "issue"
+        ],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "privacy",
+              "necessity",
+              "ethics",
+              "third_party"
+            ]
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "issue": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "redacted_suggestions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "manual_review_required": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "risk_analysis": {
+    "risk_level": "medium", "risk_score": 58, "primary_risk_type": "心理健康预警",
+    "root_cause_analysis": "合成原始指标 SYNTHETIC_RAW_PHQ9:19",
+    "key_indicators": ["SYNTHETIC_RAW_PHQ9:19"],
+    "recommended_intervention_types": ["心理疏导"], "urgency_reason": "合成原始指标 SYNTHETIC_RAW_PHQ9:19"
+  },
+  "intervention_plan": {
+    "report_title": "纯合成方案", "summary": "合成支持安排",
+    "immediate_actions": [{"action": "安排合成支持会谈", "owner": "合成辅导员", "deadline": "48小时内"}],
+    "long_term_plan": [{"goal": "建立合成学习安排", "milestones": ["第1周完成合成计划", "第4周复核合成结果"], "horizon": "4周"}],
+    "talk_outline": "合成倾听提纲", "resources": ["合成支持资源：示例热线"], "references": ["synthetic-policy-001"]
+  }
+}

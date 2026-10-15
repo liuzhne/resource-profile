@@ -16,7 +16,7 @@ public interface MentalResponseMapper extends BaseMapper<MentalResponse> {
             "mr.score, ma.level, mr.create_time AS submitTime " +
             "FROM mental_response mr " +
             "LEFT JOIN student_info si ON mr.student_id = si.id " +
-            "LEFT JOIN mental_assessment ma ON ma.student_id = mr.student_id AND ma.questionnaire_id = mr.questionnaire_id " +
+            "LEFT JOIN mental_assessment ma ON ma.response_id = mr.id " +
             "WHERE mr.questionnaire_id = #{questionnaireId} " +
             "ORDER BY mr.create_time DESC")
     List<Map<String, Object>> selectCompletionByQuestionnaire(Long questionnaireId);

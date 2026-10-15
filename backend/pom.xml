@@ -31,6 +31,7 @@
         <module>data-service</module>
         <module>agent-service</module>
         <module>mcp-student-data</module>
+        <module>knowledge-service</module>
     </modules>
 
     <properties>

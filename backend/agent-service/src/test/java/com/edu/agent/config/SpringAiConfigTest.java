@@ -27,11 +27,12 @@ class SpringAiConfigTest {
         ReflectionTestUtils.setField(config, "cachePromptEnabled", false);
 
         ResponseErrorHandler errorHandler = mock(ResponseErrorHandler.class);
-        OpenAiApi api = config.openAiApi(mock(LlmMetricsInterceptor.class), errorHandler);
+        LlmRequestPolicy policy = mock(LlmRequestPolicy.class);
+        OpenAiApi api = config.openAiApi(mock(LlmMetricsInterceptor.class), errorHandler, policy);
         assertSame(errorHandler, ReflectionTestUtils.getField(api, "responseErrorHandler"));
 
         RetryTemplate retryTemplate = new RetryTemplate();
-        OpenAiChatModel chatModel = config.openAiChatModel(api, retryTemplate);
+        OpenAiChatModel chatModel = config.openAiChatModel(api, retryTemplate, policy);
         assertSame(retryTemplate, ReflectionTestUtils.getField(chatModel, "retryTemplate"));
         OpenAiChatOptions options = (OpenAiChatOptions) ReflectionTestUtils.getField(chatModel, "defaultOptions");
         assertSame(ResponseFormat.Type.JSON_OBJECT, options.getResponseFormat().getType());

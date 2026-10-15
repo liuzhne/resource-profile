@@ -15,7 +15,10 @@
       </template>
     </el-page-header>
 
+    <el-alert v-if="loadError" type="error" title="报告加载失败，请刷新重试" :closable="false" />
+
     <el-card v-loading="loading" class="meta-card">
+      <p class="time-zone-hint">时间：北京时间（UTC+8）</p>
       <el-descriptions :column="4" border size="small">
         <el-descriptions-item label="任务ID">{{ task.id }}</el-descriptions-item>
         <el-descriptions-item label="学生ID">{{ task.studentId }}</el-descriptions-item>
@@ -40,6 +43,31 @@
           {{ risk.primary_risk_type || '—' }}
         </el-descriptions-item>
       </el-descriptions>
+    </el-card>
+
+    <el-card v-if="task.status === 'FAILED' || task.failureCode" class="failure-card" role="alert">
+      <template #header>任务未完成</template>
+      <el-descriptions :column="2" border size="small">
+        <el-descriptions-item label="失败阶段">{{
+          failureStageLabel(task.failureStage)
+        }}</el-descriptions-item>
+        <el-descriptions-item label="失败类别">{{
+          failureCodeLabel(task.failureCode)
+        }}</el-descriptions-item>
+        <el-descriptions-item label="上游状态">{{
+          failureHttpLabel(task.failureHttpStatus)
+        }}</el-descriptions-item>
+        <el-descriptions-item label="关联追踪">
+          <el-button v-if="traceId" v-permission="['admin']" link type="primary" @click="viewTrace">
+            查看站内追踪
+          </el-button>
+          <code v-if="traceId" class="trace-id">{{ traceId }}</code>
+          <span v-else>未记录</span>
+        </el-descriptions-item>
+      </el-descriptions>
+      <p v-if="!task.failureCode || task.failureCode === 'UNKNOWN'" class="time-zone-hint">
+        该任务没有可用的失败诊断记录，无法从历史状态推断具体原因。
+      </p>
     </el-card>
 
     <!-- 4 阶段时间线 -->
@@ -120,7 +148,7 @@
               >Cross-Encoder 精排</el-tag
             >
             <el-tag v-else-if="knowledge.fallback" type="info" size="small" class="ml-8"
-              >示例数据降级</el-tag
+              >降级检索结果</el-tag
             >
           </div>
           <div v-if="hasStage(2) && knowledge.chunks?.length" class="stage-body">
@@ -134,6 +162,20 @@
                 </template>
               </el-table-column>
               <el-table-column prop="title" label="标题" min-width="200" />
+              <el-table-column label="原始出处" min-width="200">
+                <template #default="{ row }">
+                  <el-link
+                    v-if="knowledgeSourceUrl(row)"
+                    :href="knowledgeSourceUrl(row)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    type="primary"
+                    >{{ knowledgeSourceLabel(row) }}</el-link
+                  >
+                  <span v-else>{{ knowledgeSourceLabel(row) }}</span>
+                  <div class="source-doc">文档：{{ row.doc_id || '未记录' }}</div>
+                </template>
+              </el-table-column>
               <el-table-column prop="content" label="片段" min-width="280" show-overflow-tooltip />
               <el-table-column label="相关度" width="100" align="center">
                 <template #default="{ row }">
@@ -144,6 +186,19 @@
           </div>
           <div v-else-if="hasStage(2)" class="muted">无召回结果</div>
           <div v-else class="muted">未执行</div>
+          <div v-for="(search, i) in knowledge.searches || []" :key="i" class="mt-12">
+            <el-tag :type="search.status === 'SUCCEEDED' ? 'success' : 'warning'" size="small">
+              {{ search.tool }} ·
+              {{
+                search.status === 'SUCCEEDED'
+                  ? '检索完成'
+                  : search.status === 'FAILED'
+                    ? '检索失败'
+                    : '检索未完成'
+              }}
+              {{ search.fallback ? '（降级结果）' : '' }}
+            </el-tag>
+          </div>
         </el-timeline-item>
 
         <!-- 阶段 3：方案生成 -->
@@ -161,7 +216,7 @@
           <div v-if="hasStage(3)" class="stage-body">
             <el-alert
               v-if="plan.summary"
-              type="success"
+              :type="task.planViewStatus === 'EMPTY' ? 'info' : 'success'"
               :closable="false"
               :title="plan.summary"
               show-icon
@@ -169,12 +224,12 @@
             />
 
             <div v-if="plan.immediate_actions?.length" class="block">
-              <div class="sub-h">立即行动（7 天内）</div>
+              <div class="sub-h">立即行动</div>
               <el-table :data="plan.immediate_actions" size="small" stripe>
                 <el-table-column prop="action" label="行动" min-width="280" />
                 <el-table-column prop="owner" label="负责人" width="120" />
-                <el-table-column label="期限" width="80" align="center">
-                  <template #default="{ row }">{{ row.deadline_days || '—' }} 天</template>
+                <el-table-column label="期限" width="140" align="center">
+                  <template #default="{ row }">{{ row.deadline || '—' }}</template>
                 </el-table-column>
                 <el-table-column label="引用" width="180">
                   <template #default="{ row }">
@@ -197,12 +252,13 @@
                 <el-collapse-item
                   v-for="(p, i) in plan.long_term_plan"
                   :key="i"
-                  :title="p.phase || `阶段 ${i + 1}`"
+                  :title="p.horizon || `阶段 ${i + 1}`"
                   :name="i"
                 >
-                  <div v-if="p.goals?.length"><strong>目标：</strong></div>
-                  <ul>
-                    <li v-for="(g, gi) in p.goals || []" :key="gi">{{ g }}</li>
+                  <div v-if="p.goal"><strong>目标：</strong>{{ p.goal }}</div>
+                  <div v-if="p.milestones?.length"><strong>里程碑：</strong></div>
+                  <ul v-if="p.milestones?.length">
+                    <li v-for="(g, gi) in p.milestones" :key="gi">{{ g }}</li>
                   </ul>
                   <div v-if="p.metrics?.length"><strong>衡量指标：</strong></div>
                   <ul>
@@ -225,7 +281,19 @@
                 <el-table-column prop="link_or_contact" label="链接 / 联系" min-width="200" />
               </el-table>
             </div>
+            <div v-if="plan.references?.length" class="block">
+              <div class="sub-h">方案引用</div>
+              <ul>
+                <li v-for="(reference, i) in plan.references" :key="i">{{ reference }}</li>
+              </ul>
+            </div>
           </div>
+          <el-alert
+            v-else-if="task.planViewStatus === 'INVALID'"
+            type="error"
+            title="方案数据格式异常，请联系管理员"
+            :closable="false"
+          />
           <div v-else class="muted">未执行</div>
         </el-timeline-item>
 
@@ -278,7 +346,7 @@
     </el-card>
 
     <!-- I-5：干预反馈闭环（方案落地约 1 个月后由辅导员回填） -->
-    <el-card v-if="canExport" class="feedback-card">
+    <el-card v-if="canFeedback" class="feedback-card">
       <template #header>
         <span>干预效果跟进</span>
         <span class="fb-hint">建议方案落地约 1 个月后回填</span>
@@ -320,7 +388,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -335,69 +403,58 @@ import {
   CircleCloseFilled
 } from '@element-plus/icons-vue'
 import {
-  getAgentTaskDetail,
   exportReport,
   getExportStatus,
   downloadExport,
   submitInterventionFeedback
 } from '@/api/agent'
+import { parseReportObject, hasPlanContent, useAgentReport } from './reportState'
+import { formatAgentTime as formatTime } from './agentTime'
+import { failureCodeLabel, failureStageLabel, failureHttpLabel } from './failureState'
+import { knowledgeSourceLabel, knowledgeSourceUrl } from './knowledgeSource'
 
 const route = useRoute()
 const router = useRouter()
-const taskId = route.params.id
+const taskId = computed(() => route.params.id)
+const { task, loading, loadError, fetchDetail } = useAgentReport(taskId)
+const traceId = computed(() =>
+  typeof task.value.traceId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(task.value.traceId)
+    ? task.value.traceId
+    : ''
+)
+const viewTrace = () => router.push({ path: '/admin/trace', query: { traceId: traceId.value } })
 
-// 初始化为 true：组件首次渲染就显示 loading 遮罩
-const loading = ref(true)
-const task = ref({})
-
-const safeParse = (s) => {
-  if (!s) return {}
-  try {
-    return typeof s === 'string' ? JSON.parse(s) : s
-  } catch (e) {
-    return {}
-  }
-}
-
-const risk = computed(() => safeParse(task.value.riskAnalysisResult))
-const knowledge = computed(() => safeParse(task.value.retrievedKnowledge))
-const plan = computed(() => safeParse(task.value.interventionPlan))
-const audit = computed(() => safeParse(task.value.complianceAudit))
+const risk = computed(() => parseReportObject(task.value.riskAnalysisResult))
+const knowledge = computed(() => parseReportObject(task.value.retrievedKnowledge))
+const plan = computed(() => parseReportObject(task.value.interventionPlan))
+const audit = computed(() => parseReportObject(task.value.complianceAudit))
 
 const hasStage = (n) => {
   if (n === 1) return !!task.value.riskAnalysisResult
-  if (n === 2) return !!task.value.retrievedKnowledge
+  if (n === 2) return !!task.value.retrievedKnowledge && knowledge.value.executed !== false
   if (n === 3) return !!task.value.interventionPlan
   if (n === 4) return !!task.value.complianceAudit
   return false
 }
 
-const stageType = (n) => (hasStage(n) ? 'primary' : 'info')
+const stageType = (n) => {
+  if (!hasStage(n)) return 'info'
+  if (n === 2 && knowledge.value.searches?.some((s) => s.status !== 'SUCCEEDED')) return 'warning'
+  return 'primary'
+}
 const auditType = computed(() => {
   if (!hasStage(4)) return 'info'
   return audit.value.audit_passed ? 'success' : 'danger'
 })
 const auditIcon = computed(() => (audit.value.audit_passed ? CircleCheck : CircleClose))
 
-const fetchDetail = async () => {
-  loading.value = true
-  try {
-    const res = await getAgentTaskDetail(taskId)
-    task.value = res.data || {}
-  } catch (e) {
-    console.error('获取任务详情失败', e)
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(fetchDetail)
-
 const goBack = () => router.back()
 
 // ============== F-1：PDF 导出 ==============
 const exporting = ref(false)
 const exportJobId = ref(null)
+let exportTaskId = null
+let operationEpoch = 0
 let pollTimer = null
 let pollCount = 0
 const MAX_POLL = 30 // 30 * 2s = 60s 超时
@@ -407,28 +464,31 @@ const canExport = computed(() => {
   const s = task.value.status
   return s === 'COMPLETED' || s === 'REJECTED'
 })
+const canFeedback = computed(() => canExport.value && hasPlanContent(plan.value))
 
 const stopPoll = () => {
   if (pollTimer) {
-    clearInterval(pollTimer)
+    clearTimeout(pollTimer)
     pollTimer = null
   }
   pollCount = 0
 }
 
-const triggerDownload = async (jobId) => {
+const triggerDownload = async (jobId, sourceId, epoch) => {
   try {
     const blob = await downloadExport(jobId)
+    if (epoch !== operationEpoch || String(taskId.value) !== sourceId) return
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `report-${taskId}.pdf`
+    a.download = `report-${sourceId}.pdf`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
     ElMessage.success('PDF 已下载')
   } catch (e) {
+    if (epoch !== operationEpoch) return
     console.error('下载 PDF 失败', e)
     ElMessage.error('下载 PDF 失败')
   }
@@ -436,6 +496,9 @@ const triggerDownload = async (jobId) => {
 
 const pollExportStatus = async () => {
   if (!exportJobId.value) return
+  const jobId = exportJobId.value
+  const sourceId = exportTaskId
+  const epoch = operationEpoch
   pollCount += 1
   if (pollCount > MAX_POLL) {
     stopPoll()
@@ -444,20 +507,28 @@ const pollExportStatus = async () => {
     return
   }
   try {
-    const res = await getExportStatus(exportJobId.value)
+    const res = await getExportStatus(jobId)
+    if (
+      epoch !== operationEpoch ||
+      String(taskId.value) !== sourceId ||
+      jobId !== exportJobId.value
+    )
+      return
     const status = res.data?.status
     if (status === 'DONE') {
       stopPoll()
-      const jid = exportJobId.value
       exportJobId.value = null
       exporting.value = false
-      await triggerDownload(jid)
+      await triggerDownload(jobId, sourceId, epoch)
     } else if (status === 'FAILED') {
       stopPoll()
       exporting.value = false
       ElMessage.error(res.data?.errMsg || 'PDF 渲染失败')
+    } else {
+      pollTimer = setTimeout(pollExportStatus, 2000)
     }
   } catch (e) {
+    if (epoch !== operationEpoch) return
     stopPoll()
     exporting.value = false
     console.error('查询导出状态失败', e)
@@ -465,48 +536,71 @@ const pollExportStatus = async () => {
 }
 
 const handleExport = async () => {
-  if (exporting.value) return
+  if (exporting.value || !canExport.value) return
+  const sourceId = String(taskId.value)
+  const epoch = operationEpoch
   exporting.value = true
   try {
-    const res = await exportReport(taskId)
+    const res = await exportReport(sourceId)
+    if (epoch !== operationEpoch || String(taskId.value) !== sourceId) return
     const jobId = res.data?.jobId
     if (!jobId) throw new Error('未拿到 jobId')
     exportJobId.value = jobId
+    exportTaskId = sourceId
     pollCount = 0
-    pollTimer = setInterval(pollExportStatus, 2000)
+    pollTimer = setTimeout(pollExportStatus, 2000)
   } catch (e) {
+    if (epoch !== operationEpoch) return
     exporting.value = false
     console.error('触发导出失败', e)
     // request.js 拦截器已弹出错误提示，这里不再重复
   }
 }
 
-onUnmounted(stopPoll)
+onUnmounted(() => {
+  ++operationEpoch
+  stopPoll()
+})
 
 // ============== I-5：干预反馈闭环 ==============
 const feedback = ref({ score: 0, outcome: '', comment: '' })
 const feedbackSubmitting = ref(false)
 
+watch(taskId, () => {
+  ++operationEpoch
+  stopPoll()
+  exporting.value = false
+  exportJobId.value = null
+  exportTaskId = null
+  feedbackSubmitting.value = false
+  feedback.value = { score: 0, outcome: '', comment: '' }
+})
+
 const handleSubmitFeedback = async () => {
+  if (!canFeedback.value || feedbackSubmitting.value) return
   if (!feedback.value.score) {
     ElMessage.warning('请先打分')
     return
   }
   feedbackSubmitting.value = true
+  const sourceId = String(taskId.value)
+  const epoch = operationEpoch
   try {
     await submitInterventionFeedback({
-      taskId: Number(taskId),
+      taskId: Number(sourceId),
       score: feedback.value.score,
       outcome: feedback.value.outcome || null,
       comment: feedback.value.comment || null
     })
+    if (epoch !== operationEpoch || String(taskId.value) !== sourceId) return
     ElMessage.success('反馈已提交，感谢跟进')
     feedback.value = { score: 0, outcome: '', comment: '' }
   } catch (e) {
+    if (epoch !== operationEpoch) return
     console.error('提交干预反馈失败', e)
     // request.js 拦截器已弹错误提示
   } finally {
-    feedbackSubmitting.value = false
+    if (epoch === operationEpoch) feedbackSubmitting.value = false
   }
 }
 
@@ -554,14 +648,28 @@ const formatScore = (s) => {
   const n = Number(s)
   return Number.isFinite(n) ? n.toFixed(3) : '—'
 }
-const formatTime = (s) => (s ? s.replace('T', ' ').slice(0, 19) : '')
 </script>
 
 <style scoped lang="scss">
 .meta-card,
+.failure-card,
 .timeline-card,
 .feedback-card {
   margin-top: 20px;
+}
+.time-zone-hint,
+.source-doc {
+  color: var(--text-color-secondary);
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+.source-doc {
+  margin: 4px 0 0;
+}
+.trace-id {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
 }
 .feedback-card {
   .fb-hint {

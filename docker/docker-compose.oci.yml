@@ -1,0 +1,5 @@
+# Backward-compatible OCI entry. All services live in the shared cloud Compose.
+# Requires Compose >= 2.23.1. Legacy OCI_SITE_ADDRESS is accepted by the shared file.
+name: edu-portrait-oci
+include:
+  - path: docker-compose.cloud.yml

@@ -38,6 +38,7 @@ import { useUserStore } from '@/store/modules/user'
 import SidebarItem from './SidebarItem.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import { routes } from '@/router'
+import { filterMenuRoutes } from '@/router/access'
 
 const route = useRoute()
 const appStore = useAppStore()
@@ -46,24 +47,14 @@ const userStore = useUserStore()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const activeMenu = computed(() => route.path)
 
-// userType: 0-管理员 1-教师 2-学生
-const currentRole = computed(() => {
-  const t = userStore.userInfo?.userType
-  if (t === 0) return 'admin'
-  if (t === 1) return 'teacher'
-  if (t === 2) return 'student'
-  return null
-})
-
-const matchRole = (meta) => {
-  if (!meta?.roles || meta.roles.length === 0) return true
-  return currentRole.value && meta.roles.includes(currentRole.value)
-}
-
 // 提取 Layout 路由下的 children 作为菜单数据源
 const menuRoutes = computed(() => {
   const layoutRoute = routes.find((r) => r.path === '/')
-  return (layoutRoute?.children || []).filter((r) => !r.meta?.hidden && matchRole(r.meta))
+  return filterMenuRoutes(
+    layoutRoute?.children || [],
+    userStore.userRoles,
+    userStore.userInfo?.permissions
+  )
 })
 </script>
 

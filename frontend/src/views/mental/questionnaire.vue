@@ -1,5 +1,8 @@
 <template>
   <div class="page-container">
+    <el-alert v-if="loadError" type="error" :closable="false" :title="loadError"
+      ><el-button link @click="fetchData">重新加载</el-button></el-alert
+    >
     <el-card>
       <template #header>
         <div class="card-header">
@@ -68,7 +71,7 @@
           <el-input v-model="formData.description" type="textarea" :rows="3" />
         </el-form-item>
         <el-form-item label="题目数量">
-          <el-input-number v-model="formData.questions" :min="1" />
+          <span>{{ isEdit ? formData.questions : 0 }}（根据实际题目自动计算）</span>
         </el-form-item>
         <el-form-item label="开始时间">
           <el-date-picker v-model="formData.startTime" type="date" value-format="YYYY-MM-DD" />
@@ -78,8 +81,8 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="formData.status">
-            <el-option label="未开始" :value="0" />
-            <el-option label="进行中" :value="1" />
+            <el-option label="草稿／停用" :value="0" />
+            <el-option label="开放（受日期限制）" :value="1" :disabled="!isEdit" />
             <el-option label="已结束" :value="2" />
           </el-select>
         </el-form-item>
@@ -127,6 +130,7 @@ const handleDesign = (row: any) => router.push(`/mental/questionnaire/design/${r
 const handleResult = (row: any) => router.push(`/mental/questionnaire/result/${row.id}`)
 
 const loading = ref(false)
+const loadError = ref('')
 const questionnaires = ref<any[]>([])
 const total = ref(0)
 const currentPage = ref(1)
@@ -139,7 +143,7 @@ const formData = reactive({
   title: '',
   type: '',
   description: '',
-  questions: 20,
+  questions: 0,
   startTime: '',
   endTime: '',
   status: 0
@@ -149,7 +153,7 @@ const viewDialogVisible = ref(false)
 const viewData = ref<any>(null)
 
 const statusLabel = (status: number) => {
-  const map: Record<number, string> = { 0: '未开始', 1: '进行中', 2: '已结束' }
+  const map: Record<number, string> = { 0: '草稿／停用', 1: '开放（受日期限制）', 2: '已结束' }
   return map[status] ?? '未知'
 }
 
@@ -160,13 +164,14 @@ const statusTagType = (status: number) => {
 
 const fetchData = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await getQuestionnaireList({ page: currentPage.value, size: pageSize.value })
     const data = res.data
     questionnaires.value = data.records || []
     total.value = Number(data.total) || 0
   } catch (e) {
-    console.error('获取问卷列表失败', e)
+    loadError.value = (e as any)?.message || '数据加载失败，请重试'
   } finally {
     loading.value = false
   }
@@ -181,7 +186,7 @@ const resetForm = () => {
   formData.title = ''
   formData.type = ''
   formData.description = ''
-  formData.questions = 20
+  formData.questions = 0
   formData.startTime = ''
   formData.endTime = ''
   formData.status = 0

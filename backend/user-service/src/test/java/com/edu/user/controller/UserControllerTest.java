@@ -30,14 +30,16 @@ class UserControllerTest {
 
     private UserService userService;
     private JwtUtil jwtUtil;
+    private com.edu.user.service.UserAdministrationService administration;
     private UserController controller;
 
     @BeforeEach
     void setUp() {
         userService = mock(UserService.class);
         jwtUtil = mock(JwtUtil.class);
+        administration = mock(com.edu.user.service.UserAdministrationService.class);
         controller = new UserController(userService,
-                new AccessGuard(jwtUtil, new InternalCallCredential(INTERNAL_TOKEN)));
+                new AccessGuard(jwtUtil, new InternalCallCredential(INTERNAL_TOKEN)), administration);
         when(jwtUtil.getSubject("tok")).thenReturn("7");
     }
 
@@ -96,24 +98,34 @@ class UserControllerTest {
     @Test
     void save_adminAllowed() {
         asRole("admin");
-        User user = new User();
+        var user = new com.edu.user.dto.UserWriteRequest();
         assertThat(controller.save(user, AUTH).getCode()).isEqualTo(200);
-        verify(userService).save(user);
+        verify(administration).save(null,7L,user);
     }
 
     @Test
     void update_adminAllowedAndUsesPathId() {
         asRole("admin");
-        User user = new User();
+        var user = new com.edu.user.dto.UserWriteRequest();
         assertThat(controller.update(9L, user, AUTH).getCode()).isEqualTo(200);
-        assertThat(user.getId()).isEqualTo(9L);
-        verify(userService).update(user);
+        verify(administration).save(9L,7L,user);
     }
 
     @Test
     void delete_adminAllowed() {
         asRole("admin");
         assertThat(controller.delete(9L, AUTH).getCode()).isEqualTo(200);
-        verify(userService).delete(9L);
+        verify(administration).delete(9L,7L);
+    }
+
+    @Test void rolesAdminAllowedButStudentWritesDeniedWithoutMutation() {
+        asRole("admin");when(administration.roleIds(9L)).thenReturn(java.util.List.of(2L));
+        assertThat(controller.roles(9L,AUTH).getData()).containsExactly(2L);
+        asRole("student");var request=new com.edu.user.dto.UserWriteRequest();
+        assertThat(controller.roles(9L,AUTH).getCode()).isEqualTo(403);
+        assertThat(controller.save(request,AUTH).getCode()).isEqualTo(403);
+        assertThat(controller.update(9L,request,AUTH).getCode()).isEqualTo(403);
+        assertThat(controller.delete(9L,AUTH).getCode()).isEqualTo(403);
+        verify(administration,never()).save(any(),any(),any());verify(administration,never()).delete(any(),any());
     }
 }
