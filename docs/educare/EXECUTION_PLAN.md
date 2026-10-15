@@ -4,7 +4,7 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-10-05（记录分支整合的内部鉴权、心理问卷授权与凭证文件排除边界；ADR-029~031 消除编号冲突；历史凭证轮换仍为 B-2；R-5/R-6 真实环境验收保持未完成，下一步仍为 R-5.1）
+> **最近更新**：2026-10-15（JAVA-AI-MIGRATION-20261015：按用户确认扩展为全部Java运行时；真实Docker Redis/Milvus联调完成，修复成功码与读一致性；生产多阶段镜像下载受阻、Java运行容器已通过，生产退役及R-5/R-6仍待验收）
 > **历史最近更新（内部鉴权）**：2026-09-14（**安全修复 INTERNAL-AUTH-20260914**：Render 上下游服务公网可达，「无 token = 内网」不成立 → 新增 `X-Internal-Token` 正向内部凭证 + common `ServiceAuthFilter` 服务入口门；`AccessGuard`/字段权限对匿名 fail-closed；网关剥头；preflight 硬门。全后端 222 例通过。见 §6 与 DECISIONS ADR-029；§1 指针不变，仍为 R-5.1）
 > **历史最近更新（R-1~R-4）**：2026-08-27（**R-1~R-4 完结**：JDK 17 Enforcer fail-fast；补 user/teacher 授权并将两控制器与 MCP token filter 纳入 ≥80% JaCoCo 门；Python 新增 RAG/upsert/MCP ASGI 集成测试；Redis/MCP 凭据改为生产硬门且 Redis requirepass/消费者接线闭环。全后端 177 例、Python 25 例通过；下一步 R-5 真 AI/可观测验收）
 > **历史最近更新（进度审计）**：2026-08-26（**进度审计（纯文档回写，零代码变更）**：对照本文件 §1-§11 与仓库实际产物逐项复核。确认完结面：Phase G/H/I/J 全部 `[x]` + 四阶段审查路线图（PROJECT_REVIEW_2026_06_10 §5.1-5.4）+ 安全增量（A3 MCP token 全链 client+8094+8095 / 8087 自鉴权 / 字段权限 list-page 漏脱敏修复 / backend-ci 测试门禁）+ 上线前工程化；产物在位核验通过：`.github/workflows/{backend-ci,eval-gate}.yml`、`docker/docker-compose.{prod,monitoring}.yml`、`scripts/preflight-prod.sh`、`backend/mcp-student-data` 与 `ai-inference-service/app/mcp/` 双端 server、`eval/run_eval.py`。剩余项收敛为三类——① 用户侧 e2e 实跑验证（GPU/Docker 环境）、② CI 覆盖率 % 门（唯一非环境依赖项）、③ Phase I 储备项 I-2/I-4/I-6 不排期）
@@ -47,8 +47,48 @@
 
 ## 1. 下一步指针（Next Action）
 
-**当前阶段**（2026-10-05）：Phase G/H/I/J 的保留代码已落地，当前进入 §12 **Release Readiness**。目标是让瘦身后的真实交付面可上线：AgentLoop 默认主路径 + student-data/knowledge-rag 两个 MCP + dense RAG + 干预闭环 + 安全/运维基线。历史上已删除的 memory-server、Hybrid Retrieval、ModelRouter、百分比灰度不属于上线范围，不恢复、不作为环境阻塞。
-**下一步**：执行 **R-5.1 Langfuse 真 trace 验收**；随后按 R-5.2~R-5.4 完成 Qwen 14B、BGE embedding/dense baseline 与真模型质量门。R-1~R-4 已闭环；U-8 已完成范围裁决，不再重建已删除能力。内部鉴权与心理管理授权已落地；B-2 历史凭证轮换仍阻塞 R-6.2，当前合并不替代真实模型或全栈验收。
+**2026-10-15 最新指针**：按用户明确授权执行全部 Java 化；本轮源码/本地回归见 [JAVA-AI-MIGRATION-20261015](./JAVA_AI_MIGRATION_20261015.md)。真实Redis/Milvus与宿主机Java联调已通过（见[本地测试报告](./LOCAL_JAVA_AI_TEST_20261015.md)）；Java运行镜像37项检查及12项重启检查已通过；下一步完成受JDK基础层下载阻塞的生产多阶段镜像源码构建，再执行 R-5.2~5.4/R-6；已有生产 JSON_GENERATION400 与 B-2 不因重构自动解除。下方10月11/13指针保留作历史运行证据，Python优先扩展政策已被本次用户选择取代。
+
+- [x] **JVM-1 生成与审核迁移**：Spring AI plan/audit/兼容risk，严格输出与最小元信息，保留失败拒绝。
+  - 完成于 2026-10-15：AgentGenerationService、内部鉴权生成端点及回归已落地。
+- [x] **JVM-2 RAG、导入与知识MCP迁移**：Spring AI embedding、Milvus兼容布局、切片/来源/缓存、三个Streamable MCP工具。
+  - 完成于 2026-10-15：knowledge-service、HTTP/MCP握手/调用、嵌入协议与故障契约测试已落地；真实Milvus后续联调结果见LOCAL-JAVA-AI-TEST-20261015，生产退役仍留JVM-4。
+- [x] **JVM-3 构建与部署配置去Python运行时**：镜像、Compose/K3s/Render、打包、CI、Java初始化入口与三根文档。
+  - 完成于 2026-10-15：默认运行包排除旧Python源码；Python仅用于运维/eval与历史对照，未改线上工作负载。
+- [x] **JVM-4a 本地真实依赖联调**：宿主机Java21连接隔离Docker Redis/Milvus，模型为本地协议桩。
+  - 完成于 2026-10-15：27项Java回归、37项完整HTTP/MCP检查、12项重启持久化检查及两项依赖故障503通过；修复Milvus2.4.1成功码与REST有界一致性。Java镜像构建因基础层下载截断未完成，不能替代全容器/真实模型验收。[报告](./LOCAL_JAVA_AI_TEST_20261015.md)。
+- [x] **JVM-4b Java运行容器验收**：已验证JAR + 官方JRE21，真实Redis/Milvus/API/MCP全容器联调。
+  - 完成于 2026-10-15：37完整检查与12重启检查通过，容器/本机JAR哈希一致；整合后732后端测试通过，前端安全锁文件更新后全套验证与生产依赖0漏洞通过。生产多阶段源码构建仍受网络限制。[整合报告](./BUSINESS_INTEGRATION_20261015.md)。
+- [ ] **JVM-4 生产退役验收**：真实Milvus/RAG持久化、镜像构建、JVM资源、全链Agent/PDF/反馈，确认线上两个旧Python进程被Java替换并保留回滚证据。
+
+
+**当前阶段**（2026-10-11）：Phase G/H/I/J保留交付面进入Release Readiness；AgentLoop、双MCP、dense RAG、反馈闭环保留。v6工程首轮对照已通过，但新生产业务task9/10/11仍FAILED：首轮JSON_GENERATION400，经纠错档案工具成功后第三轮再400，无风险/方案/P4/RAG。权限/会话及分页/统计通过，6项问题/改进已记录；完整AI恢复与成功PDF/反馈尚未通过，R-5/R-6/B-2不勾选。
+**下一步**（2026-10-13，页面加速额外交付已完成；主指针仍为完整AI修复）：按[最新生产复测](../production-tests/2026-10-11/retest/REPORT.md)优先处理RT-01真实首轮及Observation后生成400，并修复RT-02/03错误码、RT-04产物状态、RT-06角色标签；RT-05追踪共同上下文属可观测改善。三次新授权已全部用于task9/10/11，后续模型对照/完整验收需明确新增范围；正常RAG/P4/PDF/反馈仍依赖有效产物。保留[GROQ工程历史证据](../production-tests/2026-10-11/GROQ_400_CAUSE_REPORT.md)，不能外推恢复；R-5.2/5.3/5.4/R-6/B-2保持未完成。
+**契约修复完成于2026-10-07**：61组问题已修复或按用户要求置灰外部认证，三份迁移与10个应用镜像上线；生产字段对齐，17个Deployment/Pod Ready。只读冒烟76通过/0失败/2共享学生账号归属阻塞/1无开放问卷跳过；管理员须核实存量归属后独立重绑。该交付不勾选R-5.2或R-6，证据见[修复记录](../audits/FIELD_CONTRACT_FIX_2026_10_07.md)。
+**站内追踪完成于2026-10-08**：用户选定Public API与原生列表，替换历史iframe/外链入口；admin专用有界观测代理及近24小时/7/30天、分页/刷新已部署。agent-service v1、frontend入口修复后v2；生产只读21项、公网64静态文件/三个入口通过、7/30天各11条，17/17工作负载Ready。浏览器视觉复核待管理员登录，不触发模型或勾选R-5.2/R-6，见[交付记录](../production-tests/2026-10-08/LANGFUSE_INLINE_REPORT.md)。下一步主指针不变。
+- [x] **PAGE-PERF-FIX-20261013 页面加载加速实施与生产复验**
+  - 完成于 2026-10-13：v3前端独立上线，实际登录JS/CSS正文315213→164191B、9资源，42请求/27会话及完整tests/lint/build/size、真实角色UI/17部署通过；初始化/timer回归修复，失败v1/v2实际回滚，三根文档同步。[交付报告](../production-tests/2026-10-13/PAGE_PERFORMANCE_FIX_REPORT.md)。主下一步仍为完整AI400修复，R-5/R-6/B-2不勾选。
+- [x] **PAGE-PERF-PLAN-20261012 页面慢定位与加速方案（额外分析）**
+  - 完成于 2026-10-12：登录链无重启/缩0，内部HTML14–17ms/客户端1–2s；静态压缩/长期缓存生效，记录293图标公共包与旧Render重试候选。方案和三根文档同步，无应用/部署变化，过去浏览器卡顿归因与候选实施/收益待验证。见[性能方案](../production-tests/2026-10-12/PAGE_PERFORMANCE_PLAN.md)；主下一步仍为完整AI修复，R-5/R-6/B-2保持未完成。
+- [x] **DEMO-DATA-20261009 生产演示资料（额外交付，不替代R-5/R-6）**：明确合成规则、备份/隔离恢复、事务应用及只读验收。
+  - 完成于 2026-10-09：用户确认仅测试资料，1200学生/80教师、4年级/8专业已生产导入；字段/关系/范围与15项拒错、真实隔离恢复/试导入、90公网检查及幂等通过，17Deployment/8PVC保持。共享学生归属与无开放问卷两项旧演示阻塞已解决；[交付记录](../production-tests/2026-10-09/DEMO_DATA_REPORT.md)。未执行模型外发，未来R-5.2须对新批次的具体合成资料取得本次授权，不能复用此前一次授权。
+- [x] **AI-PROD-TEST-20261011 生产页面AI测试与问题记录（验收执行完成，功能未通过）**：实际三角色页面、三次授权任务、独立RAG及只读运行/权限证据。
+  - 完成于 2026-10-11：task3/4/5首轮FAILED、八组问题逐项记录；学生SSE收到他人task5元数据实证，普通角色边界/匿名/注销正确；17部署Ready，BGE-M3真实1024维与dense召回3通过，站内新trace视觉完成。PDF/反馈成功路径依赖阻塞，三根文档同步；[报告](../production-tests/2026-10-11/AI_REPORT.md)。无业务修复/部署，不勾选R-5.2/R-5.3/R-5.4/R-6/B-2。
+- [ ] **AI-PROD-FIX-20261011 八组问题修复与生产复验（进行中）**：SSE角色/活跃会话、安全失败字段及实际trace、终态UTC时间、来源契约/公开语料、表格。
+  - 2026-10-11进展：受影响后端clean verify 381及后续终态/导出回归、SSE26、前端28/build、Python58通过1可选SDK跳过、公开语料工具4及探针工具10通过；兼容四列迁移在隔离恢复/幂等后应用生产，五组件已发布，17/17 Ready、0重启。12条知识导入及旧3探针精确隔离、生产角色/API/UI/公开小样本RAG复验通过，三根文档已同步。随后GROQ-SCHEMA-FIX-20261011已定位并修复当前首轮schema400；AI-FULL-ACCEPT三次新授权已执行但仍FAILED，成功产物/PDF/反馈及完整dense baseline仍待继续，见[修复报告](../production-tests/2026-10-11/AI_FIX_REPORT.md)；本任务保持进行中，不据此勾选R-5/R-6。
+- [ ] **AI-FULL-ACCEPT-20261011 完整学生Agent、PDF和反馈复验（进行中）**：用户已授权3名合成学生的最多3次任务及产物/反馈验收。
+  - 2026-10-11结果：task6/7/8全部FAILED，task7/8明确JSON_GENERATION400，实际strict格式仍未生成四字段协议，无业务工具/产物；3次额度全用完、成功PDF/反馈阻塞。提示契约、安全亚型/结构日志和一次有界纠错已发布v5，450后端verify/17健康/真实trace及注销旧JWT401通过，未修改DB/API或保存原始正文。[验收报告](../production-tests/2026-10-11/AI_FULL_ACCEPTANCE_REPORT.md)。完整修复及R-5.2仍未完成。
+- [x] **GROQ-400-CAUSE-20261011 工程首轮生成400触发条件与修复结论**
+  - 完成于 2026-10-11：16工程对照7×400/9×strict200；原A/O400，L/M/N/P成功，最小v6/452回归及17健康通过。仅确认当前工程首轮，供应商内部机理未知；完整学生/PDF/反馈及R-5/R-6仍未完成。
+  - [x] A/B工程请求各1次及安全观测。完成于 2026-10-11：均400/json_validate_failed，B失败样本为空，仅缩工具未解决，见[实际报告](../production-tests/2026-10-11/GROQ_400_CAUSE_REPORT.md)。
+  - [x] C/D短提示/最简首轮Schema对照。
+    - 完成于 2026-10-11：新用户后续工程授权后均真实200+严格通过；D同时改变三个Schema字段，不单归因final分支。
+  - [x] E–L消息/元数据单变量原因隔离。
+    - 完成于 2026-10-11：6次400/6次200；K原A仅删rawschema400，L原A仅删工具文字目录200。空失败正文无法确定供应商内部机制。
+  - [x] 最终源码M、独立重复、最小制品发布和部署后工程复验。
+    - 完成于 2026-10-11：M实际adapter/Spring AI/编译类逐值等L且200，N独立200，O原A仍400；452verify及1类/1源文件v6发布，liveJAR与审计制品/10类一致，17/17 Ready、0重启、200/401；P部署后严格200。不代替完整业务验收。
+- [x] **AI-PROD-RETEST-20261011 v6生产复测与剩余问题记录（测试完成，完整AI未通过）**
+  - 完成于 2026-10-11：新授权3任务9/10/11均第1轮JSON_GENERATION400、第2轮档案工具成功、第3轮再400；103断言98通过/5未通过，6项问题/改进逐项记录。正常PDF/反馈、任务内RAG/P4阻塞，三份文档同步；无新应用修复/部署，完整额度用完，R-5/R-6/B-2保持未完成。见[复测报告](../production-tests/2026-10-11/retest/REPORT.md)。
 - **I-5 完结**：`intervention_feedback` 表 + agent-service 反馈提交/月报/CSV 接口 + `ReportDetail.vue` 评分组件
 - **I-1 完结**：进程内 BM25 + RRF（不加 ES/不改 Milvus schema）`hybrid_retrieval.py` + `RAG_HYBRID_ENABLED` 灰度 + `eval/hybrid_eval.py` top-3 命中率评测 + `HYBRID_RETRIEVAL_DESIGN.md`
 - **待实跑（用户侧）**：① 灰度切流 `agent_loop_canary.sh`（需 MCP server + llama.cpp + Nacos）② memory-server 8096 mcp-inspector 验 3 tool ③ hybrid `RAG_HYBRID_ENABLED=true` 跑 `eval/hybrid_eval.py`（需 Milvus 已灌库）④ 加载 `05_intervention_feedback.sql` 后验证反馈提交/CSV ⑤ G-2.3/G-3.4 既有待实跑项
@@ -151,8 +191,9 @@
     - 新 `LangfuseClient.java`：`@PostConstruct` 检 keys 三者全配才 `enabled`，否则全部 trace 调用静默 no-op；`traceGeneration(...)` 走 `@Async("agentExecutor")`（复用 G 已有的执行器）批 POST 一条 `trace-create` + 一条 `generation-create`，HTTP Basic 鉴权 `public:secret`
     - 扩 `LlmMetricsInterceptor`：从 request body 抽 `model + messages` + 从 response 抽 `output + timings`，调 `langfuseClient.traceGeneration` 异步上报；任何解析异常仅 debug 日志
     - `mvn -pl agent-service -am compile -q` 通过
-- [x] **G-5.4** 前端 "管理员追踪" 页 iframe 嵌 Langfuse（路由在 `frontend/src/router/index.js`）
+- [x] **G-5.4** 前端“管理员追踪”页（当前采用Public API与站内观测列表，历史iframe方案已替换）
   - 完成于 2026-05-14：新增 `frontend/src/views/admin/trace.vue`（满高 iframe + 刷新/新窗口动作 + 未配置 URL 时友好 empty 占位）；router `/admin/trace` 加在 `Admin` 子节点（继承父 `roles: ['admin']`，title 'LLM 追踪'，icon 'Connection'）；`frontend/.env.example` 落 `VITE_LANGFUSE_URL=http://localhost:3001` 模板；iframe `sandbox="allow-same-origin allow-scripts allow-forms allow-popups"` 允许 Langfuse SPA 必需特性
+  - 完成于 2026-10-08：Cloud拒绝iframe，按用户选择以管理员只读Public API与站内观测列表替换；agent v1/前端入口修复后v2上线、本地302/126项及生产21项/64静态文件/三个HTML入口通过，登录后的视觉复核待验证；见 `docs/production-tests/2026-10-08/LANGFUSE_INLINE_REPORT.md`。
 
 ### G-6 Braintrust eval 集启动构建（先 50 例）
 
@@ -371,8 +412,33 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 
 ## 6. 变更记录
 
+- 2026-10-13：PAGE-PERF-FIX-20261013完结：v3独立前端上线，实际登录JS/CSS正文减47.9%、42请求/27会话及完整前端检查、真实管理员/学生UI/17Ready通过；失败v1/v2已真实回滚，补真实模块环和Window timer接收者负例，三根文档同步。CDN未创建，完整AI/R-5/R-6/B-2不外推。
+
+- 2026-10-12：PAGE-PERF-PLAN-20261012完成只读时延/运行状态定位与候选方案；gzip/HTTP2/哈希长期缓存已证实，静态首屏与异常重试分别优化，CDN需域名控制/权限回归；三根文档同步，无应用实施部署，不改变AI与上线门。
+
+- 2026-10-11：AI-PROD-RETEST-20261011完成v6真实新任务9/10/11（首轮400→档案成功→第三轮生成400）；103接口断言98通过，6项问题/改进与修复方向同步报告/三根文档。权限/会话/分页/统计/退出弹窗通过，RAG/P4/成功PDF反馈依赖阻塞；无应用修复部署，三次授权已用完，R-5/R-6/B-2不勾选。
+
+- 2026-10-11：GROQ-400-CAUSE-20261011工程首轮修复结论完成：16真实请求（9 strict200/7 gen400），原A/O仍失败，整段重复toolmetadata删除后L/M/N/P均200；最终452verify、只AgentLoop.class/1源v6发布、liveJAR/10类一致、17健康/0重启和200/401通过。三根文档与报告同步；供应商内部机理未知，未外发师生/执行工具/新增完整任务或PDF反馈，不勾R-5/R-6/B-2。
+
+- 2026-10-11：GROQ-400-CAUSE-20261011后续新用户工程授权已生效；A–L十二对照6×生成400/6×strict200，K否定仅删rawschema，原A仅删整个toolmetadata块的L通过。最小最终源码/编译M/重复/部署工程复验推进中，三根文档已同步，内部精确机理仍未知、不勾R-5/R-6/B-2。
+
+- 2026-10-11：GROQ-400-CAUSE-20261011实测2次A/B均生成校验400，B空失败样本；单工具未解决，C/D只离线准备，第三次自动审批拒绝、新授权待回复。三根文档/报告同步，未改应用或部署、不勾选R-5/R-6/B-2。
+
+- 2026-10-11：AI-FULL-ACCEPT-20261011已离线准备2份单变量A/B工程请求（虚构ID0，7工具与仅档案工具，消息/最终schema/参数相同）；schema和v5来源一致性通过，实际外部调用0。新请求与后续完整复验需新有界授权，主任务/R-5/R-6仍未完成。
+
+- 2026-10-11：AI-FULL-ACCEPT-20261011，三次新授权完整任务均失败，task7/8诊断JSON_GENERATION400；提示/安全诊断/一次有界纠错v5及450回归、17服务健康、旧JWT401通过，但真实strict生成未解决，PDF/反馈阻塞，额度用尽。三根文档/报告同步，不勾R-5.2/R-5.3/R-5.4/R-6/B-2，新的外发须新授权。
+
 | 日期 | 变更 | 原因 |
 |------|------|------|
+| 2026-10-15 | BUSINESS-INTEGRATION-20261015：整合全部授权业务改动及远端AgentRunner/缓存修复，修复前端依赖漏洞，排除私密与原始测试产物 | 732后端 + 63Python兼容通过（1可选跳过）；前端全套通过/生产依赖0漏洞；37容器+12重启通过，生产源码镜像下载仍受限 |
+| 2026-10-15 | LOCAL-JAVA-AI-TEST-20261015：真实Docker依赖联调、成功码兼容和SDK强一致性读取；三根文档同步 | 27 Java回归 + 37 HTTP/MCP + 12重启检查及Redis/Milvus故障503；Java镜像下载失败，生产未变，JVM-4/R-5/R-6/B-2仍待验收 |
+| 2026-10-15 | JAVA-AI-MIGRATION-20261015：Spring AI生成/审核与Java knowledge-service承接RAG/导入/MCP；构建、部署、打包、CI和三根文档同步，JVM-1~3完成 | 用户明确全部Java化；全后端首轮724通过，最终受影响模块486通过、当前汇总728无失败；部署32项通过，真实Milvus/容器/生产退役待JVM-4，不勾R-5/R-6/B-2 |
+| 2026-10-11 | GROQ-SCHEMA-FIX-20261011：两次授权协议诊断复现strict schema400，展平action工具分支及固定400/nullcode分类；387后端回归、Agent v3部署/实际JAR核验及17/17只读复验通过，三根文档同步 | 用户明确授权MCP/system诊断；最小结构修复后真实200且输出schema有效，无学生资料/工具执行/新业务任务。完整学生/trace/PDF仍待具体资料授权，R-5/R-6/B-2不勾选 |
+| 2026-10-11 | AI-PROD-FIX-20261011：SSE会话/角色与复核、固定诊断/实际trace、原子终态UTC/API Z及校园UTC8显示、RAG出处与幂等容量/缓存修订、固定列及12条公开知识工具；同日期三根文档及[修复进展](../production-tests/2026-10-11/AI_FIX_REPORT.md)同步 | 用户要求按测试报告原因修复；目标SSE26、前端28/build、Python58通过1可选SDK跳过、工具4通过；生产迁移/恢复/幂等及五组件发布、角色/API/UI/12条公开RAG复验通过，首轮准确根因与新授权完整复验待继续，不能虚构HTTP原因或成功产物，R-5/R-6/B-2不勾选 |
+| 2026-10-11 | AI-PROD-TEST-20261011：三角色生产页面及task3/4/5实际测试，独立RAG、MCP目录、Langfuse、权限和运行证据；八组问题与三根文档同步 | 用户要求重点AI逐个记录；完整生成首轮失败、SSE学生越权实证；仅机械RAG/追踪通过，逻辑语料三条探针；没有修复/部署或假成功产物，R-5/R-6/B-2未完成 |
+| 2026-10-09 | DEMO-DATA-20261009：生产1200/80合成业务、明细及三波测评；VM隔离恢复/试导入/事务保护、15项一致性测试、90公网检查与幂等通过，同步三根现状文档 | 用户确认只有测试业务并选定规模；替换23旧业务记录，保留凭据/权限/真实历史，不伪造模型/审计/导出，不勾选R-5.2/R-6/B-2；旧共享身份及无开放问卷演示阻塞解决 |
+| 2026-10-07 | FIELD-CONTRACT-FIX-20261007：完成61组接口/前端/存储契约与三份增量迁移，发布10个变更应用；472后端回归及覆盖率门、前端113项回归/角色权限契约/构建/lint、38项部署启动门通过；生产26表274列/297实体字段一致，17个Deployment/Pod Ready，见[修复记录](../audits/FIELD_CONTRACT_FIX_2026_10_07.md) | 完成于2026-10-07：按用户要求修复审计清单，外部认证暂无服务而置灰；只读生产冒烟76通过/0失败/2存量共享学生绑定阻塞/1无开放问卷跳过，业务写入和模型请求均0；既有归属不猜测迁移，§1仍指向R-5.2，完整生产门不变 |
+| 2026-10-07 | FIELD-CONTRACT-AUDIT-20261007：完成22视图、7前端API、生产20表220列及实体/DTO/mapper/SQL核对；61项清单见[审计报告](../audits/FIELD_CONTRACT_AUDIT_2026_10_07.md)，同步ARCHITECTURE/DECISIONS/RUNBOOK | 用户要求全面汇总政治面貌类似缺口；42项契约问题、18项能力缺口、1项权限UI适配，未修复、未迁移、未部署、未触发模型，§1指针和R-5/R-6不变 |
 | 2026-05-13 | 初版创建，根据现状盘点回填 G-1.1/G-1.2/G-1.3 完成态 | IMPROVEMENT v1.1 拍板后启动执行 |
 | 2026-05-13 | G-1.5 标 `[~]` 半完成：Python 部分随 G-1.4 一同实现（`chat_completion_raw` 自动调 `record_llm_response`），Java 部分单列保留 | LangChain `ChatOpenAI.ainvoke` 隐藏原始响应；为拿 `timings` 必须 raw httpx，与 G-1.4 强耦合 |
 | 2026-05-13 | G-1.6 标 `[~]` 半完成：Python diagnostics 端点 + 脚本 + 手册落地；Java 端点延后到 G-3.1 引入 Micrometer 时一起做 | 单独为 Java 起一个 controller 太碎，与 Phase G-3 Prometheus 路径合流更经济 |
@@ -403,6 +469,12 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 | 2026-09-14 | 安全修复 ENV-AUDIT-LEAK-20260914（非 Phase 任务）：`docker/.env.audit` 移出版本库；`.gitignore` 增加 `docker/.env.*`；preflight 拒绝被 git 跟踪的 env 文件（CI 回归含反例，`backend-ci` 路径过滤扩到 `docker/.env*`）；更正 U-2 备注；新增 B-2 | U-2 演练产物误入公开仓库；不改写历史，14 个泄露值须全量轮换，轮换待部署方执行（ADR-031、RUNBOOK 轮换清单） |
 | 2026-10-05 | MENTAL-AUTHZ-20261005：心理管理读写按 STAFF_VIEW/MENTAL_WRITE 分级，完成情况原始分按 EXTREME_VIEW 过滤，学生作答模板裁剪计分信息；ADR-030 | 原 heuristic 分支 JDK 17 全后端 249 例、JaCoCo 门及前端构建/lint 通过；真实 HTTP 与浏览器角色验收待验证。与 main 的 JDK 21 集成回归另行记录，不完成 R-5/R-6 |
 | 2026-10-05 | MERGE-MAIN-20261005：保留 main 的 JDK 21/性能配置并整合内部鉴权、心理授权、凭证文件排除与本地开发脚本；ADR 编号统一为 029/030/031 | JDK 21 全后端 11 模块/54 套测试/267 例与 10 模块 JaCoCo 门通过；前端构建/lint（0 errors、1 既有 warning）/重试30/30/体积门、preflight 与 Bash 5/macOS Bash 3.2 helper 回归通过。真实全栈/GPU/生产/角色矩阵与 B-2 凭证轮换未验收；R-5/R-6 不自动完成 |
+
+| 2026-10-07 | LANGFUSE-OTLP-20261007 / ADR-038：按用户选择以Cloud JP替代R-5.1自建，以Groq GPT-OSS-120B替代R-5.2本机Qwen；迁移OTLP/v4 SDK并默认关闭内容 | Java20/Python41真实SDK/部署27项、HTTPS/鉴权及实际agent.loop/llm.chat/llm.audit通过，仅勾选R-5.1；唯一授权示例Agent遇JSON/限流失败，其他模型/质量/生产门与B-2仍未完成 |
+| 2026-10-07 | PROD-SMOKE-20261007：公网/内部/三角色API/浏览器/合成RAG/新应用trace重新实测，项目三文档同步待修复方案 | 公网18/内部21/RAG8通过；业务52通过/1分页失败/1无foreign夹具跳过；UI注销/学生入口失败，新授权Agent一次20.3秒FAILED；测试会话清理，未改部署，R-5.2/R-6不勾选，见production-tests/2026-10-07 |
+| 2026-10-07 | PROD-FIX-20261007：会话原子撤销/唯一jti/前端竞态、学生角色路由、MySQL分页及真实用户页、Groq严格schema/最终校验/共享冷却/有界任务等待；三批部署及项目三文档同步 | Java227不同用例、Python50、frontend93、K3s13通过；线上注销旧JWT401/新会话不受损、学生入口、total3及真实页面通过；公网18/内部21/RAG8、业务53通过0失败1跳过；新镜像一次合成Groq200/167tokens/冷却及空I/O trace通过，完整示例Agent本轮0次、等新授权，R-5.2/R-6/B-2保持未完成 |
+| 2026-10-07 | LOGOUT-DIALOG-CSS-20261007：main.js显式加载message-box/message官方服务样式及依赖，补上前次遗漏的视觉验证，项目三文档同步 | frontend唯一新镜像Ready；93回归/build/体积/目标lint通过，生产CSS及白色卡片中心误差0/取消/关闭保留会话/确认回登录实测通过；未调用学生Agent，R-5.2/R-6状态不变 |
+| 2026-10-08 | LANGFUSE-INLINE-20261008：按用户选择用管理员只读Public API代理及站内观测列表替换历史iframe/外链；三文档同步 | JDK21后端302项/前端126项及权限契约/lint/build/体积门通过；agent v1/前端入口修复后v2上线，生产21项、64静态文件及三个入口通过、7/30天各11条、17/17工作负载Ready、8 PVC保留；无SQL迁移/模型/Agent，浏览器视觉复核待登录；R-5.2/R-6/B-2不变 |
 
 ---
 
@@ -568,9 +640,18 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 
 ### R-5 真实 AI 与可观测验收
 
-- [ ] **R-5.1** Langfuse self-hosted 起栈、建 project、注入 key，触发任务并从 API/UI 查到 agent.loop + llm.chat trace
-- [ ] **R-5.2** 真 Qwen 14B 启动并跑完整 AgentLoop；真实工具名调用成功、final_answer 合法落库
+- [x] **R-5.1** 用户选定Langfuse Cloud JP，注入项目key、迁移v4，触发授权示例任务并从API查到agent.loop + llm.chat实际应用trace（取代self-hosted起栈）
+  - 完成于 2026-10-07：Java OTLP/Python4.13.1及内容默认关闭已部署；Cloud实际agent.loop/llm.chat/llm.audit的模型、usage、timing及空I/O通过，见ADR-038、RUNBOOK与 `langfuse-application-verification-20261007.json` 私有聚合证据。唯一授权任务FAILED不影响trace验收，但R-5.2未完成。
+- [ ] **R-5.2** 用户所选Groq GPT-OSS-120B跑完整AgentLoop（取代本机Qwen14B）；真实工具调用成功、final_answer合法落库
+  - 2026-10-07进度：来源核验及用户明确授权后唯一示例任务约20秒FAILED；ReAct第2轮出现Groq json_validate_failed/rate_limit_exceeded，未重触发；最终产物验收待完成。
+  - 2026-10-07新一轮冒烟：用户再次明确授权后经公网仅触发1个新任务，20.3秒FAILED；当前窗口单工具成功1次、LLM异常与JSON400/额度429，final产物未通过；新agent.loop/llm.chat空I/O记录和合成RAG通过，不勾选本项，见PROD-SMOKE-20261007报告。
+  - 2026-10-07 / PROD-FIX-20261007：修复已部署；严格ReAct/最终产物校验及400不重试、429有界退避、Java/Python共享60s冷却、任务并发1/排队2与900s deadline回归通过。新镜像单次纯合成Groq200/JSON、配置和空I/O trace通过；本轮完整示例Agent触发0次，等待新外发授权，真实工具/final落库验收仍待验证，不勾选本项。
+  - 2026-10-11 / AI-PROD-TEST-20261011：本次三名合成学生及三次外发明确授权后，从生产网页创建task3/4/5；均首轮NonTransientAiException→TOOL_ERROR/1轮→FAILED，无风险/方案/审核产物。MCP注册7工具与Groq模型目录可用，不等于执行通过；准确HTTP根因仍待安全诊断，三次授权已用完。[问题清单](../production-tests/2026-10-11/AI_REPORT.md)，本项仍未完成。
+  - 2026-10-11 / AI-PROD-FIX-20261011：安全类别/阶段/HTTP、LLM_ERROR与根trace及生产权限/API/UI/公开RAG通过；随后GROQ-SCHEMA-FIX-20261011两次工程协议诊断明确首轮schema400，展平后200/响应有效，387回归及Agent v3上线通过。学生资料未发送、业务工具未执行，新完整学生验收仍待授权，不能将单轮协议200当本项完成。
 - [ ] **R-5.3** 真 BGE embedding 灌入真实语料，跑检索质量集并固化 dense baseline
+  - 2026-10-11：独立公共文本查询证明所配Cloudflare BGE-M3新1024维有效向量与dense召回3、无降级；活跃语料仅3条合成探针，不具备真实语料/相关性/来源baseline验收，仍未完成。
+  - 2026-10-11 / AI-PROD-FIX-20261011：12条公开原创摘要/明确虚构支持场景及7官方出处已生产导入；policy/psychology/case各4、success0。实际1024维有限非零向量、4类公开问题API/MCP预期命中、3知识搜索工具及缓存来源保真通过，重复导入12条全部skipped。API/MCP/Java snapshot/报告来源契约已补；新生成报告关联和完整相关性集/dense baseline仍未验收，不勾选本项。
+  - 2026-10-11 / AI-PROD-FIX-20261011追加：固定三份旧验收探针已耐久私有备份实际字段/向量并精确PK隔离，实际changed_rows=3、cache revision更新，0新embedding/Groq；10项离线回归通过。生产向量恢复仍待验证。未知来源/历史后缀资料未删除，auto-ID恢复会有新物理PK；本轮公开小样本回归不替代R-5.3完整基线。
 - [ ] **R-5.4** 真模型下 AgentLoop/legacy 对比 + prompt cache ≥80% + 50 例风险 eval ≥0.85
 
 ### R-6 上线总验收
@@ -578,3 +659,12 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 - [ ] **R-6.1** CI 全门复验：backend/Python/frontend/eval 全绿，无 high/critical 生产依赖漏洞
 - [ ] **R-6.2** 生产 compose + TLS/nginx + gateway auth + 字段权限 + IDOR + MCP token + 备份恢复 + 监控告警全栈验收
 - [ ] **R-6.3** 更新 DEPLOY/E2E runbook 与本文件证据，形成上线签字清单；仅在全部证据齐全后声明可上线
+
+### AI-PROD-FIX-20261011交付与剩余原子任务（2026-10-11）
+
+- [x] 发布兼容诊断/终态迁移、SSE会话权限、UTC/来源及前端修复，并实际复验角色/API/UI和公开知识。
+  - 完成于2026-10-11：MySQL隔离恢复/迁移幂等、20表行数及历史updated_at保留；17/17 Ready、0重启；学生SSE403/teacher流注销后4,979ms EOF/旧JWT401；失败导出业务409无写入；12条公开知识API/MCP四类问题及来源/cache/重复导入通过、旧3探针私有完整向量备份及精确隔离完成。最终agent/frontend v2，证据见[修复报告](../production-tests/2026-10-11/AI_FIX_REPORT.md)。
+- [x] **GROQ-SCHEMA-FIX-20261011** 取得工程协议外发授权、定位严格schema首轮400并最小修复/部署。
+  - 完成于 2026-10-11：实际7工具定义+系统提示的两次公开协议请求400→200，action union展平、code=null安全分类，387回归及编译请求JSON相等；Agent v3实际JAR核验、17/17 Ready/0重启、匿名401及旧FAILED3个保持。[修复报告](../production-tests/2026-10-11/GROQ_SCHEMA_FIX_REPORT.md)。无师生资料/工具执行/新业务任务，两次协议授权已用完。
+- [ ] 取得三样本本轮具体资料外发授权，真实完整Agent/trace/正常PDF/反馈验收。
+  - 2026-10-11：新的三名合成学生授权仍待回复；不复用旧三次或本次工程协议授权。R-5.2/R-5.3/R-5.4/R-6/B-2不勾选。

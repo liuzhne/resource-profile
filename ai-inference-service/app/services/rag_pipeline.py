@@ -19,19 +19,22 @@ from app.services.embedding_client import get_embedding_client
 from app.services.milvus_client import search as milvus_search
 from app.services.redis_client import cache_get, cache_setex
 from app.services.reranker_client import get_reranker_client
+from app.services.knowledge_provenance import corpus_revision, provenance
 
 logger = logging.getLogger(__name__)
 
 
-def _pipeline_cache_key(collection_key: str, query: str, top_k: int, rerank: bool) -> str:
+def _pipeline_cache_key(collection_key: str, query: str, top_k: int, rerank: bool, revision: str = "") -> str:
     h = hashlib.sha256()
     h.update(collection_key.encode("utf-8"))
     h.update(b"|")
     h.update(query.strip().lower().encode("utf-8"))
     h.update(b"|")
     h.update(str(top_k).encode())
+    h.update(b"|")
+    h.update(revision.encode("utf-8"))
     h.update(b"|rerank=1" if rerank else b"|rerank=0")
-    return "edu:rag:pipe:" + h.hexdigest()[:32]
+    return "edu:rag:pipe:v2:" + h.hexdigest()[:32]
 
 
 async def retrieve_from_collection(
@@ -56,7 +59,7 @@ async def retrieve_from_collection(
             "top_k": <top_k>,
             "reranked": <bool>,
             "fallback": <bool 表示是否走了空召回降级>,
-            "chunks": [{chunk_id, title, content, score, rerank_score, source_db}, ...]
+            "chunks": [{chunk_id, doc_id, title, content, score, rerank_score, source_db, source, source_url}, ...]
         }
     """
     collection_name = settings.MILVUS_COLLECTIONS.get(collection_key)
@@ -74,7 +77,8 @@ async def retrieve_from_collection(
         }
 
     do_rerank = settings.RERANKER_ENABLED if enable_rerank is None else enable_rerank
-    cache_key = _pipeline_cache_key(collection_key, query, top_k, do_rerank)
+    cache_key = _pipeline_cache_key(collection_key, query, top_k, do_rerank,
+                                    await corpus_revision([collection_key]))
     cached = await cache_get(cache_key)
     if cached:
         try:
@@ -82,7 +86,7 @@ async def retrieve_from_collection(
             logger.info("rag_pipeline X-Cache: HIT key=%s collection=%s", cache_key, collection_key)
             return payload
         except Exception as exc:
-            logger.warning("rag_pipeline 缓存反序列化失败 key=%s: %s", cache_key, exc)
+            logger.warning("rag_pipeline 缓存反序列化失败 key=%s type=%s", cache_key, type(exc).__name__)
 
     recall = max(top_k * settings.RAG_RECALL_EXPAND, top_k)
     embed_client = get_embedding_client()
@@ -97,9 +101,9 @@ async def retrieve_from_collection(
 
     if not hits:
         logger.info(
-            "rag_pipeline 空召回 collection=%s query=%s（集合未初始化或匹配为零）",
+            "rag_pipeline 空召回 collection=%s query_chars=%d（集合未初始化或匹配为零）",
             collection_name,
-            query[:32],
+            len(query),
         )
         return {
             "collection": collection_key,
@@ -140,6 +144,7 @@ async def retrieve_from_collection(
         {
             "chunk_id": str(h.get("chunk_id") or "unknown"),
             "source_db": collection_key,
+            **provenance(h),
             "title": h.get("title"),
             "content": h.get("content"),
             "score": float(h.get("score") or 0.0),

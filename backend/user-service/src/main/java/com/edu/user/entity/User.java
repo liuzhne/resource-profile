@@ -29,6 +29,8 @@ public class User {
 
     @SensitiveField(Sensitivity.HIGH)
     private String phone;
+    private String deptName;
+    private String bio;
 
     @TableField("user_type")
     private Integer userType;

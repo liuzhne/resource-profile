@@ -1,0 +1,2 @@
+# Compatibility entry; use requirements-cloud.txt for any single cloud VM.
+-r requirements-cloud.txt

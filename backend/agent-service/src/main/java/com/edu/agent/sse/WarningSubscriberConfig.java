@@ -32,7 +32,7 @@ public class WarningSubscriberConfig {
                 Map<String, Object> data = JSON.parseObject(body, Map.class);
                 registry.broadcast("warning", data);
             } catch (Exception e) {
-                log.warn("F-2：分发事件失败：body={} err={}", body, e.getMessage());
+                log.warn("F-2：分发事件失败：{}", e.getClass().getSimpleName());
             }
         }, new ChannelTopic(WarningPublisher.CHANNEL));
         log.info("F-2：订阅 Redis 通道 {}", WarningPublisher.CHANNEL);

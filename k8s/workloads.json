@@ -1,0 +1,796 @@
+{
+  "mysql": {
+    "image": "mysql:8.0",
+    "environment": {
+      "MYSQL_ROOT_PASSWORD": "${MYSQL_ROOT_PASSWORD:?Set a fresh MYSQL_ROOT_PASSWORD}",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "TZ": "Asia/Shanghai"
+    },
+    "ports": [
+      3306
+    ],
+    "requests": {
+      "cpu": "200m",
+      "memory": "512Mi"
+    },
+    "limitMemory": "1Gi",
+    "volumes": [
+      {
+        "name": "mysql-data",
+        "mountPath": "/var/lib/mysql",
+        "size": "10Gi"
+      }
+    ],
+    "args": [
+      "--default-authentication-plugin=mysql_native_password",
+      "--character-set-server=utf8mb4",
+      "--collation-server=utf8mb4_unicode_ci",
+      "--innodb-buffer-pool-size=256M",
+      "--max-connections=100"
+    ],
+    "healthcheck": [
+      "CMD-SHELL",
+      "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql -h 127.0.0.1 -u root -e 'SELECT 1' >/dev/null"
+    ]
+  },
+  "redis": {
+    "image": "redis:7-alpine",
+    "environment": {
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}"
+    },
+    "ports": [
+      6379
+    ],
+    "requests": {
+      "cpu": "50m",
+      "memory": "128Mi"
+    },
+    "limitMemory": "384Mi",
+    "volumes": [
+      {
+        "name": "redis-data",
+        "mountPath": "/data",
+        "size": "2Gi"
+      }
+    ],
+    "args": [
+      "sh",
+      "-c",
+      "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction"
+    ],
+    "healthcheck": [
+      "CMD-SHELL",
+      "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"
+    ]
+  },
+  "etcd": {
+    "image": "quay.io/coreos/etcd:v3.5.5",
+    "environment": {
+      "ETCD_AUTO_COMPACTION_MODE": "revision",
+      "ETCD_AUTO_COMPACTION_RETENTION": "1000",
+      "ETCD_QUOTA_BACKEND_BYTES": "4294967296",
+      "ETCD_SNAPSHOT_COUNT": "50000"
+    },
+    "ports": [
+      2379
+    ],
+    "requests": {
+      "cpu": "50m",
+      "memory": "128Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [
+      {
+        "name": "etcd-data",
+        "mountPath": "/etcd",
+        "size": "5Gi"
+      }
+    ],
+    "args": [
+      "etcd",
+      "--advertise-client-urls=http://etcd:2379",
+      "--listen-client-urls=http://0.0.0.0:2379",
+      "--data-dir=/etcd"
+    ],
+    "healthcheck": [
+      "CMD",
+      "etcdctl",
+      "endpoint",
+      "health"
+    ]
+  },
+  "minio": {
+    "image": "milvusdb/minio:RELEASE.2024-12-18T13-15-44Z",
+    "environment": {
+      "MINIO_ROOT_USER": "${MINIO_ACCESS_KEY:?Set a fresh MinIO access ID}",
+      "MINIO_ROOT_PASSWORD": "${MINIO_SECRET_KEY:?Set a fresh MinIO secret}"
+    },
+    "ports": [
+      9000,
+      9001
+    ],
+    "requests": {
+      "cpu": "50m",
+      "memory": "128Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [
+      {
+        "name": "minio-data",
+        "mountPath": "/data",
+        "size": "10Gi"
+      }
+    ],
+    "args": [
+      "server",
+      "/data",
+      "--console-address",
+      ":9001"
+    ],
+    "healthcheck": [
+      "CMD",
+      "curl",
+      "-fsS",
+      "http://127.0.0.1:9000/minio/health/live"
+    ]
+  },
+  "milvus-standalone": {
+    "image": "milvusdb/milvus:v2.4.1",
+    "environment": {
+      "ETCD_ENDPOINTS": "etcd:2379",
+      "MINIO_ADDRESS": "minio:9000"
+    },
+    "ports": [
+      19530,
+      9091
+    ],
+    "requests": {
+      "cpu": "250m",
+      "memory": "4Gi"
+    },
+    "limitMemory": "8Gi",
+    "volumes": [
+      {
+        "name": "milvus-data",
+        "mountPath": "/var/lib/milvus",
+        "size": "15Gi"
+      }
+    ],
+    "args": [
+      "milvus",
+      "run",
+      "standalone"
+    ],
+    "healthcheck": [
+      "CMD",
+      "curl",
+      "-fsS",
+      "http://127.0.0.1:9091/healthz"
+    ]
+  },
+  "auth-service": {
+    "image": "edu-portrait-kamatera-auth-service:latest",
+    "environment": {
+      "SPRING_PROFILES_ACTIVE": "prod",
+      "SPRING_CLOUD_NACOS_DISCOVERY_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED": "false",
+      "SPRING_CONFIG_IMPORT": "optional:classpath:application.yml",
+      "SPRING_MAIN_LAZY_INITIALIZATION": "false",
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": "1",
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": "true",
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+      "SERVER_COMPRESSION_ENABLED": "true",
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": "true",
+      "MYSQL_HOST": "mysql",
+      "MYSQL_PORT": "3306",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "MYSQL_SSL_MODE": "${MYSQL_SSL_MODE:-PREFERRED}",
+      "DB_MAXIMUM_POOL_SIZE": "3",
+      "DB_MINIMUM_IDLE": "1",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_HOST": "redis",
+      "SPRING_DATA_REDIS_PORT": "6379",
+      "SPRING_DATA_REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_DATABASE": "0",
+      "JWT_SECRET": "${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "JAVA_TOOL_OPTIONS": "-XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom",
+      "PORT": "8081"
+    },
+    "ports": [
+      8081
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD-SHELL",
+      "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"
+    ]
+  },
+  "user-service": {
+    "image": "edu-portrait-kamatera-user-service:latest",
+    "environment": {
+      "SPRING_PROFILES_ACTIVE": "prod",
+      "SPRING_CLOUD_NACOS_DISCOVERY_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED": "false",
+      "SPRING_CONFIG_IMPORT": "optional:classpath:application.yml",
+      "SPRING_MAIN_LAZY_INITIALIZATION": "false",
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": "1",
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": "true",
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+      "SERVER_COMPRESSION_ENABLED": "true",
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": "true",
+      "MYSQL_HOST": "mysql",
+      "MYSQL_PORT": "3306",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "MYSQL_SSL_MODE": "${MYSQL_SSL_MODE:-PREFERRED}",
+      "DB_MAXIMUM_POOL_SIZE": "3",
+      "DB_MINIMUM_IDLE": "1",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_HOST": "redis",
+      "SPRING_DATA_REDIS_PORT": "6379",
+      "SPRING_DATA_REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_DATABASE": "0",
+      "JWT_SECRET": "${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "JAVA_TOOL_OPTIONS": "-XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom",
+      "PORT": "8082"
+    },
+    "ports": [
+      8082
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD-SHELL",
+      "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"
+    ]
+  },
+  "teacher-service": {
+    "image": "edu-portrait-kamatera-teacher-service:latest",
+    "environment": {
+      "SPRING_PROFILES_ACTIVE": "prod",
+      "SPRING_CLOUD_NACOS_DISCOVERY_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED": "false",
+      "SPRING_CONFIG_IMPORT": "optional:classpath:application.yml",
+      "SPRING_MAIN_LAZY_INITIALIZATION": "false",
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": "1",
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": "true",
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+      "SERVER_COMPRESSION_ENABLED": "true",
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": "true",
+      "MYSQL_HOST": "mysql",
+      "MYSQL_PORT": "3306",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "MYSQL_SSL_MODE": "${MYSQL_SSL_MODE:-PREFERRED}",
+      "DB_MAXIMUM_POOL_SIZE": "3",
+      "DB_MINIMUM_IDLE": "1",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_HOST": "redis",
+      "SPRING_DATA_REDIS_PORT": "6379",
+      "SPRING_DATA_REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_DATABASE": "0",
+      "JWT_SECRET": "${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "JAVA_TOOL_OPTIONS": "-XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom",
+      "PORT": "8083"
+    },
+    "ports": [
+      8083
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD-SHELL",
+      "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"
+    ]
+  },
+  "student-service": {
+    "image": "edu-portrait-kamatera-student-service:latest",
+    "environment": {
+      "SPRING_PROFILES_ACTIVE": "prod",
+      "SPRING_CLOUD_NACOS_DISCOVERY_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED": "false",
+      "SPRING_CONFIG_IMPORT": "optional:classpath:application.yml",
+      "SPRING_MAIN_LAZY_INITIALIZATION": "false",
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": "1",
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": "true",
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+      "SERVER_COMPRESSION_ENABLED": "true",
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": "true",
+      "MYSQL_HOST": "mysql",
+      "MYSQL_PORT": "3306",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "MYSQL_SSL_MODE": "${MYSQL_SSL_MODE:-PREFERRED}",
+      "DB_MAXIMUM_POOL_SIZE": "3",
+      "DB_MINIMUM_IDLE": "1",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_HOST": "redis",
+      "SPRING_DATA_REDIS_PORT": "6379",
+      "SPRING_DATA_REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_DATABASE": "0",
+      "JWT_SECRET": "${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "JAVA_TOOL_OPTIONS": "-XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom",
+      "PORT": "8084"
+    },
+    "ports": [
+      8084
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD-SHELL",
+      "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"
+    ]
+  },
+  "mental-service": {
+    "image": "edu-portrait-kamatera-mental-service:latest",
+    "environment": {
+      "SPRING_PROFILES_ACTIVE": "prod",
+      "SPRING_CLOUD_NACOS_DISCOVERY_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED": "false",
+      "SPRING_CONFIG_IMPORT": "optional:classpath:application.yml",
+      "SPRING_MAIN_LAZY_INITIALIZATION": "false",
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": "1",
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": "true",
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+      "SERVER_COMPRESSION_ENABLED": "true",
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": "true",
+      "MYSQL_HOST": "mysql",
+      "MYSQL_PORT": "3306",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "MYSQL_SSL_MODE": "${MYSQL_SSL_MODE:-PREFERRED}",
+      "DB_MAXIMUM_POOL_SIZE": "3",
+      "DB_MINIMUM_IDLE": "1",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_HOST": "redis",
+      "SPRING_DATA_REDIS_PORT": "6379",
+      "SPRING_DATA_REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_DATABASE": "0",
+      "JWT_SECRET": "${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "JAVA_TOOL_OPTIONS": "-XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom",
+      "PORT": "8085"
+    },
+    "ports": [
+      8085
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD-SHELL",
+      "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"
+    ]
+  },
+  "data-service": {
+    "image": "edu-portrait-kamatera-data-service:latest",
+    "environment": {
+      "SPRING_PROFILES_ACTIVE": "prod",
+      "SPRING_CLOUD_NACOS_DISCOVERY_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED": "false",
+      "SPRING_CONFIG_IMPORT": "optional:classpath:application.yml",
+      "SPRING_MAIN_LAZY_INITIALIZATION": "false",
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": "1",
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": "true",
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+      "SERVER_COMPRESSION_ENABLED": "true",
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": "true",
+      "MYSQL_HOST": "mysql",
+      "MYSQL_PORT": "3306",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "MYSQL_SSL_MODE": "${MYSQL_SSL_MODE:-PREFERRED}",
+      "DB_MAXIMUM_POOL_SIZE": "3",
+      "DB_MINIMUM_IDLE": "1",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_HOST": "redis",
+      "SPRING_DATA_REDIS_PORT": "6379",
+      "SPRING_DATA_REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_DATABASE": "0",
+      "JWT_SECRET": "${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "JAVA_TOOL_OPTIONS": "-XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom",
+      "PORT": "8086"
+    },
+    "ports": [
+      8086
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD-SHELL",
+      "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"
+    ]
+  },
+  "ai-inference-service": {
+    "image": "edu-portrait-knowledge:cloud",
+    "environment": {
+      "EMBEDDING_BASE_URL": "${EMBEDDING_BASE_URL:?Set the external embedding URL including /v1}",
+      "EMBEDDING_API_KEY": "${EMBEDDING_API_KEY:-${LLM_API_KEY}}",
+      "EMBEDDING_MODEL": "${EMBEDDING_MODEL:?Set the embedding model}",
+      "EMBEDDING_DIM": "${EMBEDDING_DIM:-1024}",
+      "RERANKER_ENABLED": "${RERANKER_ENABLED:-false}",
+      "RERANKER_BASE_URL": "${RERANKER_BASE_URL:-http://127.0.0.1:8093}",
+      "RERANKER_MODEL": "${RERANKER_MODEL:-bge-reranker-base}",
+      "MILVUS_HOST": "milvus-standalone",
+      "MILVUS_PORT": "19530",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "EDUCARE_ADMIN_TOKEN": "${EDUCARE_ADMIN_TOKEN:?Set a fresh RAG administration credential}",
+      "PORT": "8090",
+      "KNOWLEDGE_MCP_ENABLED": "false",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "AGENT_SERVICE_URL": "http://agent-service:8087"
+    },
+    "ports": [
+      8090
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "1Gi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD",
+      "curl",
+      "-fsS",
+      "http://127.0.0.1:8090/health"
+    ]
+  },
+  "knowledge-rag-mcp": {
+    "image": "edu-portrait-knowledge:cloud",
+    "environment": {
+      "EMBEDDING_BASE_URL": "${EMBEDDING_BASE_URL:?Set the external embedding URL including /v1}",
+      "EMBEDDING_API_KEY": "${EMBEDDING_API_KEY:-${LLM_API_KEY}}",
+      "EMBEDDING_MODEL": "${EMBEDDING_MODEL:?Set the embedding model}",
+      "EMBEDDING_DIM": "${EMBEDDING_DIM:-1024}",
+      "RERANKER_ENABLED": "${RERANKER_ENABLED:-false}",
+      "RERANKER_BASE_URL": "${RERANKER_BASE_URL:-http://127.0.0.1:8093}",
+      "RERANKER_MODEL": "${RERANKER_MODEL:-bge-reranker-base}",
+      "MILVUS_HOST": "milvus-standalone",
+      "MILVUS_PORT": "19530",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "EDUCARE_ADMIN_TOKEN": "${EDUCARE_ADMIN_TOKEN:?Set a fresh RAG administration credential}",
+      "MCP_KNOWLEDGE_RAG_PORT": "8095",
+      "MCP_KNOWLEDGE_RAG_PATH": "/mcp",
+      "PORT": "8095",
+      "KNOWLEDGE_MCP_ENABLED": "true",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "KNOWLEDGE_API_ENABLED": "false"
+    },
+    "ports": [
+      8095
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "1Gi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD",
+      "curl",
+      "-fsS",
+      "http://127.0.0.1:8095/health"
+    ]
+  },
+  "mcp-student-data": {
+    "image": "edu-portrait-kamatera-mcp-student-data:latest",
+    "environment": {
+      "SPRING_PROFILES_ACTIVE": "prod",
+      "SPRING_CLOUD_NACOS_DISCOVERY_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED": "false",
+      "SPRING_CONFIG_IMPORT": "optional:classpath:application.yml",
+      "SPRING_MAIN_LAZY_INITIALIZATION": "false",
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": "1",
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": "true",
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+      "SERVER_COMPRESSION_ENABLED": "true",
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": "true",
+      "MYSQL_HOST": "mysql",
+      "MYSQL_PORT": "3306",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "MYSQL_SSL_MODE": "${MYSQL_SSL_MODE:-PREFERRED}",
+      "DB_MAXIMUM_POOL_SIZE": "3",
+      "DB_MINIMUM_IDLE": "1",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_HOST": "redis",
+      "SPRING_DATA_REDIS_PORT": "6379",
+      "SPRING_DATA_REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_DATABASE": "0",
+      "JWT_SECRET": "${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "JAVA_TOOL_OPTIONS": "-XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom",
+      "PORT": "8094",
+      "STUDENT_SERVICE_URL": "http://student-service:8084",
+      "MENTAL_SERVICE_URL": "http://mental-service:8085"
+    },
+    "ports": [
+      8094
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD-SHELL",
+      "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"
+    ]
+  },
+  "agent-service": {
+    "image": "edu-portrait-kamatera-agent-service:latest",
+    "environment": {
+      "SPRING_PROFILES_ACTIVE": "prod",
+      "SPRING_CLOUD_NACOS_DISCOVERY_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED": "false",
+      "SPRING_CONFIG_IMPORT": "optional:classpath:application.yml",
+      "SPRING_MAIN_LAZY_INITIALIZATION": "false",
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": "1",
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": "true",
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+      "SERVER_COMPRESSION_ENABLED": "true",
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": "true",
+      "MYSQL_HOST": "mysql",
+      "MYSQL_PORT": "3306",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "MYSQL_SSL_MODE": "${MYSQL_SSL_MODE:-PREFERRED}",
+      "DB_MAXIMUM_POOL_SIZE": "3",
+      "DB_MINIMUM_IDLE": "1",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_HOST": "redis",
+      "SPRING_DATA_REDIS_PORT": "6379",
+      "SPRING_DATA_REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_DATABASE": "0",
+      "JWT_SECRET": "${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "JAVA_TOOL_OPTIONS": "-XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom",
+      "PORT": "8087",
+      "SPRING_AI_OPENAI_BASE_URL": "${SPRING_AI_OPENAI_BASE_URL:?Set the Java OpenAI-compatible API root}",
+      "SPRING_AI_OPENAI_API_KEY": "${LLM_API_KEY:?Set the external model API key}",
+      "SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL": "${LLM_MODEL:?Set the external chat model}",
+      "SPRING_AI_OPENAI_CHAT_OPTIONS_RESPONSE_FORMAT_TYPE": "${SPRING_AI_OPENAI_CHAT_OPTIONS_RESPONSE_FORMAT_TYPE:-TEXT}",
+      "SPRING_AI_OPENAI_CHAT_OPTIONS_REASONING_EFFORT": "${SPRING_AI_OPENAI_CHAT_OPTIONS_REASONING_EFFORT:-}",
+      "LLM_MAX_TOKENS": "${LLM_MAX_TOKENS:-2048}",
+      "LLM_CACHE_PROMPT_ENABLED": "false",
+      "EDUCARE_LLM_CACHE_PROMPT": "false",
+      "STUDENT_SERVICE_URL": "http://student-service:8084",
+      "MENTAL_SERVICE_URL": "http://mental-service:8085",
+      "DATA_SERVICE_URL": "http://data-service:8086",
+      "AI_INFERENCE_URL": "http://ai-inference-service:8090",
+      "MCP_STUDENT_DATA_URL": "http://mcp-student-data:8094",
+      "MCP_KNOWLEDGE_RAG_URL": "http://knowledge-rag-mcp:8095",
+      "MCP_KNOWLEDGE_RAG_ENDPOINT": "/mcp",
+      "MCP_CLIENT_REQUEST_TIMEOUT": "120s",
+      "SPRING_AI_MCP_CLIENT_ENABLED": "true",
+      "EDUCARE_MCP_DEFERRED_ENABLED": "false",
+      "EDUCARE_AGENT_LOOP_ENABLED": "true",
+      "EDUCARE_AGENT_LOOP_PROTOCOL": "react",
+      "EDUCARE_EXPORT_PATH": "/var/lib/edu-exports",
+      "EDUCARE_FONT_PATH": "file:/opt/educare-fonts/NotoSansSC-Regular.ttf",
+      "EDUCARE_SCHEDULE_ENABLED": "false",
+      "LANGFUSE_PUBLIC_KEY": "${LANGFUSE_PUBLIC_KEY:-}",
+      "LANGFUSE_SECRET_KEY": "${LANGFUSE_SECRET_KEY:-}",
+      "LANGFUSE_HOST": "${LANGFUSE_HOST:-}",
+      "LANGFUSE_CAPTURE_CONTENT": "${LANGFUSE_CAPTURE_CONTENT:-false}",
+      "LANGFUSE_ENABLED": "${LANGFUSE_ENABLED:-true}",
+      "LANGFUSE_CONNECT_TIMEOUT_MS": "${LANGFUSE_CONNECT_TIMEOUT_MS:-2000}",
+      "LANGFUSE_READ_TIMEOUT_MS": "${LANGFUSE_READ_TIMEOUT_MS:-5000}",
+      "EDUCARE_LLM_REQUEST_POLICY_ENABLED": "${EDUCARE_LLM_REQUEST_POLICY_ENABLED:-false}",
+      "EDUCARE_LLM_SHARED_COOLDOWN_ENABLED": "${EDUCARE_LLM_SHARED_COOLDOWN_ENABLED:-true}",
+      "EDUCARE_LLM_REQUEST_QUEUE_CAPACITY": "${EDUCARE_LLM_REQUEST_QUEUE_CAPACITY:-2}",
+      "EDUCARE_LLM_REQUEST_MAX_WAIT_MS": "${EDUCARE_LLM_REQUEST_MAX_WAIT_MS:-180000}",
+      "EDUCARE_LLM_MIN_REQUEST_INTERVAL_MS": "${EDUCARE_LLM_MIN_REQUEST_INTERVAL_MS:-60000}",
+      "EDUCARE_LLM_RETRY_MAX_ATTEMPTS": "${EDUCARE_LLM_RETRY_MAX_ATTEMPTS:-3}",
+      "EDUCARE_LLM_RETRY_MAX_DELAY_MS": "${EDUCARE_LLM_RETRY_MAX_DELAY_MS:-120000}",
+      "EDUCARE_LLM_MAX_OUTPUT_TOKENS": "${EDUCARE_LLM_MAX_OUTPUT_TOKENS:-2400}",
+      "EDUCARE_LLM_MAX_INPUT_CHARACTERS": "${EDUCARE_LLM_MAX_INPUT_CHARACTERS:-18000}",
+      "EDUCARE_AGENT_LOOP_STRUCTURED_OUTPUT_ENABLED": "${EDUCARE_AGENT_LOOP_STRUCTURED_OUTPUT_ENABLED:-false}",
+      "EDUCARE_AGENT_LOOP_DEADLINE_SECONDS": "${EDUCARE_AGENT_LOOP_DEADLINE_SECONDS:-900}",
+      "EDUCARE_AGENT_TASK_CONCURRENCY": "${EDUCARE_AGENT_TASK_CONCURRENCY:-1}",
+      "EDUCARE_AGENT_TASK_QUEUE_CAPACITY": "${EDUCARE_AGENT_TASK_QUEUE_CAPACITY:-2}",
+      "EDUCARE_AGENT_TASK_LOCK_SECONDS": "${EDUCARE_AGENT_TASK_LOCK_SECONDS:-1200}",
+      "AI_INFERENCE_READ_TIMEOUT_MS": "${AI_INFERENCE_READ_TIMEOUT_MS:-240000}"
+    },
+    "ports": [
+      8087
+    ],
+    "requests": {
+      "cpu": "150m",
+      "memory": "512Mi"
+    },
+    "limitMemory": "768Mi",
+    "volumes": [
+      {
+        "name": "agent-exports",
+        "mountPath": "/var/lib/edu-exports",
+        "size": "2Gi"
+      }
+    ],
+    "healthcheck": [
+      "CMD-SHELL",
+      "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"
+    ]
+  },
+  "gateway": {
+    "image": "edu-portrait-kamatera-gateway:latest",
+    "environment": {
+      "SPRING_PROFILES_ACTIVE": "prod",
+      "SPRING_CLOUD_NACOS_DISCOVERY_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_ENABLED": "false",
+      "SPRING_CLOUD_NACOS_CONFIG_IMPORT_CHECK_ENABLED": "false",
+      "SPRING_CONFIG_IMPORT": "optional:classpath:application.yml",
+      "SPRING_MAIN_LAZY_INITIALIZATION": "false",
+      "SPRING_MVC_SERVLET_LOAD_ON_STARTUP": "1",
+      "EDUCARE_PERFORMANCE_DATABASE_WARMUP": "true",
+      "MYBATIS_PLUS_CONFIGURATION_LOG_IMPL": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+      "SERVER_COMPRESSION_ENABLED": "true",
+      "MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED": "true",
+      "MYSQL_HOST": "mysql",
+      "MYSQL_PORT": "3306",
+      "MYSQL_DATABASE": "edu_portrait",
+      "MYSQL_USER": "${MYSQL_USER:-edu}",
+      "MYSQL_PASSWORD": "${MYSQL_PASSWORD:?Set a fresh MYSQL_PASSWORD}",
+      "MYSQL_SSL_MODE": "${MYSQL_SSL_MODE:-PREFERRED}",
+      "DB_MAXIMUM_POOL_SIZE": "3",
+      "DB_MINIMUM_IDLE": "1",
+      "REDIS_HOST": "redis",
+      "REDIS_PORT": "6379",
+      "REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_HOST": "redis",
+      "SPRING_DATA_REDIS_PORT": "6379",
+      "SPRING_DATA_REDIS_PASSWORD": "${REDIS_PASSWORD:?Set a fresh REDIS_PASSWORD}",
+      "SPRING_DATA_REDIS_DATABASE": "0",
+      "JWT_SECRET": "${JWT_SECRET:?Set a fresh JWT_SECRET of at least 32 characters}",
+      "EDUCARE_INTERNAL_TOKEN": "${EDUCARE_INTERNAL_TOKEN:?Set a fresh internal credential}",
+      "EDUCARE_MCP_TOKEN": "${EDUCARE_MCP_TOKEN:?Set a fresh MCP credential}",
+      "JAVA_TOOL_OPTIONS": "-XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom",
+      "PORT": "8080",
+      "SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED": "false",
+      "EDUCARE_GATEWAY_AUTH_ENABLED": "true",
+      "EDUCARE_GATEWAY_AUTH_CHECK_SESSION": "true",
+      "AUTH_SERVICE_URL": "http://auth-service:8081",
+      "USER_SERVICE_URL": "http://user-service:8082",
+      "TEACHER_SERVICE_URL": "http://teacher-service:8083",
+      "STUDENT_SERVICE_URL": "http://student-service:8084",
+      "MENTAL_SERVICE_URL": "http://mental-service:8085",
+      "DATA_SERVICE_URL": "http://data-service:8086",
+      "AGENT_SERVICE_URL": "http://agent-service:8087"
+    },
+    "ports": [
+      8080
+    ],
+    "requests": {
+      "cpu": "100m",
+      "memory": "384Mi"
+    },
+    "limitMemory": "512Mi",
+    "volumes": [],
+    "healthcheck": [
+      "CMD-SHELL",
+      "curl -fsS http://127.0.0.1:$${PORT}/actuator/health >/dev/null"
+    ]
+  },
+  "frontend": {
+    "image": "edu-portrait-kamatera-frontend:latest",
+    "environment": {
+      "CLOUD_SITE_ADDRESS": "${CLOUD_SITE_ADDRESS:?Set hostname}"
+    },
+    "ports": [
+      80,
+      443
+    ],
+    "requests": {
+      "cpu": "50m",
+      "memory": "64Mi"
+    },
+    "limitMemory": "128Mi",
+    "volumes": [
+      {
+        "name": "caddy-data",
+        "mountPath": "/data",
+        "size": "1Gi"
+      },
+      {
+        "name": "caddy-config",
+        "mountPath": "/config",
+        "size": "1Gi"
+      }
+    ],
+    "healthcheck": [
+      "HTTP",
+      80,
+      "/healthz"
+    ]
+  }
+}

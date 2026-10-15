@@ -24,14 +24,20 @@
           <div class="info-row">
             <span class="k">角色</span><span class="v">{{ roleLabel }}</span>
           </div>
-          <div class="info-row"><span class="k">邮箱</span><span class="v">—</span></div>
-          <div class="info-row"><span class="k">电话</span><span class="v">—</span></div>
-          <div class="info-row"><span class="k">部门</span><span class="v">—</span></div>
+          <div class="info-row">
+            <span class="k">邮箱</span><span class="v">{{ userInfo?.email || '—' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="k">电话</span><span class="v">{{ userInfo?.phone || '—' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="k">部门</span><span class="v">{{ userInfo?.deptName || '—' }}</span>
+          </div>
         </div>
 
         <p class="no-source">
           <el-icon :size="14"><WarningFilled /></el-icon>
-          <span>邮箱 / 电话 / 部门在 `/auth/userInfo` 中不返回，暂无数据来源。</span>
+          <span>账号资料由本人维护，部门信息由管理员维护。</span>
         </p>
       </aside>
 
@@ -69,13 +75,12 @@
                 <el-input v-model="form.bio" type="textarea" :rows="4" />
               </el-form-item>
             </el-form>
-            <el-button type="primary" class="submit-btn" @click="notReady">保存</el-button>
+            <el-button type="primary" class="submit-btn" :loading="saving" @click="saveProfile"
+              >保存</el-button
+            >
             <p class="no-source form-note">
               <el-icon :size="14"><WarningFilled /></el-icon>
-              <span
-                >资料保存暂无接口：`api/auth.js` 仅有 login / userInfo / logout /
-                refresh，无更新资料接口。</span
-              >
+              <span>请填写有效邮箱和联系电话。</span>
             </p>
           </template>
 
@@ -92,10 +97,12 @@
                 <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
               </el-form-item>
             </el-form>
-            <el-button type="primary" class="submit-btn" @click="notReady">修改密码</el-button>
+            <el-button type="primary" class="submit-btn" :loading="saving" @click="savePassword"
+              >修改密码</el-button
+            >
             <p class="no-source form-note">
               <el-icon :size="14"><WarningFilled /></el-icon>
-              <span>修改密码暂无接口，需后端提供后再接入。</span>
+              <span>新密码至少12个字符。修改后需重新登录。</span>
             </p>
           </template>
         </div>
@@ -106,10 +113,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { WarningFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
 import { initialOf } from '@/utils/avatar'
+import { updateProfile, changePassword } from '@/api/auth'
 
 const userStore = useUserStore()
 
@@ -118,7 +127,7 @@ const tabs = [
   { key: 'security', label: '安全设置' }
 ]
 
-const activeTab = ref('basic')
+const activeTab = ref(useRoute().query.tab === 'security' ? 'security' : 'basic')
 
 // 改版前本页是写死的假数据，此处改读 store 里的真实登录用户
 const userInfo = computed(() => userStore.userInfo)
@@ -130,9 +139,9 @@ const roleLabel = computed(
 
 const form = reactive({
   nickname: userInfo.value?.nickname || '',
-  email: '',
-  phone: '',
-  bio: ''
+  email: userInfo.value?.email || '',
+  phone: userInfo.value?.phone || '',
+  bio: userInfo.value?.bio || ''
 })
 
 const passwordForm = reactive({
@@ -141,8 +150,31 @@ const passwordForm = reactive({
   confirmPassword: ''
 })
 
-const notReady = () => {
-  ElMessage.info('该功能暂未开放')
+const saving = ref(false)
+const saveProfile = async () => {
+  saving.value = true
+  try {
+    await updateProfile(form)
+    await userStore.getUserInfoAction()
+    ElMessage.success('资料已保存')
+  } finally {
+    saving.value = false
+  }
+}
+const savePassword = async () => {
+  if (passwordForm.newPassword !== passwordForm.confirmPassword)
+    return ElMessage.warning('两次新密码不一致')
+  saving.value = true
+  try {
+    await changePassword({
+      oldPassword: passwordForm.oldPassword,
+      newPassword: passwordForm.newPassword
+    })
+    ElMessage.success('密码已修改，请重新登录')
+    await userStore.clearSession()
+  } finally {
+    saving.value = false
+  }
 }
 </script>
 

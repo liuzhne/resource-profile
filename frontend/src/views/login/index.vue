@@ -32,8 +32,8 @@
 
       <div class="brand-foot">
         <span>© 2026 信息中心</span>
-        <span class="link" @click="notReady">使用条款</span>
-        <span class="link" @click="notReady">隐私政策</span>
+        <span class="link" @click="policy = 'terms'">使用条款</span>
+        <span class="link" @click="policy = 'privacy'">隐私政策</span>
       </div>
     </aside>
 
@@ -41,7 +41,7 @@
     <main class="form-panel">
       <div class="form-top">
         <span class="muted">还没有账号？</span>
-        <span class="link-accent" @click="notReady">联系管理员开通</span>
+        <span class="link-accent" @click="openSupport('OPEN_ACCOUNT')">联系管理员开通</span>
       </div>
 
       <div class="form-center">
@@ -69,6 +69,8 @@
               type="button"
               class="seg-item"
               :class="{ 'is-active': loginTab === t.key }"
+              :disabled="t.key !== 'password'"
+              :title="t.key === 'sms' ? '暂无短信服务，请使用密码登录' : ''"
               @click="switchTab(t.key)"
             >
               {{ t.label }}
@@ -96,7 +98,9 @@
             <el-form-item prop="password">
               <div class="field-label-row">
                 <label class="field-label">密码</label>
-                <span class="link-accent" @click="notReady">忘记密码？</span>
+                <span class="link-accent" @click="openSupport('PASSWORD_RECOVERY')"
+                  >忘记密码？</span
+                >
               </div>
               <el-input
                 v-model="loginForm.password"
@@ -149,20 +153,71 @@
           </div>
 
           <div class="alt-login">
-            <el-button class="alt-btn" @click="notReady">
+            <el-button class="alt-btn" disabled title="暂无外部认证服务">
               <el-icon :size="16"><School /></el-icon>
               <span>统一身份认证</span>
             </el-button>
-            <el-button class="alt-btn" @click="notReady">
+            <el-button class="alt-btn" disabled title="暂无外部认证服务">
               <el-icon :size="16"><Grid /></el-icon>
               <span>扫码登录</span>
             </el-button>
           </div>
-
-          <p class="default-account">默认账号：admin / admin</p>
         </div>
       </div>
     </main>
+    <el-dialog
+      :model-value="!!policy"
+      :title="policy === 'terms' ? '使用说明' : '隐私说明'"
+      width="620px"
+      @close="policy = ''"
+    >
+      <template v-if="policy === 'terms'"
+        ><p>
+          平台供已开通账号的师生和授权工作人员使用。请使用本人账号，保管密码，不公开传播他人的档案或测评结果。
+        </p>
+        <p>AI分析是辅助信息，需由授权人员复核。心理测评与AI结果不能替代专业诊断。</p>
+        <p>账号开通、权限、资料更正和密码恢复由管理员人工核验处理。</p></template
+      >
+      <template v-else
+        ><p>
+          平台按角色处理账号、师生档案、学业与心理测评资料。联系方式和测评详情只向具有相应权限的账号返回。
+        </p>
+        <p>
+          登录操作记录用户名、时间、角色和连接IP。选择“记住我”后，浏览器保存访问状态及仅HTTP可读的刷新会话，最多7天；退出或修改密码会撤销会话。
+        </p>
+        <p>
+          启用AI分析时，相关资料可能发送至已配置的模型服务商。当前生成使用Groq，向量使用Cloudflare；Langfuse记录模型、token、耗时和状态。实际发送范围应由业务管理方确认。
+        </p>
+        <p>
+          资料更正、访问或删除请求，请通过管理员申请入口联系系统管理员。数据保留安排由部署方负责。
+        </p></template
+      >
+    </el-dialog>
+    <el-dialog
+      v-model="supportOpen"
+      :title="support.type === 'OPEN_ACCOUNT' ? '申请开通账号' : '申请找回密码'"
+      width="540px"
+    >
+      <p>申请会保存至本系统，由管理员核验身份后处理。请勿提交密码、证件号码或验证码。</p>
+      <el-form label-position="top"
+        ><el-form-item label="用户名（开通申请可留空）"
+          ><el-input v-model="support.username" maxlength="50" /></el-form-item
+        ><el-form-item label="联系邮箱或电话"
+          ><el-input v-model="support.contact" maxlength="100" /></el-form-item
+        ><el-form-item label="申请说明（至少10个字）"
+          ><el-input
+            v-model="support.reason"
+            type="textarea"
+            maxlength="1000"
+            :rows="4" /></el-form-item
+      ></el-form>
+      <template #footer
+        ><el-button @click="supportOpen = false">取消</el-button
+        ><el-button type="primary" :loading="supportSending" @click="submitSupport"
+          >提交申请</el-button
+        ></template
+      >
+    </el-dialog>
   </div>
 </template>
 
@@ -172,6 +227,7 @@ import { ElMessage } from 'element-plus'
 import { User, Lock, Message, School, Grid } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
 import BrandLogo from '@/components/BrandLogo.vue'
+import { submitAccountRequest } from '@/api/auth'
 
 const userStore = useUserStore()
 const loading = ref(false)
@@ -191,8 +247,8 @@ const brandPoints = [
 ]
 
 const loginForm = reactive({
-  username: 'admin',
-  password: 'admin',
+  username: '',
+  password: '',
   remember: false
 })
 
@@ -205,8 +261,23 @@ const switchTab = (key: string) => {
   loginTab.value = key
 }
 
-const notReady = () => {
-  ElMessage.info('该功能暂未开放')
+const policy = ref(''),
+  supportOpen = ref(false),
+  supportSending = ref(false)
+const support = reactive({ type: 'OPEN_ACCOUNT', username: '', contact: '', reason: '' })
+const openSupport = (type) => {
+  Object.assign(support, { type, username: '', contact: '', reason: '' })
+  supportOpen.value = true
+}
+const submitSupport = async () => {
+  supportSending.value = true
+  try {
+    await submitAccountRequest(support)
+    supportOpen.value = false
+    ElMessage.success('申请已登记，请等待管理员通过所填联系方式处理')
+  } finally {
+    supportSending.value = false
+  }
 }
 
 const handleLogin = async () => {
@@ -699,13 +770,6 @@ const handleLogin = async () => {
   }
 }
 
-.default-account {
-  margin-top: 22px;
-  text-align: center;
-  font-size: 12px;
-  color: rgba(60, 60, 67, 0.5);
-}
-
 /* ---------- 窄屏：品牌栏收起 ---------- */
 @media (max-width: 919px) {
   .brand-panel {
@@ -715,5 +779,12 @@ const handleLogin = async () => {
   .compact-brand {
     display: flex;
   }
+}
+</style>
+
+<style scoped>
+.seg-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 </style>

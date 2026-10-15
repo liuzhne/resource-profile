@@ -5,6 +5,7 @@ import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
 import com.edu.common.security.Roles;
 import com.edu.student.entity.Student;
+import com.edu.student.dto.StudentWriteRequest;
 import com.edu.student.service.StudentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -60,12 +61,15 @@ public class StudentController {
     /** 新增学生：仅 admin/teacher（或内网）。 */
     @PostMapping
     public Result<Void> save(
-            @RequestBody Student student,
+            @RequestBody StudentWriteRequest request,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.STUDENT_WRITE)) {
             return Result.error(403, "无权新增学生");
         }
-        studentService.save(student);
+        if (request.isBirthDateProvided() && !accessGuard.hasAnyRole(authHeader, Roles.ADMIN)) {
+            return Result.error(403, "无权录入出生日期");
+        }
+        studentService.save(request.validatedEntity());
         return Result.success();
     }
 
@@ -73,11 +77,15 @@ public class StudentController {
     @PutMapping("/{id}")
     public Result<Void> update(
             @PathVariable Long id,
-            @RequestBody Student student,
+            @RequestBody StudentWriteRequest request,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.STUDENT_WRITE)) {
             return Result.error(403, "无权修改学生");
         }
+        if (request.isBirthDateProvided() && !accessGuard.hasAnyRole(authHeader, Roles.ADMIN)) {
+            return Result.error(403, "无权修改出生日期");
+        }
+        Student student = request.validatedEntity();
         student.setId(id);
         studentService.update(student);
         return Result.success();

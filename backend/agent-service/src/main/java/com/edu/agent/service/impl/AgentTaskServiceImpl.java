@@ -9,10 +9,13 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.edu.agent.core.AgentRunner;
+import com.edu.agent.core.AgentFailure;
 import com.edu.agent.core.AgentLoopRequest;
 import com.edu.agent.core.AgentLoopResult;
 import com.edu.agent.core.AgentLoopStatus;
+import com.edu.agent.core.AgentLoopOutputSchema;
 import com.edu.agent.core.FinalAnswerValidator;
+import com.edu.agent.core.RagSnapshotCollector;
 import com.edu.agent.entity.AgentTask;
 import com.edu.agent.enums.RiskLevel;
 import com.edu.agent.enums.TaskStatus;
@@ -58,7 +61,8 @@ import java.util.concurrent.TimeUnit;
 public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask> implements AgentTaskService {
 
     private final AgentTaskMapper agentTaskMapper;
-    private final AiInferenceClient aiInferenceClient;          // P3 阶段接入 RAG / 方案 / 合规
+    private final com.edu.agent.service.AgentGenerationService generationService;
+    private final AiInferenceClient aiInferenceClient;          // Java knowledge-service 的兼容 RAG HTTP 接口
     private final StudentPortraitAggregator portraitAggregator;   // P2-5：基于真实端点的画像聚合
     private final RiskAnalyzeService riskAnalyzeService;          // P2-5：真实 LLM 风险识别
     private final StringRedisTemplate redisTemplate;
@@ -68,7 +72,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private final SkillLoader skillLoader;                        // H-3.5：技能加载器（按需注入 classpath skills 到 system prompt）
     private final com.edu.agent.core.SubAgentRegistry subAgentRegistry;  // J-2.1：子代理 agent-as-tool（默认关）
 
-    @Qualifier("agentExecutor")
+    @Qualifier("agentTaskExecutor")
     private final Executor agentExecutor;
 
     @Value("${educare.idempotency.trigger-window-seconds:30}")
@@ -86,7 +90,8 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
 
     private static final String LOCK_PREFIX = "agent:task:lock:";
     private static final String TRIGGER_IDEM_PREFIX = "edu:agent:trigger:";
-    private static final long LOCK_EXPIRE_SECONDS = 120;
+    @Value("${educare.agent.task-lock-seconds:1200}")
+    private long taskLockSeconds = 1200;
     private static final int AGENT_LOOP_MAX_ITERATIONS = 8;
 
     private static final List<TaskStatus> ACTIVE_STATUSES = List.of(
@@ -153,7 +158,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             // Self-invocation bypasses @Async: explicitly enqueue instead of running the loop in HTTP.
             agentExecutor.execute(() -> asyncExecute(taskId));
         } catch (RejectedExecutionException e) {
-            failTask(taskId);
+            failTask(taskId, new AgentFailure("QUEUE_FULL", "LLM_REQUEST", null));
             redisTemplate.delete(idemKey);
             publishTerminal(taskId);
             throw new BusinessException(503, "分析队列已满，请稍后重试");
@@ -185,13 +190,13 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     // ==================== 2. 异步执行入口 ====================
 
     @Override
-    @Async("agentExecutor")
+    @Async("agentTaskExecutor")
     public void asyncExecute(Long taskId) {
         String lockKey = LOCK_PREFIX + taskId;
         String lockValue = UUID.randomUUID().toString();
 
         Boolean locked = redisTemplate.opsForValue()
-                .setIfAbsent(lockKey, lockValue, LOCK_EXPIRE_SECONDS, TimeUnit.SECONDS);
+                .setIfAbsent(lockKey, lockValue, taskLockSeconds, TimeUnit.SECONDS);
         log.info("分布式锁！");
         if (!Boolean.TRUE.equals(locked)) {
             log.warn("任务 {} 正在执行中，跳过重复调度", taskId);
@@ -201,8 +206,8 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         try {
             doExecute(taskId);
         } catch (Exception e) {
-            log.error("任务 {} 执行异常", taskId, e);
-            failTask(taskId);
+            log.error("任务 {} 执行异常 errorType={}", taskId, e.getClass().getSimpleName());
+            failTask(taskId, AgentFailure.from(e, "UNKNOWN"));
             publishTerminal(taskId);
         } finally {
             log.info("释放锁！");
@@ -216,7 +221,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
 
     private void doExecute(Long taskId) {
         // AgentLoop 主路径（默认）：一次性 think→tool→observe 替换 P1+P3（风险识别 + 计划生成），
-        // RAG 检索由 knowledge-rag MCP tool 自然完成；P4 合规审核仍走原 audit 端点。
+        // RAG 检索由 knowledge-rag MCP tool 自然完成；P4 合规审核走 Spring AI AgentGenerationService。
         // educare.agent.loop.enabled=false 时回落旧 4 阶段流水线作 fallback。
         if (agentLoopEnabled) {
             doExecuteAgentLoop(taskId);
@@ -301,6 +306,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             boolean passed = parseAuditPassed(audit);
             if (!passed) {
                 transition(taskId, TaskStatus.COMPLIANCE_CHECKING, TaskStatus.REJECTED);
+                completeTask(taskId);
                 publishTerminal(taskId);
                 log.warn("任务 {} 合规审核未通过，转人工", taskId);
                 return;
@@ -343,19 +349,22 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             task.setStatus(TaskStatus.RISK_ANALYZING);
 
             AgentLoopResult result = runAgentLoopForTask(task);
+            if (result.traceId() != null) {
+                AgentTask traceUpdate = new AgentTask(); traceUpdate.setId(taskId); traceUpdate.setTraceId(result.traceId());
+                agentTaskMapper.updateById(traceUpdate);
+            }
             if (result.status() != AgentLoopStatus.COMPLETED || result.finalAnswer() == null) {
                 log.error("任务 {} AgentLoop 未给出 final_answer，status={} iterations={}",
                         taskId, result.status(), result.iterations());
-                failTask(taskId);
+                failTask(taskId, result.failure() == null ? AgentFailure.forStatus(result.status()) : result.failure());
                 publishTerminal(taskId);
                 return;
             }
 
             AgentLoopParsed parsed = parseAgentLoopFinalAnswer(result.finalAnswer());
             if (parsed == null) {
-                log.error("任务 {} AgentLoop final_answer 解析失败，原文: {}",
-                        taskId, abbreviate(result.finalAnswer()));
-                failTask(taskId);
+                log.error("任务 {} AgentLoop final_answer 解析失败", taskId);
+                failTask(taskId, new AgentFailure("OUTPUT_INVALID", "FINAL_VALIDATION", null));
                 publishTerminal(taskId);
                 return;
             }
@@ -403,6 +412,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             boolean passed = parseAuditPassed(audit);
             if (!passed) {
                 transition(taskId, TaskStatus.COMPLIANCE_CHECKING, TaskStatus.REJECTED);
+                completeTask(taskId);
                 publishTerminal(taskId);
                 log.warn("任务 {} AgentLoop 路径合规审核未通过，转人工", taskId);
                 return;
@@ -419,19 +429,16 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     }
 
     private AgentLoopResult runAgentLoopForTask(AgentTask task) {
+        RagSnapshotCollector retrievals = new RagSnapshotCollector();
         // J-2.1：主 loop 工具 = MCP 工具 + （开启时）3 个专家子代理 agent-as-tool
-        List<ToolCallback> tools = new java.util.ArrayList<>(resolveMcpTools());
-        tools.addAll(subAgentRegistry.subAgentTools(this::resolveMcpTools));
+        List<ToolCallback> tools = new java.util.ArrayList<>(retrievals.wrap(resolveMcpTools()));
+        tools.addAll(subAgentRegistry.subAgentTools(() -> retrievals.wrap(resolveMcpTools())));
         // H-3.5：按需把激活技能注入 system prompt（关闭/无技能时返回空串，prompt 字节稳定，仍命中 G-1 cache）
         String skillsBlock = skillLoader.composeActiveSkillsPrompt();
         String systemPrompt = skillsBlock.isEmpty()
                 ? agentLoopSystemPrompt
                 : agentLoopSystemPrompt + "\n\n" + skillsBlock;
-        String userPrompt = String.format(
-                "请对学生 ID = %d 完成一次风险识别 + 干预方案生成任务。\n"
-                        + "请通过可用工具拉取该学生的画像/学业/心理/出勤数据，必要时检索案例、政策、心理学知识，"
-                        + "并按 system 中规定的 final_answer JSON schema 给出最终答复。",
-                task.getStudentId());
+        String userPrompt = initialAgentUserPrompt(task.getStudentId());
         AgentLoopRequest req = new AgentLoopRequest(
                 systemPrompt,
                 userPrompt,
@@ -441,7 +448,27 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         log.info("任务 {} 启动 AgentLoop，tools={}, maxIter={}",
                 task.getId(), tools.size(), AGENT_LOOP_MAX_ITERATIONS);
         // J-1.3：传入 final_answer 校验器 —— 双 JSON schema 不合格则触发修复轮，而非直接 FAILED。
-        return agentRunner.run(req, AgentTaskServiceImpl::validateFinalAnswer);
+        try {
+            return agentRunner.run(req, AgentTaskServiceImpl::validateFinalAnswer);
+        } finally {
+            // Includes no-search, failed-search and partial evidence; never infer execution from model text.
+            String snapshot = retrievals.snapshot();
+            task.setRetrievedKnowledge(snapshot);
+            agentTaskMapper.update(null, new LambdaUpdateWrapper<AgentTask>()
+                    .eq(AgentTask::getId, task.getId())
+                    .set(AgentTask::getRetrievedKnowledge, snapshot));
+        }
+    }
+
+    static String initialAgentUserPrompt(Long studentId) {
+        return String.format(
+                "请对学生 ID = %d 完成一次风险识别 + 干预方案生成任务。\n"
+                        + "尚无任何工具 Observation 的首轮，只调用 get_student_profile 取该学生基础档案；"
+                        + "本轮不要给最终答案，也不要并行调用其他工具。首轮四字段示例："
+                        + "{\"thought\":\"先获取学生基础档案\",\"plan\":null,\"action\":{\"tool\":\"get_student_profile\",\"args\":{\"studentId\":%d}},\"final_answer\":null}\n"
+                        + "已有工具 Observation 后，首轮取数指引不再适用：依据工具结果按需获取学业、心理、出勤及知识，"
+                        + "不重复已经成功执行的工具；不假设缺失数据。最后按 system 的 final_answer schema 生成真实风险与干预双对象。",
+                studentId, studentId);
     }
 
     /** J-1.3：final_answer 必须能解析为 risk_analysis + intervention_plan 双 JSON，否则给纠错指引。 */
@@ -449,18 +476,18 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
         return parseAgentLoopFinalAnswer(finalAnswer) != null
                 ? FinalAnswerValidator.Result.ok()
                 : FinalAnswerValidator.Result.invalid(
-                "final_answer 必须是合法 JSON 字符串，且含 risk_analysis 与 intervention_plan 两个对象，"
-                        + "risk_analysis.risk_level ∈ {high,medium,low,none}。请只输出该 JSON，勿加多余文字。");
+                "final_answer 必须是 system schema 中完整的 risk_analysis 与 intervention_plan 两个对象，"
+                        + "所有字段类型正确；risk_level ∈ {high,medium,low,none}，risk_score 为0至100整数。请补齐缺失字段并只输出ReAct JSON。");
     }
 
     private List<ToolCallback> resolveMcpTools() {
         ToolCallbackProvider provider = toolCallbackProviders.getIfAvailable();
         if (provider == null) {
-            throw new BusinessException(503, "MCP 工具尚未就绪，请稍后重试");
+            throw new com.edu.agent.core.AgentExecutionException(new AgentFailure("MCP_UNAVAILABLE", "TOOL_EXECUTION", null));
         }
         ToolCallback[] arr = provider.getToolCallbacks();
         if (arr == null || arr.length == 0) {
-            throw new BusinessException(503, "MCP 工具尚未就绪，请稍后重试");
+            throw new com.edu.agent.core.AgentExecutionException(new AgentFailure("MCP_UNAVAILABLE", "TOOL_EXECUTION", null));
         }
         return Arrays.asList(arr);
     }
@@ -476,7 +503,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
      */
     static AgentLoopParsed parseAgentLoopFinalAnswer(String finalAnswer) {
         try {
-            JSONObject root = JSON.parseObject(finalAnswer);
+            JSONObject root = AgentLoopOutputSchema.parseFinalAnswer(finalAnswer);
             if (root == null) {
                 return null;
             }
@@ -489,7 +516,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             RiskLevel level = parseRiskLevelFromObj(riskObj);
             return new AgentLoopParsed(riskObj.toJSONString(), planObj.toJSONString(), level);
         } catch (Exception e) {
-            log.warn("AgentLoop final_answer JSON 解析异常: {}", e.getMessage());
+            log.warn("AgentLoop final_answer JSON 解析异常 errorType={}", e.getClass().getSimpleName());
             return null;
         }
     }
@@ -502,7 +529,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             }
             return RiskLevel.valueOf(level.toUpperCase());
         } catch (Exception e) {
-            log.warn("AgentLoop risk_level 解析失败: {}", e.getMessage());
+            log.warn("AgentLoop risk_level 解析失败 errorType={}", e.getClass().getSimpleName());
             return RiskLevel.MEDIUM;
         }
     }
@@ -553,7 +580,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             log.info("任务 {} RAG 检索完成，长度: {}", task.getId(), response == null ? 0 : response.length());
             return response != null ? response : fallbackKnowledge();
         } catch (Exception e) {
-            log.error("任务 {} RAG 检索异常", task.getId(), e);
+            log.error("任务 {} RAG 检索异常 errorType={}", task.getId(), e.getClass().getSimpleName());
             return fallbackKnowledge();
         }
     }
@@ -574,11 +601,11 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             JSONArray chunks = knowledge != null ? knowledge.getJSONArray("chunks") : null;
             req.put("knowledge_chunks", chunks != null ? chunks : Collections.emptyList());
 
-            String response = aiInferenceClient.generatePlan(req);
+            String response = generationService.generatePlan(req);
             log.info("任务 {} 方案生成完成", task.getId());
             return response != null ? response : fallbackPlan();
         } catch (Exception e) {
-            log.error("任务 {} 方案生成异常", task.getId(), e);
+            log.error("任务 {} 方案生成异常 errorType={}", task.getId(), e.getClass().getSimpleName());
             return fallbackPlan();
         }
     }
@@ -595,13 +622,28 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             req.put("student_profile", JSON.parseObject(maskedProfile));
             req.put("intervention_plan", JSON.parseObject(task.getInterventionPlan()));
 
-            String response = aiInferenceClient.complianceAudit(req);
+            String response = generationService.complianceAudit(req);
             log.info("任务 {} 合规审核完成", task.getId());
-            return response != null ? response : fallbackAudit();
+            try {
+                JSONObject audit = AgentLoopOutputSchema.parseStrictObject(response == null ? "" : response);
+                if (!(audit.get("audit_passed") instanceof Boolean)) throw new IllegalArgumentException();
+            } catch (Exception invalid) {
+                recordAuditFailure(task.getId(), new AgentFailure("OUTPUT_INVALID", "COMPLIANCE_CHECKING", null));
+                return fallbackAudit();
+            }
+            return response;
         } catch (Exception e) {
-            log.error("任务 {} 合规审核异常", task.getId(), e);
+            log.error("任务 {} 合规审核异常 errorType={}", task.getId(), e.getClass().getSimpleName());
+            recordAuditFailure(task.getId(), AgentFailure.from(e, "COMPLIANCE_CHECKING"));
             return fallbackAudit();
         }
+    }
+
+    private void recordAuditFailure(Long taskId, AgentFailure failure) {
+        AgentTask update = new AgentTask(); update.setId(taskId);
+        update.setFailureCode(failure.code()); update.setFailureStage(failure.stage());
+        update.setFailureHttpStatus(failure.httpStatus());
+        agentTaskMapper.updateById(update);
     }
 
     private String fallbackKnowledge() {
@@ -632,17 +674,24 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     }
 
     private void completeTask(Long taskId) {
-        AgentTask update = new AgentTask();
-        update.setId(taskId);
-        update.setCompletedAt(LocalDateTime.now());
-        agentTaskMapper.updateById(update);
+        // State transitions already stamp terminal time atomically; repair only a missing legacy value.
+        agentTaskMapper.markTerminalTime(taskId);
     }
 
     private void failTask(Long taskId) {
-        AgentTask update = new AgentTask();
-        update.setId(taskId);
-        update.setStatus(TaskStatus.FAILED);
-        agentTaskMapper.updateById(update);
+        failTask(taskId, new AgentFailure("UNKNOWN", "UNKNOWN", null));
+    }
+
+    private void failTask(Long taskId, AgentFailure failure) {
+        // A repeated delivery cannot rewrite another terminal outcome, diagnostic, or completion time.
+        agentTaskMapper.update(null, new LambdaUpdateWrapper<AgentTask>()
+                .eq(AgentTask::getId, taskId).eq(AgentTask::getDeleted, 0)
+                .notIn(AgentTask::getStatus, TaskStatus.COMPLETED, TaskStatus.REJECTED, TaskStatus.FAILED)
+                .set(AgentTask::getStatus, TaskStatus.FAILED)
+                .setSql("completed_at=COALESCE(completed_at,UTC_TIMESTAMP()), updated_at=UTC_TIMESTAMP()")
+                .set(AgentTask::getFailureCode, failure.code())
+                .set(AgentTask::getFailureStage, failure.stage())
+                .set(AgentTask::getFailureHttpStatus, failure.httpStatus()));
     }
 
     /**
@@ -657,7 +706,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             String riskLevel = t.getRiskLevel() == null ? null : t.getRiskLevel().name();
             warningPublisher.publishTerminal(taskId, status, riskLevel, t.getStudentId());
         } catch (Exception e) {
-            log.warn("F-2：发布终态事件失败 taskId={} err={}", taskId, e.getMessage());
+            log.warn("F-2：发布终态事件失败 taskId={} err={}", taskId, e.getClass().getSimpleName());
         }
     }
 
@@ -669,7 +718,7 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
             String level = map.getString("risk_level");
             return RiskLevel.valueOf(level.toUpperCase());
         } catch (Exception e) {
-            log.error("解析风险等级失败: {}", json, e);
+            log.error("解析风险等级失败 errorType={}", e.getClass().getSimpleName());
             return RiskLevel.MEDIUM;
         }
     }
@@ -677,9 +726,9 @@ public class AgentTaskServiceImpl extends ServiceImpl<AgentTaskMapper, AgentTask
     private boolean parseAuditPassed(String json) {
         try {
             JSONObject map = JSON.parseObject(json);
-            return Boolean.TRUE.equals(map.getBoolean("audit_passed"));
+            return Boolean.TRUE.equals(map.get("audit_passed"));
         } catch (Exception e) {
-            log.error("解析合规审核结果失败: {}", json, e);
+            log.error("解析合规审核结果失败 errorType={}", e.getClass().getSimpleName());
             return false;
         }
     }

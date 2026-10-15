@@ -6,6 +6,8 @@ import com.edu.common.security.AccessGuard;
 import com.edu.common.security.InternalCallCredential;
 import com.edu.common.util.JwtUtil;
 import com.edu.teacher.entity.Teacher;
+import com.edu.teacher.dto.TeacherWriteRequest;
+import org.mockito.ArgumentCaptor;
 import com.edu.teacher.service.TeacherService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,18 +90,24 @@ class TeacherControllerTest {
         verify(teacherService, never()).getById(any());
     }
 
+    private TeacherWriteRequest request() {
+        TeacherWriteRequest value = new TeacherWriteRequest();
+        value.setUserId(2L); value.setEmployeeId("T-9"); value.setName("测试教师");
+        return value;
+    }
+
     @Test
     void save_adminAllowed() {
         asRole("admin");
-        Teacher teacher = new Teacher();
+        TeacherWriteRequest teacher = request();
         assertThat(controller.save(teacher, AUTH).getCode()).isEqualTo(200);
-        verify(teacherService).save(teacher);
+        verify(teacherService).save(any(Teacher.class));
     }
 
     @Test
     void save_teacherDenied() {
         asRole("teacher");
-        Teacher teacher = new Teacher();
+        TeacherWriteRequest teacher = request();
         assertThat(controller.save(teacher, AUTH).getCode()).isEqualTo(403);
         verify(teacherService, never()).save(any());
     }
@@ -107,10 +115,11 @@ class TeacherControllerTest {
     @Test
     void update_adminAllowedAndUsesPathId() {
         asRole("admin");
-        Teacher teacher = new Teacher();
+        TeacherWriteRequest teacher = request();
         assertThat(controller.update(9L, teacher, AUTH).getCode()).isEqualTo(200);
-        assertThat(teacher.getId()).isEqualTo(9L);
-        verify(teacherService).update(teacher);
+        ArgumentCaptor<Teacher> value = ArgumentCaptor.forClass(Teacher.class);
+        verify(teacherService).update(value.capture());
+        assertThat(value.getValue().getId()).isEqualTo(9L);
     }
 
     @Test

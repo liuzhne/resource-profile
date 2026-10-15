@@ -5,21 +5,24 @@ import router from './router'
 import permissionDirective from './directives/permission'
 import { installServiceWarmup } from './utils/prewarm'
 import { wakeServices } from './utils/warmup'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import { installAppIcons } from './icons'
 
+// 显式调用的服务组件不会触发模板按需导入，需加载其全局样式及依赖。
+import 'element-plus/es/components/message-box/style/css'
+import 'element-plus/es/components/message/style/css'
 import './styles/index.scss'
 
 const app = createApp(App)
 
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component)
-}
+installAppIcons(app)
 
 app.use(createPinia())
 app.use(router)
 app.use(permissionDirective)
 
-// Render 免费层各服务独立休眠：打开网站即并行唤醒，使用期间保持清醒（详见 utils/prewarm.js）
-installServiceWarmup(router, wakeServices)
+// Only deployments that explicitly enable sleeping services need background wakeups.
+if (import.meta.env.VITE_ENABLE_SERVICE_WARMUP === 'true') {
+  installServiceWarmup(router, wakeServices)
+}
 
 app.mount('#app')

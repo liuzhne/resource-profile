@@ -5,6 +5,9 @@ import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
 import com.edu.common.security.Roles;
 import com.edu.mental.dto.QuestionnaireFullDto;
+import com.edu.mental.dto.QuestionnaireUpdateRequest;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import com.edu.mental.entity.Question;
 import com.edu.mental.entity.Questionnaire;
 import com.edu.mental.mapper.MentalAssessmentMapper;
@@ -70,7 +73,11 @@ public class MentalController {
         result.put("goodRate", goodRate);
         result.put("attentionRate", attentionRate);
         result.put("interventionRate", interventionRate);
-        result.put("todayCompleted", totalCount);
+        result.put("recentAssessmentCount", totalCount);
+        LocalDate day=LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        result.put("todayCompleted", mentalAssessmentMapper.countSubmittedBetween(day.atStartOfDay(),day.plusDays(1).atStartOfDay()));
+        result.put("statisticsPeriod", "最近30天测评记录");
+        result.put("businessTimezone", "Asia/Shanghai");
         result.put("warningList", mentalAssessmentMapper.selectWarningList());
         result.put("trendData", mentalAssessmentMapper.selectTrendData());
         return Result.success(result);
@@ -128,14 +135,14 @@ public class MentalController {
     @PutMapping("/questionnaires/{id}")
     public Result<Void> updateQuestionnaire(
             @PathVariable Long id,
-            @RequestBody Questionnaire questionnaire,
+            @RequestBody QuestionnaireUpdateRequest questionnaire,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         // 等级规则（levelRules）也经此保存
         if (!accessGuard.hasAnyRole(authHeader, Roles.MENTAL_WRITE)) {
             return Result.error(403, WRITE_DENIED);
         }
         questionnaire.setId(id);
-        questionnaireService.update(questionnaire);
+        questionnaireService.updateMetadata(questionnaire);
         return Result.success();
     }
 

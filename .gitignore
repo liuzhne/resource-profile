@@ -153,3 +153,12 @@ deliverables/
 
 # Local development process IDs, logs and resolved environment files
 .local-run/
+
+# Local test artifacts: retain narrative reports and reusable tests, not raw outputs.
+docs/production-tests/**/*.json
+docs/production-tests/**/*.png
+docs/production-tests/**/*.jpg
+docs/production-tests/**/*.jpeg
+docs/audits/*.json
+docs/audits/*.csv
+docs/educare/*_EVIDENCE.json

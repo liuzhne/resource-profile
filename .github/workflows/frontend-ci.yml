@@ -31,6 +31,8 @@ jobs:
         run: npm ci
       - name: ESLint（只读）
         run: npm run lint:check
+      - name: 前端行为回归
+        run: npm test
       - name: 生产构建
         run: npm run build
       - name: Bundle 体积门

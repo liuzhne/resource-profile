@@ -5,6 +5,7 @@ import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
 import com.edu.common.security.Roles;
 import com.edu.teacher.entity.Teacher;
+import com.edu.teacher.dto.TeacherWriteRequest;
 import com.edu.teacher.service.TeacherService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -43,21 +44,22 @@ public class TeacherController {
     }
 
     @PostMapping
-    public Result<Void> save(@RequestBody Teacher teacher,
+    public Result<Void> save(@RequestBody TeacherWriteRequest request,
                              @RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.ADMIN)) {
             return Result.error(403, "无权新增教师");
         }
-        teacherService.save(teacher);
+        teacherService.save(request.validatedEntity());
         return Result.success();
     }
 
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody Teacher teacher,
+    public Result<Void> update(@PathVariable Long id, @RequestBody TeacherWriteRequest request,
                                @RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (!accessGuard.allowSelfRoleOrInternal(authHeader, null, Roles.ADMIN)) {
             return Result.error(403, "无权修改教师");
         }
+        Teacher teacher = request.validatedEntity();
         teacher.setId(id);
         teacherService.update(teacher);
         return Result.success();

@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["risk_analysis", "intervention_plan"],
+  "properties": {
+    "risk_analysis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["risk_level", "risk_score", "primary_risk_type", "root_cause_analysis", "key_indicators", "recommended_intervention_types", "urgency_reason"],
+      "properties": {
+        "risk_level": {"type": "string", "enum": ["high", "medium", "low", "none"]},
+        "risk_score": {"type": "integer"},
+        "primary_risk_type": {"type": "string"},
+        "root_cause_analysis": {"type": "string"},
+        "key_indicators": {"type": "array", "items": {"type": "string"}},
+        "recommended_intervention_types": {"type": "array", "items": {"type": "string"}},
+        "urgency_reason": {"type": "string"}
+      }
+    },
+    "intervention_plan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["report_title", "summary", "immediate_actions", "long_term_plan", "talk_outline", "resources", "references"],
+      "properties": {
+        "report_title": {"type": "string"},
+        "summary": {"type": "string"},
+        "immediate_actions": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["action", "owner", "deadline"],
+          "properties": {"action": {"type": "string"}, "owner": {"type": "string"}, "deadline": {"type": "string"}}
+        }},
+        "long_term_plan": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["goal", "milestones", "horizon"],
+          "properties": {"goal": {"type": "string"}, "milestones": {"type": "array", "items": {"type": "string"}}, "horizon": {"type": "string"}}
+        }},
+        "talk_outline": {"type": "string"},
+        "resources": {"type": "array", "items": {"type": "string"}},
+        "references": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

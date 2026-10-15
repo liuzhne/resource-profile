@@ -36,17 +36,30 @@ public class AgentTask {
     @TableField("intervention_plan")
     private String interventionPlan;
 
+    /** Response-only normalization status; provider JSON is preserved in intervention_plan. */
+    @TableField(exist = false)
+    private String planViewStatus;
+
     @TableField("compliance_audit")
     private String complianceAudit;
 
     @TableField(fill = FieldFill.INSERT)
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     private LocalDateTime createdAt;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     private LocalDateTime updatedAt;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     private LocalDateTime completedAt;
+
+    /** Fixed failure diagnostics only, never a provider response or exception message. */
+    private String failureCode;
+    private String failureStage;
+    private Integer failureHttpStatus;
+    private String traceId;
 
     @TableLogic
     @TableField("deleted")

@@ -1,0 +1,47 @@
+server:
+  port: ${PORT:${MCP_KNOWLEDGE_RAG_PORT:8090}}
+spring:
+  application:
+    name: knowledge-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
+  ai:
+    mcp:
+      server:
+        enabled: ${KNOWLEDGE_MCP_ENABLED:false}
+        name: knowledge-rag
+        version: 2.0.0
+        type: SYNC
+        protocol: STREAMABLE
+        streamable-http:
+          mcp-endpoint: /mcp
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+knowledge:
+  api-enabled: ${KNOWLEDGE_API_ENABLED:true}
+  mcp-token: ${EDUCARE_MCP_TOKEN:}
+  admin-token: ${EDUCARE_ADMIN_TOKEN:}
+  internal-token: ${EDUCARE_INTERNAL_TOKEN:}
+  milvus-url: ${MILVUS_URL:http://${MILVUS_HOST:localhost}:${MILVUS_PORT:19530}}
+  milvus-token: ${MILVUS_TOKEN:}
+  embedding-url: ${EMBEDDING_BASE_URL:http://localhost:8092/v1}
+  embedding-key: ${EMBEDDING_API_KEY:${LLM_API_KEY:dummy}}
+  embedding-model: ${EMBEDDING_MODEL:bge-m3}
+  embedding-dim: ${EMBEDDING_DIM:1024}
+  reranker-enabled: ${RERANKER_ENABLED:false}
+  reranker-url: ${RERANKER_BASE_URL:http://localhost:8093}
+  reranker-model: ${RERANKER_MODEL:bge-reranker-base}
+  cache-ttl: ${RAG_CACHE_TTL:3600}
+  embedding-cache-ttl: ${EMBEDDING_CACHE_TTL:86400}
+  recall-expand: ${RAG_RECALL_EXPAND:3}
+  upsert-hash-ttl: ${UPSERT_HASH_TTL:604800}

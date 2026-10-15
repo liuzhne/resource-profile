@@ -9,6 +9,8 @@ import com.edu.common.util.JwtUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -89,14 +91,16 @@ class ExportControllerTest {
     }
 
     @Test
-    void download_internalCredential_ok() {
+    void download_internalCredential_doesNotRepresentProfessionalRole() {
         asInternalCall();
         jobExists();
 
         ResponseEntity<Resource> r = controller.download(50L, null);
 
-        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(exportService).loadFile(50L);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(controller.createExportJob(7L, null).getCode()).isEqualTo(403);
+        assertThat(controller.getExportStatus(50L, null).getCode()).isEqualTo(403);
+        verify(exportService, never()).loadFile(50L);
     }
 
     @Test
@@ -108,5 +112,30 @@ class ExportControllerTest {
 
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         verify(exportService, never()).loadFile(anyLong());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"teacher", "counselor", "academic_advisor", "student"})
+    void everyPdfEndpointRejectsRolesWithoutRawMentalPermission(String role) {
+        when(jwtUtil.getSubject("tok")).thenReturn("9");
+        when(jwtUtil.parseRoles("tok")).thenReturn(Set.of(role));
+        assertThat(controller.createExportJob(7L, AUTH).getCode()).isEqualTo(403);
+        assertThat(controller.getExportStatus(50L, AUTH).getCode()).isEqualTo(403);
+        assertThat(controller.download(50L, AUTH).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        verify(exportService, never()).createExportJob(anyLong(), anyLong());
+        verify(exportService, never()).getJobStatus(anyLong());
+        verify(exportService, never()).loadFile(anyLong());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"admin", "psychologist"})
+    void allPdfEndpointsAllowLoggedInProfessionalRoles(String role) {
+        when(jwtUtil.getSubject("tok")).thenReturn("9");
+        when(jwtUtil.parseRoles("tok")).thenReturn(Set.of(role));
+        when(exportService.createExportJob(7L, 9L)).thenReturn(50L);
+        jobExists();
+        assertThat(controller.createExportJob(7L, AUTH).getCode()).isEqualTo(200);
+        assertThat(controller.getExportStatus(50L, AUTH).getCode()).isEqualTo(200);
+        assertThat(controller.download(50L, AUTH).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 }

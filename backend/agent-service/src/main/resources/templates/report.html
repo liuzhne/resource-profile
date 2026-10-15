@@ -71,9 +71,9 @@
     </tr>
     <tr>
         <td class="meta-label">创建时间</td>
-        <td th:text="${task.createdAt != null} ? ${#temporals.format(task.createdAt, 'yyyy-MM-dd HH:mm')} : '—'">—</td>
+        <td th:text="${taskCreatedAtLocal != null} ? ${#temporals.format(taskCreatedAtLocal, 'yyyy-MM-dd HH:mm')} : '—'">—</td>
         <td class="meta-label">完成时间</td>
-        <td th:text="${task.completedAt != null} ? ${#temporals.format(task.completedAt, 'yyyy-MM-dd HH:mm')} : '—'">—</td>
+        <td th:text="${taskCompletedAtLocal != null} ? ${#temporals.format(taskCompletedAtLocal, 'yyyy-MM-dd HH:mm')} : '—'">—</td>
     </tr>
 </table>
 
@@ -129,7 +129,15 @@
         </tbody>
     </table>
 </div>
-<p th:unless="${knowledgeChunks != null and !knowledgeChunks.isEmpty()}" class="muted">无召回结果</p>
+<p th:if="${knowledge == null or knowledge.isEmpty() or knowledge['executed'] == false}" class="muted">未执行</p>
+<p th:if="${knowledge != null and !knowledge.isEmpty() and knowledge['executed'] != false and knowledgeChunks.isEmpty()}" class="muted">无可用召回结果</p>
+<ul th:if="${knowledgeSearches != null and !knowledgeSearches.isEmpty()}">
+    <li th:each="s : ${knowledgeSearches}">
+        <span th:text="${s['tool']}">—</span>：
+        <span th:text="${s['status'] == 'SUCCEEDED'} ? '检索完成' : (${s['status'] == 'FAILED'} ? '检索失败' : '检索未完成')">—</span>
+        <span th:if="${s['fallback'] == true}">（降级结果）</span>
+    </li>
+</ul>
 
 <!-- ========== 阶段 3：干预方案 ========== -->
 <h2>四、阶段 3 · 干预方案</h2>
@@ -139,7 +147,7 @@
         <span th:text="${plan['summary']}">—</span>
     </div>
 
-    <h3 th:if="${immediateActions != null and !immediateActions.isEmpty()}">立即行动（7 天内）</h3>
+    <h3 th:if="${immediateActions != null and !immediateActions.isEmpty()}">立即行动</h3>
     <table th:if="${immediateActions != null and !immediateActions.isEmpty()}">
         <thead>
         <tr>
@@ -152,17 +160,20 @@
         <tr th:each="a : ${immediateActions}">
             <td th:text="${a['action'] ?: '—'}">—</td>
             <td th:text="${a['owner'] ?: '—'}">—</td>
-            <td th:text="${a['deadline_days'] != null} ? ${a['deadline_days']} + ' 天' : '—'">—</td>
+            <td th:text="${a['deadline'] ?: '—'}">—</td>
         </tr>
         </tbody>
     </table>
 
     <h3 th:if="${longTermPlan != null and !longTermPlan.isEmpty()}">长期跟进</h3>
     <div th:each="p, ps : ${longTermPlan}" class="no-break" style="margin-bottom:10px;">
-        <strong th:text="${p['phase'] ?: '阶段 ' + (ps.index + 1)}">—</strong>
-        <div th:if="${p['goals'] != null}">
-            <em>目标：</em>
-            <ul><li th:each="g : ${p['goals']}" th:text="${g}">—</li></ul>
+        <strong th:text="${p['horizon'] ?: '阶段 ' + (ps.index + 1)}">—</strong>
+        <div th:if="${p['goal']}">
+            <em>目标：</em><span th:text="${p['goal']}">—</span>
+        </div>
+        <div th:if="${p['milestones'] != null and !p['milestones'].isEmpty()}">
+            <em>里程碑：</em>
+            <ul><li th:each="g : ${p['milestones']}" th:text="${g}">—</li></ul>
         </div>
         <div th:if="${p['metrics'] != null}">
             <em>衡量指标：</em>
@@ -191,8 +202,13 @@
         </tr>
         </tbody>
     </table>
+    <h3 th:if="${references != null and !references.isEmpty()}">方案引用</h3>
+    <ul th:if="${references != null and !references.isEmpty()}">
+        <li th:each="r : ${references}" th:text="${r}">—</li>
+    </ul>
 </div>
-<p th:unless="${plan != null and !plan.isEmpty()}" class="muted">未执行</p>
+<p th:if="${planInvalid}" class="alert alert-error">方案数据格式异常，请联系管理员</p>
+<p th:if="${!planInvalid and (plan == null or plan.isEmpty())}" class="muted">未执行</p>
 
 <!-- ========== 阶段 4：合规审核 ========== -->
 <h2>五、阶段 4 · 合规审核</h2>

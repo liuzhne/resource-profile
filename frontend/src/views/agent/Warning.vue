@@ -6,6 +6,7 @@
         <div class="head-sub">
           共 <b>{{ total }}</b> 个分析任务
         </div>
+        <div class="head-sub">时间：北京时间（UTC+8）</div>
       </div>
       <div class="head-actions">
         <el-button class="btn-reset" :icon="Refresh" :loading="loading" @click="fetchList">
@@ -48,6 +49,7 @@
       <el-table
         v-loading="loading"
         :data="taskList"
+        class="warning-table"
         stripe
         element-loading-text="加载中..."
         :row-class-name="rowClass"
@@ -133,14 +135,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, MagicStick, Loading } from '@element-plus/icons-vue'
-import { fetchEventSource } from '@microsoft/fetch-event-source'
-import { createBackoff } from '@/utils/backoff'
 import { getAgentTaskList, triggerAgentTask } from '@/api/agent'
 import { useUserStore } from '@/store/modules/user'
+import { formatAgentTime as formatTime } from './agentTime'
+import { createWarningStream } from './warningStream'
 
 const userStore = useUserStore()
 
@@ -240,70 +242,36 @@ const hasInProgressTask = computed(() =>
 // 中间状态（RISK_ANALYZING 等）仍靠 3s 轮询，仅在 hasInProgressTask 时打 API。
 // SSE 断开时指数退避重连（见 sseBackoff），期间轮询继续兜底。
 let pollTimer = null
-let sseAbortCtrl = null
 const sseConnected = ref(false)
 
 // fetch-event-source 默认固定 1s 重连、并不退避。agent-service 休眠或唤醒失败时，
 // 实测（2026-09-14）一个标签页 30 分钟向网关重连 930 次，网关因此无法休眠、白耗免费实例时长。
-const sseBackoff = createBackoff({ min: 2000, max: 60000 })
-
-const connectSse = async () => {
-  if (sseAbortCtrl) sseAbortCtrl.abort()
-  sseAbortCtrl = new AbortController()
-  try {
-    // Render static-site rewrites buffer this long-lived response; use the gateway in production.
-    const sseBase = (import.meta.env.VITE_SSE_BASE_URL || '/api').replace(/\/$/, '')
-    await fetchEventSource(`${sseBase}/agent/api/v1/warning/stream`, {
-      signal: sseAbortCtrl.signal,
-      headers: userStore.token ? { Authorization: `Bearer ${userStore.token}` } : {},
-      openWhenHidden: true, // 切到后台标签页也保持连接
-      onopen: async (resp) => {
-        if (resp.ok && resp.headers.get('content-type')?.includes('text/event-stream')) {
-          sseConnected.value = true
-          sseBackoff.reset()
-        } else {
-          // 非 200 或非 SSE 内容 —— 直接抛错，让 fetch-event-source 走 onerror
-          throw new Error(`SSE 握手失败 status=${resp.status}`)
-        }
-      },
-      onmessage: (ev) => {
-        // 后端事件名：hello / warning。心跳是注释行（: ping），onmessage 不会收到
-        if (ev.event === 'warning') {
-          // 收到任意终态事件 → 刷新列表
-          fetchList()
-        }
-      },
-      onerror: (err) => {
-        sseConnected.value = false
-        // 返回数值即下次重连前的等待毫秒数；抛异常则停止重连（这里要自动重连，故不抛）
-        const wait = sseBackoff.next()
-        console.warn(`SSE 连接异常，${wait / 1000}s 后重连`, err?.message || err)
-        return wait
-      },
-      onclose: () => {
-        sseConnected.value = false
-      }
-    })
-  } catch (e) {
-    sseConnected.value = false
-    // 主动 abort 不算错误
-    if (e?.name !== 'AbortError') {
-      console.warn('SSE 终止', e)
-    }
-  }
-}
+const sseBase = (import.meta.env.VITE_SSE_BASE_URL || '/api').replace(/\/$/, '')
+const warningStream = createWarningStream({
+  url: `${sseBase}/agent/api/v1/warning/stream`,
+  getToken: () => userStore.token,
+  onConnected: (value) => {
+    sseConnected.value = value
+  },
+  onWarning: fetchList
+})
+watch(
+  () => userStore.token,
+  () => void warningStream.start(),
+  { flush: 'sync' }
+)
 
 onMounted(() => {
   fetchList()
   pollTimer = setInterval(() => {
     if (hasInProgressTask.value) fetchList()
   }, 3000)
-  connectSse()
+  void warningStream.start()
 })
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
-  if (sseAbortCtrl) sseAbortCtrl.abort()
+  warningStream.dispose()
 })
 
 const statusType = (s) =>
@@ -337,11 +305,6 @@ const primaryRiskType = (row) => {
   } catch {
     return ''
   }
-}
-
-const formatTime = (s) => {
-  if (!s) return ''
-  return s.replace('T', ' ').slice(0, 19)
 }
 </script>
 
@@ -392,6 +355,32 @@ const formatTime = (s) => {
 
 .table-wrap {
   padding: 0 20px 18px;
+  min-width: 0;
+}
+
+// The glass theme makes header/row cells transparent. Sticky operation cells
+// must be opaque so horizontally scrolling dates cannot show through them.
+:deep(.warning-table) {
+  --el-table-fixed-box-shadow: 0 0 8px rgba(0, 0, 0, 0.08);
+  --el-table-fixed-left-column: #fff;
+  --el-table-fixed-right-column: #fff;
+  --el-table-header-bg-color: #f5f7fa;
+
+  th.el-table__cell {
+    background-color: #f5f7fa;
+  }
+  td.el-table-fixed-column--right {
+    background-color: #fff;
+  }
+  .el-table__row--striped td.el-table-fixed-column--right {
+    background-color: #fafafa;
+  }
+  .el-table__body tr:hover > td.el-table-fixed-column--right {
+    background-color: #f5f7fa;
+  }
+  .high-risk-row td.el-table-fixed-column--right {
+    background-color: #fff0f0;
+  }
 }
 
 .pagination {

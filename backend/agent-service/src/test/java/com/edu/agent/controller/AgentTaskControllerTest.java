@@ -1,6 +1,14 @@
 package com.edu.agent.controller;
 
 import com.edu.agent.entity.AgentTask;
+import com.alibaba.fastjson2.JSON;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import org.springframework.core.io.ClassPathResource;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import com.edu.agent.service.AgentTaskService;
 import com.edu.common.result.Result;
 import com.edu.common.security.AccessGuard;
@@ -107,5 +115,46 @@ class AgentTaskControllerTest {
 
         assertThat(r.getCode()).isEqualTo(403);
         verify(agentTaskService, never()).triggerTask(anyLong());
+    }
+
+    private AgentTask syntheticReport() throws Exception {
+        var full = JSON.parseObject(new ClassPathResource("report/react-final.json").getContentAsString(StandardCharsets.UTF_8));
+        full.getJSONObject("risk_analysis").put("unknown_nested", Map.of("score", "SYNTHETIC_RAW_PHQ9:19"));
+        full.getJSONObject("risk_analysis").getJSONArray("recommended_intervention_types").add("SYNTHETIC_RAW_PHQ9:19");
+        var task = new AgentTask(); task.setId(7L); task.setStudentId(1L);
+        task.setRiskAnalysisResult(full.getJSONObject("risk_analysis").toJSONString());
+        task.setRiskType("SYNTHETIC_RAW_PHQ9:19");
+        task.setInterventionPlan(full.getJSONObject("intervention_plan").toJSONString());
+        task.setRetrievedKnowledge("{\"query\":\"SYNTHETIC_RAW_PHQ9:19\",\"executed\":true,\"searches\":[{\"query\":\"SYNTHETIC_RAW_PHQ9:19\",\"arguments\":{\"score\":19},\"tool\":\"search_psychology\",\"status\":\"SUCCEEDED\"}],\"chunks\":[]}");
+        return task;
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"teacher", "counselor", "academic_advisor"})
+    void detailAndListNeverExposeStringJsonRawMentalOrUnknownNestedFields(String role) throws Exception {
+        when(jwtUtil.getSubject("tok")).thenReturn("9"); when(jwtUtil.parseRoles("tok")).thenReturn(Set.of(role));
+        var source = syntheticReport();
+        when(agentTaskService.getTaskDetail(7L)).thenReturn(source);
+        var page = new Page<AgentTask>(1, 20); page.setTotal(1); page.setRecords(List.of(source));
+        when(agentTaskService.listTasks(1, 20, null, null)).thenReturn(page);
+        var detail = controller.detail(7L, AUTH).getData();
+        var listed = controller.list(1, 20, null, null, AUTH).getData().getRecords().getFirst();
+        for (AgentTask view : List.of(detail, listed)) {
+            assertThat(JSON.toJSONString(view)).doesNotContain("SYNTHETIC_RAW_PHQ9", "unknown_nested", "\"arguments\"");
+            assertThat(view.getRiskAnalysisResult()).contains("详细分析限专业角色", "risk_details_restricted");
+            assertThat(view.getInterventionPlan()).contains("48小时内", "合成支持资源：示例热线");
+            assertThat(view.getPlanViewStatus()).isEqualTo("AVAILABLE");
+        }
+        assertThat(source.getRiskAnalysisResult()).contains("SYNTHETIC_RAW_PHQ9", "unknown_nested");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"admin", "psychologist"})
+    void professionalRolesKeepRawMentalAndReceiveTheSameNormalizedPlan(String role) throws Exception {
+        when(jwtUtil.getSubject("tok")).thenReturn("9"); when(jwtUtil.parseRoles("tok")).thenReturn(Set.of(role));
+        var source = syntheticReport(); when(agentTaskService.getTaskDetail(7L)).thenReturn(source);
+        var view = controller.detail(7L, AUTH).getData();
+        assertThat(view.getRiskAnalysisResult()).isEqualTo(source.getRiskAnalysisResult());
+        assertThat(view.getInterventionPlan()).contains("\"name\":\"合成支持资源：示例热线\"");
     }
 }

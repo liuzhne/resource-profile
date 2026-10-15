@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,6 +7,7 @@ from starlette.middleware.cors import CORSMiddleware
 from app.api import agent, diagnostics, health, llm, rag, rag_upsert
 from app.core.config import settings
 from app.core.lifespan import chain_lifespans
+from app.services.langfuse_telemetry import telemetry
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -13,9 +15,12 @@ async def lifespan(app: FastAPI):
     print(f"   LLM Base URL: {settings.LLM_BASE_URL}")
     print(f"   Milvus Host:  {settings.MILVUS_HOST}:{settings.MILVUS_PORT}")
 
-    yield
-
-    print(f"  {settings.APP_NAME} 正在关闭...")
+    try:
+        yield
+    finally:
+        # Shutdown flushes pending OTLP spans, without blocking the ASGI loop.
+        await asyncio.to_thread(telemetry.shutdown)
+        print(f"  {settings.APP_NAME} 正在关闭...")
 
 def create_app() -> FastAPI:
     # FastMCP's StreamableHTTPSessionManager is initialized by the lifespan
@@ -63,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(llm.router)
     app.include_router(agent.router)
     app.include_router(rag.router)
+    app.include_router(rag_upsert.router)
     app.include_router(diagnostics.router)
     # 注册 MCP Streamable HTTP 协议端点 (/mcp)
     if mcp_app is not None:

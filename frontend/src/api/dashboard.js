@@ -15,3 +15,10 @@ export const getDistributionData = () => {
 export const getRecentLogins = () => {
   return request.get('/data/dashboard/recentLogins')
 }
+
+export const getDashboardTodos = (limit = 10) =>
+  request.get('/data/dashboard/todos', { params: { limit } })
+export const getNotifications = (limit = 10) =>
+  request.get('/data/notifications', { params: { limit } })
+export const searchDirectory = (q, limit = 10) =>
+  request.get('/data/search', { params: { q, limit } })

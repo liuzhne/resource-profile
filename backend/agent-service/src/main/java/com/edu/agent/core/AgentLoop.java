@@ -3,10 +3,12 @@ package com.edu.agent.core;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.edu.agent.config.LangfuseClient;
+import com.edu.agent.config.LlmCallException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -43,6 +45,14 @@ public class AgentLoop implements AgentRunner {
     private static final int CONSECUTIVE_PARSE_ERROR_LIMIT = 2;
     /** J-1.3：final_answer 校验失败时最多触发几次"修复轮"，防模型反复给坏答案打转。 */
     private static final int MAX_FINAL_ANSWER_REPAIRS = 2;
+    /** One constrained-output repair within the existing loop/deadline; never an HTTP or tool replay. */
+    private static final int MAX_JSON_GENERATION_REPAIRS = 1;
+    private static final String JSON_GENERATION_CORRECTION =
+            "JSON_GENERATION_INVALID: 上一轮未通过严格 JSON 校验，未执行该轮工具。"
+                    + "只输出 thought、plan、action、final_answer 四个字段；不用的字段为 null，"
+                    + "action 与 final_answer 只能一个非 null。action.tool 必须来自可用工具，args 严格遵循该工具 schema，"
+                    + "不添加字段，学生 ID 使用整数。尚无工具 Observation 时先取学生基础档案；"
+                    + "已有 Observation 时继续依据真实结果，不重复已成功执行的工具，不编造数据或最终结论。";
 
     private final ChatClient chatClient;
     private final LangfuseClient langfuseClient;
@@ -64,6 +74,12 @@ public class AgentLoop implements AgentRunner {
     @org.springframework.beans.factory.annotation.Value("${educare.agent.loop.protocol:react}")
     private String protocol;
 
+    @org.springframework.beans.factory.annotation.Value("${educare.agent.loop.structured-output.enabled:false}")
+    private boolean structuredOutputEnabled;
+
+    @org.springframework.beans.factory.annotation.Value("${educare.agent.loop.deadline-seconds:900}")
+    private long deadlineSeconds = 900;
+
     private void recordTrace(AgentLoopRequest req, List<AgentTrace> traces, AgentTrace t) {
         traces.add(t);
         fireHooks(h -> h.onIteration(req.taskTag(), t));
@@ -77,17 +93,24 @@ public class AgentLoop implements AgentRunner {
             try {
                 action.accept(h);
             } catch (Exception e) {
-                log.debug("AgentLoopHook 异常（已忽略）: {}", e.getMessage());
+                log.debug("AgentLoopHook 异常（已忽略）: {}", e.getClass().getSimpleName());
             }
         }
     }
 
     /**
      * J-1.3：带 final_answer 校验的 run。validator 非空时，final_answer 不合格会喂纠错 observation
-     * 触发最多 {@link #MAX_FINAL_ANSWER_REPAIRS} 次修复轮；修复预算耗尽则接受当前答案返回（由调用方裁决）。
+     * 触发最多 {@link #MAX_FINAL_ANSWER_REPAIRS} 次修复轮；修复预算耗尽仍不合格则显式失败。
      */
     @Override
     public AgentLoopResult run(AgentLoopRequest rawReq, FinalAnswerValidator validator) {
+        if (deadlineSeconds < 1 || deadlineSeconds > 1800) throw new IllegalArgumentException("Invalid Agent deadline");
+        try (AgentDeadline ignored = AgentDeadline.start(deadlineSeconds * 1000)) {
+            return runWithinDeadline(rawReq, validator);
+        }
+    }
+
+    private AgentLoopResult runWithinDeadline(AgentLoopRequest rawReq, FinalAnswerValidator validator) {
         AgentLoopRequest req = rawReq.normalized();
         Instant runStart = Instant.now();
         // J-3.4：双轨 —— native 走 Spring AI 原生 tool-calling 的隐式内部循环
@@ -98,22 +121,50 @@ public class AgentLoop implements AgentRunner {
         List<AgentTrace> traces = new ArrayList<>(req.maxIterations());
         int consecutiveParseError = 0;
         int repairsLeft = MAX_FINAL_ANSWER_REPAIRS;
+        int generationRepairsLeft = MAX_JSON_GENERATION_REPAIRS;
         String lastThought = null;
         String agentPlan = null;  // J-2.3：首轮规划
         fireHooks(h -> h.onStart(req.taskTag(), req));  // J-3.1
 
         for (int i = 1; i <= req.maxIterations(); i++) {
+            if (AgentDeadline.remainingMillis() == 0) {
+                return finishRun(req, new AgentLoopResult(AgentLoopStatus.DEADLINE_EXCEEDED, null, traces, i - 1), runStart);
+            }
             long t0 = System.currentTimeMillis();
             String userPrompt = composeUserPromptWithHistory(req, traces);
 
             String raw;
             try {
-                raw = chatClient.prompt().system(systemPrompt).user(userPrompt).call().content();
+                var prompt = chatClient.prompt().system(systemPrompt).user(userPrompt);
+                if (structuredOutputEnabled) {
+                    prompt.options(OpenAiChatOptions.builder()
+                            .responseFormat(AgentLoopOutputSchema.responseFormat(req.tools())).build());
+                }
+                raw = prompt.call().content();
             } catch (Exception e) {
-                log.error("[AgentLoop][{}] LLM 调用异常 iter={}", req.taskTag(), i, e);
+                AgentFailure failure = AgentFailure.from(e, "LLM_REQUEST");
+                log.error("[AgentLoop][{}] LLM 调用异常 iter={} code={} httpStatus={} reason={}",
+                        req.taskTag(), i, failure.code(), failure.httpStatus(), LlmCallException.reasonFrom(e));
+                if (structuredOutputEnabled && generationRepairsLeft > 0 && i < req.maxIterations()
+                        && "PROVIDER_JSON_SCHEMA".equals(failure.code()) && Integer.valueOf(400).equals(failure.httpStatus())
+                        && "JSON_GENERATION".equals(LlmCallException.reasonFrom(e))) {
+                    recordTrace(req, traces, new AgentTrace(i, "", null, null, null, JSON_GENERATION_CORRECTION,
+                            System.currentTimeMillis() - t0, "provider-json-generation-invalid"));
+                    if (AgentDeadline.remainingMillis() == 0) {
+                        return finishRun(req, new AgentLoopResult(AgentLoopStatus.DEADLINE_EXCEEDED, null, traces, i), runStart);
+                    }
+                    generationRepairsLeft--;
+                    log.warn("[AgentLoop][{}] iter={} 严格 JSON 生成失败，下一轮纠正格式（剩余修复 {}）",
+                            req.taskTag(), i, generationRepairsLeft);
+                    continue;
+                }
                 recordTrace(req, traces, new AgentTrace(i, "", null, null, null, null,
-                        System.currentTimeMillis() - t0, "llm-call-failed: " + e.getMessage()));
-                return finishRun(req, new AgentLoopResult(AgentLoopStatus.TOOL_ERROR, null, traces, i), runStart);
+                        System.currentTimeMillis() - t0, "llm-call-failed: " + e.getClass().getSimpleName()));
+                return finishRun(req, new AgentLoopResult(AgentLoopStatus.LLM_ERROR, null, traces, i, failure, null), runStart);
+            }
+
+            if (AgentDeadline.remainingMillis() == 0) {
+                return finishRun(req, new AgentLoopResult(AgentLoopStatus.DEADLINE_EXCEEDED, null, traces, i), runStart);
             }
 
             ParsedTurn parsed = parseLlmJson(raw);
@@ -121,14 +172,19 @@ public class AgentLoop implements AgentRunner {
             // J-2.3：捕获首个 plan，记日志（也随 rawLlmOutput 进 Langfuse trace），便于长任务可观测/可steer
             if (parsed.plan != null && agentPlan == null) {
                 agentPlan = parsed.plan;
-                log.info("[AgentLoop][{}] plan: {}", req.taskTag(), abbreviate(agentPlan));
+                log.info("[AgentLoop][{}] plan received", req.taskTag());
             }
 
             if (parsed.finalAnswer != null) {
                 // J-1.3：final_answer 校验 + 自纠错。不合格且还有修复预算 → 喂纠错 observation，继续循环。
-                if (validator != null && repairsLeft > 0) {
+                if (validator != null) {
                     FinalAnswerValidator.Result vr = validator.validate(parsed.finalAnswer);
                     if (!vr.valid()) {
+                        if (repairsLeft == 0) {
+                            recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, null, null,
+                                    "FINAL_ANSWER_INVALID", System.currentTimeMillis() - t0, "final-answer-invalid"));
+                            return finishRun(req, new AgentLoopResult(AgentLoopStatus.VALIDATION_ERROR, null, traces, i), runStart);
+                        }
                         repairsLeft--;
                         recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, null, null,
                                 "FINAL_ANSWER_INVALID: " + vr.correction(),
@@ -141,8 +197,7 @@ public class AgentLoop implements AgentRunner {
                 }
                 recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, null, null, null,
                         System.currentTimeMillis() - t0, null));
-                log.info("[AgentLoop][{}] iter={} COMPLETED finalAnswer={}",
-                        req.taskTag(), i, abbreviate(parsed.finalAnswer));
+                log.info("[AgentLoop][{}] iter={} COMPLETED", req.taskTag(), i);
                 return finishRun(req, new AgentLoopResult(AgentLoopStatus.COMPLETED, parsed.finalAnswer, traces, i), runStart);
             }
 
@@ -187,19 +242,22 @@ public class AgentLoop implements AgentRunner {
                 }
                 String observation;
                 try {
-                    observation = invokeTool(req.tools(), parsed.toolName, parsed.toolArgs);
+                    observation = invokeToolWithinDeadline(req.tools(), parsed.toolName, parsed.toolArgs);
                 } catch (Exception first) {
+                    if (AgentDeadline.remainingMillis() == 0) {
+                        return finishRun(req, new AgentLoopResult(AgentLoopStatus.DEADLINE_EXCEEDED, null, traces, i), runStart);
+                    }
                     log.warn("[AgentLoop][{}] iter={} tool={} 首次失败，重试一次",
-                            req.taskTag(), i, parsed.toolName, first);
+                            req.taskTag(), i, parsed.toolName);
                     try {
-                        observation = invokeTool(req.tools(), parsed.toolName, parsed.toolArgs);
+                        observation = invokeToolWithinDeadline(req.tools(), parsed.toolName, parsed.toolArgs);
                     } catch (Exception second) {
                         recordTrace(req, traces, new AgentTrace(i, raw, parsed.thought, parsed.toolName, parsed.toolArgs,
-                                "ERROR: " + second.getMessage(),
+                                "ERROR: " + second.getClass().getSimpleName(),
                                 System.currentTimeMillis() - t0,
                                 "tool-failed-after-retry"));
                         log.error("[AgentLoop][{}] iter={} tool={} 重试仍失败，终止",
-                                req.taskTag(), i, parsed.toolName, second);
+                                req.taskTag(), i, parsed.toolName);
                         return finishRun(req, new AgentLoopResult(AgentLoopStatus.TOOL_ERROR, null, traces, i), runStart);
                     }
                 }
@@ -235,8 +293,14 @@ public class AgentLoop implements AgentRunner {
      * LangfuseClient 未配 key 时整体 no-op，失败 fail-soft。
      */
     private AgentLoopResult finishRun(AgentLoopRequest req, AgentLoopResult result, Instant runStart) {
+        if (result.status() != AgentLoopStatus.COMPLETED && result.failure() == null) {
+            result = new AgentLoopResult(result.status(), result.finalAnswer(), result.traces(), result.iterations(),
+                    AgentFailure.forStatus(result.status()), result.traceId());
+        }
+        result = result.withTraceId(java.util.UUID.randomUUID().toString().replace("-", ""));
         Instant runEnd = Instant.now();
-        fireHooks(h -> h.onFinish(req.taskTag(), result));  // J-3.1
+        AgentLoopResult finishedResult = result;
+        fireHooks(h -> h.onFinish(req.taskTag(), finishedResult));  // J-3.1
         try {
             String tracesSummary = JSON.toJSONString(result.traces());
             if (tracesSummary.length() > 2048) {
@@ -247,6 +311,12 @@ public class AgentLoop implements AgentRunner {
             metadata.put("iterations", result.iterations());
             metadata.put("status", result.status().name());
             metadata.put("traces_summary", tracesSummary);
+            metadata.put("traceId", result.traceId());
+            if (result.failure() != null) {
+                metadata.put("errorCode", result.failure().code());
+                metadata.put("errorStage", result.failure().stage());
+                if (result.failure().httpStatus() != null) metadata.put("httpStatus", result.failure().httpStatus());
+            }
             langfuseClient.traceGeneration(
                     "agent.loop",
                     "unknown",
@@ -259,7 +329,7 @@ public class AgentLoop implements AgentRunner {
                     runEnd);
         } catch (Exception e) {
             log.debug("[AgentLoop][{}] Langfuse trace 上报触发异常（已忽略）: {}",
-                    req.taskTag(), e.getMessage());
+                    req.taskTag(), e.getClass().getSimpleName());
         }
         return result;
     }
@@ -282,10 +352,15 @@ public class AgentLoop implements AgentRunner {
                     .call()
                     .content();
         } catch (Exception e) {
-            log.error("[AgentLoop][{}] native 调用异常", req.taskTag(), e);
+            AgentFailure failure = AgentFailure.from(e, "LLM_REQUEST");
+            log.error("[AgentLoop][{}] native 调用异常 code={} httpStatus={} reason={}",
+                    req.taskTag(), failure.code(), failure.httpStatus(), LlmCallException.reasonFrom(e));
             recordTrace(req, traces, new AgentTrace(1, "", null, null, null, null,
-                    System.currentTimeMillis() - t0, "native-call-failed: " + e.getMessage()));
-            return finishRun(req, new AgentLoopResult(AgentLoopStatus.TOOL_ERROR, null, traces, 1), runStart);
+                    System.currentTimeMillis() - t0, "native-call-failed: " + e.getClass().getSimpleName()));
+            return finishRun(req, new AgentLoopResult(AgentLoopStatus.LLM_ERROR, null, traces, 1, failure, null), runStart);
+        }
+        if (AgentDeadline.remainingMillis() == 0) {
+            return finishRun(req, new AgentLoopResult(AgentLoopStatus.DEADLINE_EXCEEDED, null, traces, 1), runStart);
         }
         if (validator != null) {
             FinalAnswerValidator.Result vr = validator.validate(content);
@@ -300,7 +375,7 @@ public class AgentLoop implements AgentRunner {
         }
         recordTrace(req, traces, new AgentTrace(1, content, null, null, null, null,
                 System.currentTimeMillis() - t0, null));
-        log.info("[AgentLoop][{}] native COMPLETED finalAnswer={}", req.taskTag(), abbreviate(content));
+        log.info("[AgentLoop][{}] native COMPLETED", req.taskTag());
         return finishRun(req, new AgentLoopResult(AgentLoopStatus.COMPLETED, content, traces, 1), runStart);
     }
 
@@ -352,27 +427,44 @@ public class AgentLoop implements AgentRunner {
         if (req.systemPrompt() != null && !req.systemPrompt().isBlank()) {
             sb.append(req.systemPrompt()).append("\n\n");
         }
-        sb.append("# 可用工具\n");
-        if (req.tools().isEmpty()) {
-            sb.append("（本次无可用工具，请直接给出最终答案）\n");
-        } else {
-            for (ToolCallback cb : req.tools()) {
-                ToolDefinition def = cb.getToolDefinition();
-                sb.append("- name: ").append(def.name()).append('\n');
-                sb.append("  description: ").append(def.description()).append('\n');
-                String schema = def.inputSchema();
-                if (schema != null && !schema.isBlank()) {
-                    sb.append("  inputSchema: ").append(schema).append('\n');
+        // Strict turns get their complete tool catalog from response_format, without a duplicate text catalog.
+        if (!structuredOutputEnabled || req.tools().isEmpty()) {
+            sb.append("# 可用工具\n");
+            if (req.tools().isEmpty()) {
+                sb.append("（本次无可用工具，请直接给出最终答案）\n");
+            } else {
+                for (ToolCallback cb : req.tools()) {
+                    ToolDefinition def = cb.getToolDefinition();
+                    sb.append("- name: ").append(def.name()).append('\n');
+                    sb.append("  description: ").append(def.description()).append('\n');
+                    String schema = def.inputSchema();
+                    if (schema != null && !schema.isBlank()) {
+                        sb.append("  inputSchema: ").append(schema).append('\n');
+                    }
                 }
             }
         }
-        sb.append("\n# 输出协议（ReAct JSON，严格遵守）\n");
+        sb.append(structuredOutputEnabled && !req.tools().isEmpty()
+                ? "# 输出协议（ReAct JSON，严格遵守）\n"
+                : "\n# 输出协议（ReAct JSON，严格遵守）\n");
         sb.append("每一轮必须只输出一个 JSON 对象，**不要**写任何解释文字或 Markdown 代码围栏。\n");
-        sb.append("有两种合法形态，二选一：\n");
-        sb.append("1. 调用工具：{\"thought\":\"<本轮思考>\",\"action\":{\"tool\":\"<工具名>\",\"args\":{<参数对象>}}}\n");
-        sb.append("2. 给出最终答案：{\"thought\":\"<本轮思考>\",\"final_answer\":\"<最终答复字符串>\"}\n");
+        if (structuredOutputEnabled) {
+            sb.append("所有顶层字段 thought、plan、action、final_answer 必须存在。未使用的 plan、action 或 final_answer 设 null。"
+                    + "action 与 final_answer 只能有一个非 null；最终双对象直接嵌入 final_answer，不要双重 JSON 编码。\n");
+            sb.append("两种四字段形态，二选一：\n");
+            sb.append("1. 调用工具的结构示例：{\"thought\":\"<本轮思考>\",\"plan\":null,\"action\":{\"tool\":\"<从可用工具选择名称>\",\"args\":{}},\"final_answer\":null}。"
+                    + "示例 args 只是结构占位，必须按所选工具的 inputSchema 填写全部必需参数。\n");
+            sb.append("2. 最终答案的结构示例：{\"thought\":\"<简短依据>\",\"plan\":null,\"action\":null,\"final_answer\":{\"risk_analysis\":{},\"intervention_plan\":{}}}。"
+                    + "两个空对象只是结构占位，必须按任务 schema 填满 risk_analysis 与 intervention_plan 的全部必需字段；空对象不是合法最终结果。"
+                    + "final_answer 必须是双对象 JSON，不能是普通文本字符串。\n");
+            sb.append("plan 若使用则必须是字符串数组，不使用时仍须填写 null；不得添加 schema 之外的字段。\n");
+        } else {
+            sb.append("有两种合法形态，二选一：\n");
+            sb.append("1. 调用工具：{\"thought\":\"<本轮思考>\",\"action\":{\"tool\":\"<工具名>\",\"args\":{<参数对象>}}}\n");
+            sb.append("2. 给出最终答案：{\"thought\":\"<简短依据>\",\"final_answer\":{<最终答复JSON对象>}}；普通文本答案可使用字符串。\n");
+            sb.append("（可选）首轮可在 JSON 里附 \"plan\":[\"步骤1\",\"步骤2\",...] 列出你的计划，便于追踪，但不影响上述两种形态。\n");
+        }
         sb.append("收到 Observation 后必须基于其内容继续推理或直接给出 final_answer，不要重复同一个 action。\n");
-        sb.append("（可选）首轮可在 JSON 里附 \"plan\":[\"步骤1\",\"步骤2\",...] 列出你的计划，便于追踪，但不影响上述两种形态。\n");
         sb.append("（可选并行）当需要同时取多份**互不依赖**的数据时，\"action\" 可写成数组：");
         sb.append("\"action\":[{\"tool\":\"t1\",\"args\":{}},{\"tool\":\"t2\",\"args\":{}}]，将并行执行并合并 Observation。\n");
         return sb.toString();
@@ -383,9 +475,21 @@ public class AgentLoop implements AgentRunner {
         return HistoryCompactor.compose(req.userPrompt(), traces);
     }
 
+    private String invokeToolWithinDeadline(List<ToolCallback> tools, String name, String args) throws Exception {
+        if (parallelToolExecutor == null) return invokeTool(tools, name, args);
+        var future = java.util.concurrent.CompletableFuture.supplyAsync(
+                () -> invokeTool(tools, name, args), parallelToolExecutor);
+        try {
+            return future.get(AgentDeadline.remainingMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            future.cancel(true);
+            throw e;
+        }
+    }
+
     // -------- 解析 + 工具调度 --------
 
-    /** ReAct JSON 解析；trim Markdown fence + 提第一个 {...} 容忍 LLM 输出闲话。 */
+    /** ReAct JSON parser; compatible Markdown fences still require a strict JSON body. */
     ParsedTurn parseLlmJson(String raw) {
         if (raw == null || raw.isBlank()) {
             return ParsedTurn.error("empty-llm-output");
@@ -407,10 +511,9 @@ public class AgentLoop implements AgentRunner {
         if (lb < 0 || rb < lb) {
             return ParsedTurn.error("no-json-object");
         }
-        String jsonStr = s.substring(lb, rb + 1);
         JSONObject obj;
         try {
-            obj = JSON.parseObject(jsonStr);
+            obj = AgentLoopOutputSchema.parseStrictObject(s);
         } catch (Exception e) {
             return ParsedTurn.error("json-parse-failed: " + e.getClass().getSimpleName());
         }
@@ -419,7 +522,11 @@ public class AgentLoop implements AgentRunner {
         }
 
         String thought = obj.getString("thought");
-        String finalAnswer = obj.getString("final_answer");
+        Object finalValue = obj.get("final_answer");
+        String finalAnswer = finalValue instanceof JSONObject answer ? answer.toJSONString()
+                : finalValue instanceof String text ? text : null;
+        if (finalValue != null && finalAnswer == null) return ParsedTurn.error("invalid-final-answer-type");
+        if (finalAnswer != null && obj.get("action") != null) return ParsedTurn.error("ambiguous-action-and-final-answer");
         String plan = extractPlan(obj);  // J-2.3：可选规划字段
 
         if (finalAnswer != null) {
@@ -469,7 +576,7 @@ public class AgentLoop implements AgentRunner {
     String invokeTool(List<ToolCallback> tools, String name, String argsJson) {
         for (ToolCallback cb : tools) {
             if (name.equals(cb.getToolDefinition().name())) {
-                return cb.call(argsJson == null ? "{}" : argsJson);
+                return cb.call(AgentLoopOutputSchema.toolArguments(cb, argsJson == null ? "{}" : argsJson));
             }
         }
         throw new IllegalArgumentException("未知工具: " + name);
@@ -490,9 +597,13 @@ public class AgentLoop implements AgentRunner {
         StringBuilder sb = new StringBuilder();
         for (java.util.concurrent.CompletableFuture<String> f : futures) {
             try {
-                sb.append(f.join()).append('\n');
+                sb.append(f.get(AgentDeadline.remainingMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)).append('\n');
+            } catch (java.util.concurrent.TimeoutException e) {
+                futures.forEach(pending -> pending.cancel(true));
+                sb.append("Observation[error]: agent-deadline-exceeded\n");
+                break;
             } catch (Exception e) {
-                sb.append("Observation[error]: ").append(e.getMessage()).append('\n');
+                sb.append("Observation[error]: ").append(e.getClass().getSimpleName()).append('\n');
             }
         }
         return sb.toString().strip();
@@ -512,7 +623,7 @@ public class AgentLoop implements AgentRunner {
             try {
                 return invokeTool(req.tools(), c.name(), c.args());
             } catch (Exception second) {
-                return "ERROR: " + second.getMessage();
+                return "ERROR: " + second.getClass().getSimpleName();
             }
         }
     }

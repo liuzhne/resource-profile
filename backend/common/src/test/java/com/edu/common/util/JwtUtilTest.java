@@ -6,7 +6,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,6 +40,27 @@ class JwtUtilTest {
         JwtUtil util = new JwtUtil(p);
         util.init();
         return util;
+    }
+
+    @Test
+    void refreshRotationPreservesTheExactAbsoluteExpirationAndUsesFreshIssuerId() {
+        String original = jwtUtil.generateRefreshToken("42");
+        var deadline = jwtUtil.getExpiration(original);
+        for (int i = 0; i < 8; i++) {
+            String rotated = jwtUtil.generateRefreshTokenUntil("42", deadline);
+            assertThat(jwtUtil.getExpiration(rotated)).isEqualTo(deadline);
+            assertThat(jwtUtil.getClaim(rotated, "tokenUse").toString()).isEqualTo("refresh");
+            assertThat(jwtUtil.getSubject(rotated)).isEqualTo("42");
+            assertThat(rotated).isNotEqualTo(original);
+            original = rotated;
+        }
+    }
+
+    @Test
+    void absoluteRefreshCannotBeExpiredOrExceedConfiguredMaximum() {
+        assertThatThrownBy(() -> jwtUtil.generateRefreshTokenUntil("42", null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> jwtUtil.generateRefreshTokenUntil("42", new java.util.Date(System.currentTimeMillis() - 1))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> jwtUtil.generateRefreshTokenUntil("42", new java.util.Date(System.currentTimeMillis() + 8L * 86400000))).isInstanceOf(IllegalArgumentException.class);
     }
 
     // ---- A5 fail-fast ----
@@ -74,6 +98,36 @@ class JwtUtilTest {
         assertThat(jwtUtil.getSubject(token)).isEqualTo("7");
         assertThat(jwtUtil.parseRoles(token)).isEmpty();
         assertThat(jwtUtil.validateToken(token)).isTrue();
+    }
+
+    @Test
+    void repeatedAccessTokensHaveUniqueIssuerIdsEvenInTheSameSecond() {
+        assertDistinctTokenIds(() -> jwtUtil.generateAccessToken("42", Map.of(
+                "roles", java.util.List.of("teacher"), "userId", 42L, "jti", "caller-fixed-id")));
+    }
+
+    @Test
+    void repeatedRefreshTokensAlsoHaveUniqueIssuerIdsEvenInTheSameSecond() {
+        assertDistinctTokenIds(() -> jwtUtil.generateRefreshToken("42"));
+    }
+
+    private void assertDistinctTokenIds(Supplier<String> generate) {
+        Set<String> tokens = new HashSet<>();
+        Set<String> ids = new HashSet<>();
+        Set<java.util.Date> issuedAt = new HashSet<>();
+        for (int i = 0; i < 64; i++) {
+            String token = generate.get();
+            var claims = jwtUtil.parseToken(token); // Real signing and verification, not mocked claims.
+            tokens.add(token);
+            ids.add(claims.getId());
+            issuedAt.add(claims.getIssuedAt());
+            assertThat(UUID.fromString(claims.getId()).version()).isEqualTo(4);
+            assertThat(claims.getSubject()).isEqualTo("42");
+        }
+        assertThat(tokens).hasSize(64);
+        assertThat(ids).hasSize(64).doesNotContain("caller-fixed-id");
+        // At least two tokens share the encoded second: uniqueness cannot rely on iat.
+        assertThat(issuedAt.size()).isLessThan(64);
     }
 
     @Test

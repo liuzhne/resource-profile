@@ -16,5 +16,6 @@ public class SubmitAnswerRequest {
         private Long questionId;
         private List<Integer> optionIndices;
         private String text;
+        private Integer scaleValue;
     }
 }

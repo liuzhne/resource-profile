@@ -80,4 +80,26 @@ class SkillLoaderTest {
         SkillLoader l = loader(true, " risk-assessment , , intervention-design ");
         assertThat(l.activeNames()).containsExactly("risk-assessment", "intervention-design");
     }
+
+    @Test
+    void mentalSkillRequiresExplicitItemEvidenceAndUsesExistingRiskFields() {
+        String body = loader(true, "psychological-screening").getSkill("psychological-screening").orElseThrow().body();
+        assertThat(body).contains("只有工具明确返回题目级结果时", "总分或等级不能推导单题答案", "未测量", "urgency_reason")
+                .doesNotContain("`urgency` 拉满");
+    }
+
+    @Test
+    void complianceSkillSeparatesReactOutputFromIndependentAuditContract() {
+        String body = loader(true, "compliance-audit").getSkill("compliance-audit").orElseThrow().body();
+        assertThat(body).contains("risk_analysis", "intervention_plan", "独立 P4", "audit_passed", "audit_items",
+                        "redacted_suggestions", "manual_review_required", "不能代替审核接口判定通过")
+                .doesNotContain("输出 `passed`", "`passed=false`", "`passed=true`");
+    }
+
+    @Test
+    void riskSkillTreatsAbsentFamilyNotesAndItemScoresAsUnknown() {
+        String body = loader(true, "risk-assessment").getSkill("risk-assessment").orElseThrow().body();
+        assertThat(body).contains("不假设接口一定包含家庭经济信息或辅导员备注", "均属未知", "不能从专业、总分或等级推导这些事实")
+                .doesNotContain("基础档案（年级、专业、家庭经济、辅导员备注）");
+    }
 }

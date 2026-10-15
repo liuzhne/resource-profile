@@ -29,6 +29,7 @@ class AccessGuardTest {
     @BeforeEach
     void setUp() {
         jwtUtil = mock(JwtUtil.class);
+        when(jwtUtil.parseToken("tok")).thenReturn(io.jsonwebtoken.Jwts.claims().build());
         guard = new AccessGuard(jwtUtil, new InternalCallCredential(SECRET));
     }
 
@@ -161,5 +162,45 @@ class AccessGuardTest {
         when(jwtUtil.getSubject("tok")).thenReturn("7");
         when(jwtUtil.parseRoles("tok")).thenReturn(Set.of("counselor"));
         assertThat(guard.allowSelfRoleOrInternal(AUTH, 99L, Roles.STAFF_VIEW)).isTrue();
+    }
+
+    private void request(String method, String path, Object permissions) {
+        var request=new MockHttpServletRequest(method,path);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        when(jwtUtil.parseRoles("tok")).thenReturn(Set.of("teacher"));
+        var builder=io.jsonwebtoken.Jwts.claims();
+        if(permissions!=null) builder.add("permissions",permissions);
+        when(jwtUtil.parseToken("tok")).thenReturn(builder.build());
+    }
+
+    @Test void editablePermissionsRestrictReadAndWriteWithoutElevatingRoles() {
+        request("GET","/student/42",java.util.List.of("student:read"));
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isTrue();
+        assertThat(guard.hasAnyRole(AUTH,Roles.ADMIN)).isFalse();
+        request("PUT","/student/42",java.util.List.of("student:read"));
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isFalse();
+        request("POST","/student/42",java.util.List.of("student:write"));
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isTrue();
+        request("HEAD","/api/mental/42",java.util.List.of("mental:read"));
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isTrue();
+        request("GET","/data/dashboard",java.util.List.of());
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isFalse();
+    }
+    @Test void oldClaimsOtherPathsAndOwnerKeepExistingBoundaries() {
+        request("GET","/student/42",null);
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isTrue();
+        request("GET","/auth/profile",java.util.List.of());
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isTrue();
+        request("GET","",java.util.List.of());
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isTrue();
+        request("PUT","/mental/42",java.util.List.of());
+        when(jwtUtil.getSubject("tok")).thenReturn("42");
+        assertThat(guard.isSelfOrAnyRole(AUTH,42L,Roles.STAFF_VIEW)).isTrue();
+    }
+    @Test void corruptPermissionsAndParsingFailClosed() {
+        request("GET","/teacher/list","teacher:read");
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isFalse();
+        when(jwtUtil.parseToken("tok")).thenThrow(new IllegalArgumentException());
+        assertThat(guard.hasAnyRole(AUTH,Roles.STAFF_VIEW)).isFalse();
     }
 }

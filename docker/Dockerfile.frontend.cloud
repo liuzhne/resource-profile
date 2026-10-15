@@ -1,0 +1,26 @@
+# Single-cloud-VM frontend: same-origin API/SSE and AI routes enabled by build argument.
+# Build context = frontend/. Keep Render and the existing nginx image unchanged.
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+ARG VITE_AI_ENABLED=true
+ARG VITE_LANGFUSE_URL=https://jp.cloud.langfuse.com
+ARG VITE_REQUEST_PROFILE=standard
+ARG VITE_ENABLE_SERVICE_WARMUP=false
+ENV VITE_AI_ENABLED=${VITE_AI_ENABLED} \
+    VITE_LANGFUSE_URL=${VITE_LANGFUSE_URL} \
+    VITE_REQUEST_PROFILE=${VITE_REQUEST_PROFILE} \
+    VITE_ENABLE_SERVICE_WARMUP=${VITE_ENABLE_SERVICE_WARMUP} \
+    VITE_API_BASE_URL=/api \
+    VITE_SSE_BASE_URL=/api \
+    VITE_PREWARM_URLS=""
+RUN npm run build
+
+FROM caddy:2-alpine
+ARG VITE_LANGFUSE_URL=https://jp.cloud.langfuse.com
+LABEL org.educare.langfuse-console-url=${VITE_LANGFUSE_URL}
+COPY --from=build /app/dist /srv
+# Caddyfile is mounted by docker-compose.cloud.yml; certificates persist in /data.
+EXPOSE 80 443

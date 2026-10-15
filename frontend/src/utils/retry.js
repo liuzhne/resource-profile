@@ -1,55 +1,169 @@
-// 冷启动重试的决策逻辑。
-// 抽成纯函数便于单测：这里判错会导致写操作被重复执行（如「新增学生」落库两条）。
+// Replay only reads. A timeout or HTTP 429 never proves that a write was not applied.
+export const DEFAULT_TIMEOUT = 15000
+export const DEFAULT_BUDGET = 30000
+export const MAX_RETRY = 2
+export const RETRY_DELAYS = [250, 750]
+const READ_METHODS = new Set(['get', 'head', 'options'])
+const STANDARD = Object.freeze({
+  timeout: DEFAULT_TIMEOUT,
+  budget: DEFAULT_BUDGET,
+  maxRetry: MAX_RETRY,
+  delays: RETRY_DELAYS
+})
+const RENDER = Object.freeze({
+  timeout: 60000,
+  budget: 240000,
+  maxRetry: 6,
+  delays: [5000, 15000, 30000, 45000, 60000, 60000]
+})
+const positive = (value) =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 2147483647
 
-// 重试窗口必须覆盖完整的冷启动过程。
-//
-// 实测（2026-09-13）：
-//   · Render 把首个请求挂住约 114s 后返回 429，此时唤醒仍在后台继续
-//   · auth-service 端到端冷启动约 157s（JVM 自身 107s + 容器调度）
-//   · 服务就绪后全链路仅 1.6s
-//
-// 也就是说：首次请求注定失败，但它触发了唤醒；只要重试撑到唤醒完成就能成功。
-// #10 的 131s 窗口仍短于 157s，永远差一口气 —— 这是拉到 215s 的原因。
-export const MAX_RETRY = 6
-export const RETRY_DELAYS = [5000, 15000, 30000, 45000, 60000, 60000]
+export const resolveRequestProfile = (env = {}) =>
+  env.VITE_REQUEST_PROFILE === 'render' ? RENDER : STANDARD
+export const serviceWarmupEnabled = (env = {}) =>
+  env.VITE_REQUEST_PROFILE === 'render' && env.VITE_ENABLE_SERVICE_WARMUP === 'true'
 
-// 天然幂等的方法，超时后重放不产生副作用
-const IDEMPOTENT_METHODS = ['get', 'head', 'options']
+export const loginRequestOptions = (env = {}) => ({
+  timeout: env.VITE_REQUEST_PROFILE === 'render' ? 180000 : DEFAULT_TIMEOUT,
+  requestBudgetMs: env.VITE_REQUEST_PROFILE === 'render' ? 240000 : DEFAULT_BUDGET,
+  retry: false
+})
 
-/** 冷启动类失败：服务在休眠/唤醒中，而非业务出错 */
-export const isColdStartFailure = (error) => {
-  const status = error?.response?.status
-  if (status === 429 || [502, 503, 504].includes(status)) return true
-  return error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT' || !error?.response
+export const isReadRequest = (config) =>
+  config?.method == null ||
+  (typeof config.method === 'string' && READ_METHODS.has(config.method.toLowerCase()))
+
+export const isCanceledRequest = (error) =>
+  error?.code === 'ERR_CANCELED' || error?.name === 'AbortError' || error?.__CANCEL__ === true
+
+export const isTransientFailure = (error) => {
+  if (isCanceledRequest(error) || error?.code === 'ERR_REQUEST_BUDGET') return false
+  if (error?.response) return [429, 502, 503, 504].includes(error.response.status)
+  return ['ECONNABORTED', 'ETIMEDOUT', 'ERR_NETWORK'].includes(error?.code)
 }
 
-/**
- * 是否值得重试。
- *
- * 关键约束：超时不代表请求没被服务端执行 —— 冷启动时很可能是「已受理但响应慢」。
- * 因此非幂等写操作默认不因超时重试，否则会重复落库。
- * 唯一对所有方法放行的是 429：那是 Render 边缘层在休眠期直接拦掉的，
- * 请求从未抵达应用，重放绝对安全。
- */
-export const shouldRetry = (error, config) => {
-  if (!config || config.retry === false) return false
-  if ((config.__retryCount || 0) >= MAX_RETRY) return false
-
-  const status = error?.response?.status
-
-  // 429：请求未抵达应用，任何方法都可安全重试
-  if (status === 429) return true
-
-  const method = (config.method || 'get').toLowerCase()
-  // retryUnsafe 供调用方对「重复执行无害」的写操作显式开启（如登录）
-  const safeToReplay = IDEMPOTENT_METHODS.includes(method) || config.retryUnsafe === true
-  if (!safeToReplay) return false
-
-  if (error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT') return true
-  if (!error?.response) return true
-  return [502, 503, 504].includes(status)
+export const resolveRequestPolicy = (config, profile = STANDARD) => {
+  const binary = ['blob', 'arraybuffer'].includes(config.responseType)
+  const suppliedTimeout = positive(config.timeout) ? config.timeout : profile.timeout
+  // Blob APIs currently specify no timeout; preserve a full minute for actual PDF/CSV downloads.
+  const timeout = binary && suppliedTimeout === profile.timeout ? 60000 : suppliedTimeout
+  const longOperation = binary || timeout > profile.timeout
+  const budget = positive(config.requestBudgetMs)
+    ? config.requestBudgetMs
+    : binary
+      ? Math.max(90000, timeout)
+      : Math.max(profile.budget, timeout)
+  return {
+    timeout,
+    budget,
+    delays: profile.delays,
+    maxRetry:
+      config.retry === false || !isReadRequest(config) || (longOperation && config.retry !== true)
+        ? 0
+        : profile.maxRetry
+  }
 }
 
-/** 第 n 次重试前的等待时长（n 从 1 起） */
-export const retryDelay = (attempt) =>
-  RETRY_DELAYS[attempt - 1] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1]
+export const shouldRetry = (error, config, policy = resolveRequestPolicy(config || {})) =>
+  !!config &&
+  config.retry !== false &&
+  isReadRequest(config) &&
+  (config.__retryCount || 0) < policy.maxRetry &&
+  !config.signal?.aborted &&
+  isTransientFailure(error)
+
+export const retryDelay = (attempt, policy = STANDARD) =>
+  policy.delays[attempt - 1] ?? policy.delays[policy.delays.length - 1]
+
+export const retryAfterDelay = (error, attempt, policy, wallNow = Date.now()) => {
+  const headers = error?.response?.headers
+  const raw = headers?.get?.('Retry-After') ?? headers?.['retry-after']
+  let requested = 0
+  if (typeof raw === 'string' && /^\d+(?:\.\d+)?$/.test(raw.trim())) requested = Number(raw) * 1000
+  else if (typeof raw === 'string') {
+    const date = Date.parse(raw)
+    if (Number.isFinite(date)) requested = Math.max(0, date - wallNow)
+  }
+  return Math.max(retryDelay(attempt, policy), requested)
+}
+
+const policyError = (code) => {
+  const error = new Error(code === 'ERR_CANCELED' ? '请求已取消' : '请求超过总时间预算')
+  error.code = code
+  if (code === 'ERR_CANCELED') {
+    error.name = 'CanceledError'
+    error.__CANCEL__ = true
+  }
+  return error
+}
+
+// A class retains identity across Axios config merges (plain objects are recursively copied).
+export class RequestBudget {
+  constructor(policy, signal, { now, setTimer, clearTimer }) {
+    this.policy = policy
+    this.now = now
+    // Browser timers require their native receiver; never bind them to this budget.
+    this.setTimer = (...args) => setTimer(...args)
+    this.clearTimer = (...args) => clearTimer(...args)
+    this.deadline = now() + policy.budget
+    this.controller = new AbortController()
+    this.originalSignal = signal
+    this.closed = false
+    this.reason = null
+    this.onCancel = () => this.abort('ERR_CANCELED')
+    if (signal?.aborted) this.onCancel()
+    else signal?.addEventListener('abort', this.onCancel, { once: true })
+    if (!this.reason) this.timer = setTimer(() => this.abort('ERR_REQUEST_BUDGET'), policy.budget)
+  }
+  get signal() {
+    return this.controller.signal
+  }
+  remaining() {
+    return Math.max(0, this.deadline - this.now())
+  }
+  abort(reason) {
+    if (this.closed || this.reason) return
+    this.reason = reason
+    this.controller.abort()
+  }
+  failure() {
+    if (!this.closed && !this.reason && this.remaining() <= 0) this.abort('ERR_REQUEST_BUDGET')
+    return this.reason ? policyError(this.reason) : null
+  }
+  waitFor(promise) {
+    return new Promise((resolve, reject) => {
+      const fail = this.failure()
+      const onAbort = () => settle(reject, this.failure())
+      const settle = (fn, value) => {
+        this.signal.removeEventListener('abort', onAbort)
+        fn(value)
+      }
+      // Observe the underlying shared promise even when this request has already canceled.
+      Promise.resolve(promise).then(
+        (value) => settle(resolve, value),
+        (error) => settle(reject, error)
+      )
+      if (fail) reject(fail)
+      else this.signal.addEventListener('abort', onAbort, { once: true })
+    })
+  }
+  async delay(milliseconds) {
+    let timer
+    try {
+      await this.waitFor(
+        new Promise((resolve) => {
+          timer = this.setTimer(resolve, milliseconds)
+        })
+      )
+    } finally {
+      this.clearTimer(timer)
+    }
+  }
+  finish() {
+    if (this.closed) return
+    this.closed = true
+    this.clearTimer(this.timer)
+    this.originalSignal?.removeEventListener('abort', this.onCancel)
+  }
+}

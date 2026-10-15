@@ -18,7 +18,7 @@ spring:
             readTimeout: 90000   # plan/audit 经过 LLM 可能 60s+，留余量
           ai-inference-service:
             connectTimeout: 5000
-            readTimeout: 120000  # AI 链路允许更长
+            readTimeout: ${AI_INFERENCE_READ_TIMEOUT_MS:240000} # Python bounded 180s wait/request + network margin
 
     # Sentinel 流控（D 阶段）：dashboard 留空则只启用本地编码规则，不上报
     sentinel:
@@ -110,7 +110,7 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   global-config:
     db-config:
       logic-delete-field: deleted
@@ -136,7 +136,7 @@ management:
 # 日志
 logging:
   level:
-    com.edu.agent.mapper: debug
+    com.edu.agent.mapper: warn
 
 educare:
   # MCP 内部预共享 token（纵深防御，A3）。空=仅靠 127.0.0.1 网络隔离（默认）；
@@ -178,16 +178,32 @@ educare:
   llm:
     # G-1.4：透传给 llama.cpp 的扩展开关。新版本 llama.cpp 默认 true，显式声明兼容旧版。
     cache-prompt: ${EDUCARE_LLM_CACHE_PROMPT:true}
+    request-policy:
+      enabled: ${EDUCARE_LLM_REQUEST_POLICY_ENABLED:false}
+      shared-cooldown-enabled: ${EDUCARE_LLM_SHARED_COOLDOWN_ENABLED:true}
+      queue-capacity: ${EDUCARE_LLM_REQUEST_QUEUE_CAPACITY:2}
+      max-wait-ms: ${EDUCARE_LLM_REQUEST_MAX_WAIT_MS:180000}
+      min-interval-ms: ${EDUCARE_LLM_MIN_REQUEST_INTERVAL_MS:60000}
+      max-attempts: ${EDUCARE_LLM_RETRY_MAX_ATTEMPTS:3}
+      max-retry-after-ms: ${EDUCARE_LLM_RETRY_MAX_DELAY_MS:120000}
+      max-output-tokens: ${EDUCARE_LLM_MAX_OUTPUT_TOKENS:2400}
+      max-input-characters: ${EDUCARE_LLM_MAX_INPUT_CHARACTERS:18000}
   # AgentLoop 主路径开关（单布尔）。
   # enabled=true（默认）→ AgentTaskServiceImpl.doExecute 走 AgentLoop（一次性 think→tool→observe 完成
-  #   "风险识别 + 计划生成"，RAG 检索由 knowledge-rag MCP tool 自然完成；合规审核 P4 仍走原 audit 端点）。
+  #   "风险识别 + 计划生成"，RAG 检索由 knowledge-rag MCP tool 自然完成；合规审核 P4 由 Java AgentGenerationService 执行）。
   # enabled=false → 回落旧 4 阶段流水线（risk → rag → plan → audit）作 fallback。
   agent:
+    task-concurrency: ${EDUCARE_AGENT_TASK_CONCURRENCY:1}
+    task-queue-capacity: ${EDUCARE_AGENT_TASK_QUEUE_CAPACITY:2}
+    task-lock-seconds: ${EDUCARE_AGENT_TASK_LOCK_SECONDS:1200}
     loop:
       enabled: ${EDUCARE_AGENT_LOOP_ENABLED:true}
       # J-3.4：工具协议。react（默认，thought/observation 细粒度可观测）或 native（Spring AI 原生
       # tool-calling 隐式内部循环，省协议开销，适合云端/大模型；失去 thought/observation 细粒度）。
       protocol: ${EDUCARE_AGENT_LOOP_PROTOCOL:react}
+      deadline-seconds: ${EDUCARE_AGENT_LOOP_DEADLINE_SECONDS:900}
+      structured-output:
+        enabled: ${EDUCARE_AGENT_LOOP_STRUCTURED_OUTPUT_ENABLED:false}
     # H-3.5：Skill 加载器。enabled=true 时把 active 列出的 classpath skills/*.md 注入 AgentLoop system prompt。
     skills:
       enabled: ${EDUCARE_AGENT_SKILLS_ENABLED:true}
@@ -210,9 +226,13 @@ educare:
       enabled: ${EDUCARE_AGENT_CHECKPOINT_ENABLED:false}
       ttl-seconds: ${EDUCARE_AGENT_CHECKPOINT_TTL:3600}
 
-# G-5.3：Langfuse trace。所有字段空时 LangfuseClient 自动 no-op，主流程零影响。
-# self-hosted v2：host 用 docker 内网名 langfuse-server:3000；本地裸跑用 http://localhost:3001
+# Langfuse v4 OTLP HTTP/JSON。host 是实例根 URL，缺少任一凭证时 no-op。
+# 默认不外传 prompt/output 或自由文本 metadata；内容捕获只在合成数据验收时显式开启。
 langfuse:
+  enabled: ${LANGFUSE_ENABLED:true}
   public-key: ${LANGFUSE_PUBLIC_KEY:}
   secret-key: ${LANGFUSE_SECRET_KEY:}
   host: ${LANGFUSE_HOST:}
+  capture-content: ${LANGFUSE_CAPTURE_CONTENT:false}
+  connect-timeout-ms: ${LANGFUSE_CONNECT_TIMEOUT_MS:2000}
+  read-timeout-ms: ${LANGFUSE_READ_TIMEOUT_MS:5000}

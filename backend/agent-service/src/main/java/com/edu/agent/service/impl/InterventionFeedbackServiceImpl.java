@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.edu.agent.dto.FeedbackRequest;
 import com.edu.agent.entity.AgentTask;
 import com.edu.agent.entity.InterventionFeedback;
+import com.edu.agent.enums.TaskStatus;
+import com.edu.agent.service.PlanViewNormalizer;
 import com.edu.agent.mapper.AgentTaskMapper;
 import com.edu.agent.mapper.InterventionFeedbackMapper;
 import com.edu.agent.service.InterventionFeedbackService;
@@ -48,6 +50,15 @@ public class InterventionFeedbackServiceImpl implements InterventionFeedbackServ
         AgentTask task = agentTaskMapper.selectById(req.getTaskId());
         if (task == null || (task.getDeleted() != null && task.getDeleted() == 1)) {
             throw new IllegalArgumentException("任务不存在: " + req.getTaskId());
+        }
+        if (task.getStatus() != TaskStatus.COMPLETED && task.getStatus() != TaskStatus.REJECTED) {
+            throw new IllegalArgumentException("任务尚未形成终态，不能提交干预反馈");
+        }
+        if (!PlanViewNormalizer.hasContent(PlanViewNormalizer.normalize(task.getInterventionPlan()))) {
+            throw new IllegalArgumentException("任务没有有效干预方案，不能提交反馈");
+        }
+        if (req.getComment() != null && req.getComment().length() > 1000) {
+            throw new IllegalArgumentException("文字反馈最多1000字");
         }
 
         InterventionFeedback fb = new InterventionFeedback();

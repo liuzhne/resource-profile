@@ -39,7 +39,7 @@ async def search_collection(query: str, collection_key: str, top_k: int) -> Dict
             "reranked": bool,
             "fallback": bool,
             "count": int,
-            "chunks": [{chunk_id, title, content, score, rerank_score, source_db}, ...]
+            "chunks": [{chunk_id, doc_id, title, content, score, rerank_score, source_db, source, source_url}, ...]
         }
     """
     top_k = _clamp_top_k(top_k)
@@ -56,7 +56,7 @@ async def search_collection(query: str, collection_key: str, top_k: int) -> Dict
             "error": "empty query",
         }
 
-    logger.info("[mcp:rag] search collection=%s top_k=%s query=%s", collection_key, top_k, query[:48])
+    logger.info("[mcp:rag] search collection=%s top_k=%s query_chars=%d", collection_key, top_k, len(query))
     pipeline_result = await retrieve_from_collection(
         query=query,
         collection_key=collection_key,

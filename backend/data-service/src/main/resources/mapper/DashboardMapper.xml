@@ -3,92 +3,91 @@
 <mapper namespace="com.edu.data.mapper.DashboardMapper">
     <select id="selectStatistics" resultType="java.util.HashMap">
         SELECT
-            (SELECT COUNT(*) FROM teacher_info WHERE status = 1 AND deleted = 0) AS teacherCount,
-            (SELECT COUNT(*) FROM student_info WHERE status = 1 AND deleted = 0) AS studentCount,
-            (SELECT COUNT(*) FROM mental_questionnaire WHERE status = 1 AND deleted = 0) AS questionnaireCount,
-            (SELECT COUNT(DISTINCT student_id) FROM mental_assessment WHERE level IN ('高危', '重度')) AS warningCount
-    </select>
-
-    <select id="countActiveTeachers" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM teacher_info WHERE status = 1 AND deleted = 0
-    </select>
-
-    <select id="countActiveStudents" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM student_info WHERE status = 1 AND deleted = 0
-    </select>
-
-    <select id="countActiveQuestionnaires" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM mental_questionnaire WHERE status = 1 AND deleted = 0
-    </select>
-
-    <select id="countWarningStudents" resultType="java.lang.Long">
-        SELECT COUNT(DISTINCT student_id) FROM mental_assessment WHERE level IN ('高危', '重度')
+            (SELECT COUNT(*) FROM teacher_info WHERE status=1 AND deleted=0) AS `teacherCount`,
+            (SELECT COUNT(*) FROM student_info WHERE status=1 AND deleted=0) AS `studentCount`,
+            (SELECT COUNT(*) FROM mental_response mr
+             JOIN student_info s ON s.id=mr.student_id AND s.deleted=0
+             JOIN mental_questionnaire q ON q.id=mr.questionnaire_id AND q.deleted=0
+             WHERE mr.create_time &gt;= #{startTime} AND mr.create_time &lt; #{endTime}) AS `todayCompletionCount`,
+            (SELECT COUNT(DISTINCT ma.student_id) FROM mental_assessment ma
+             JOIN student_info s ON s.id=ma.student_id AND s.deleted=0
+             WHERE ma.level IN ('中度','重度','高危') AND ma.warning_status IN ('OPEN','IN_PROGRESS')) AS `warningCount`
     </select>
 
     <select id="selectTeacherTrend" resultType="java.util.HashMap">
-        SELECT
-            DATE(create_time) as day,
-            COUNT(*) as count
+        SELECT DATE(create_time) AS `day`, COUNT(*) AS count
         FROM teacher_info
-        WHERE deleted = 0 AND create_time &gt;= #{startDate}
-        GROUP BY DATE(create_time)
-        ORDER BY day
+        WHERE deleted=0 AND create_time &gt;= #{startDate} AND create_time &lt; #{endDate}
+        GROUP BY DATE(create_time) ORDER BY `day`
     </select>
-
     <select id="selectStudentTrend" resultType="java.util.HashMap">
-        SELECT
-            DATE(create_time) as day,
-            COUNT(*) as count
+        SELECT DATE(create_time) AS `day`, COUNT(*) AS count
         FROM student_info
-        WHERE deleted = 0 AND create_time &gt;= #{startDate}
-        GROUP BY DATE(create_time)
-        ORDER BY day
+        WHERE deleted=0 AND create_time &gt;= #{startDate} AND create_time &lt; #{endDate}
+        GROUP BY DATE(create_time) ORDER BY `day`
     </select>
-
     <select id="selectTeacherTrendByMonth" resultType="java.util.HashMap">
-        SELECT
-            DATE_FORMAT(create_time, '%Y-%m') as ym,
-            COUNT(*) as count
+        SELECT DATE_FORMAT(create_time,'%Y-%m') AS ym, COUNT(*) AS count
         FROM teacher_info
-        WHERE deleted = 0 AND create_time &gt;= #{startDate}
-        GROUP BY DATE_FORMAT(create_time, '%Y-%m')
-        ORDER BY ym
+        WHERE deleted=0 AND create_time &gt;= #{startDate} AND create_time &lt; #{endDate}
+        GROUP BY DATE_FORMAT(create_time,'%Y-%m') ORDER BY ym
     </select>
-
     <select id="selectStudentTrendByMonth" resultType="java.util.HashMap">
-        SELECT
-            DATE_FORMAT(create_time, '%Y-%m') as ym,
-            COUNT(*) as count
+        SELECT DATE_FORMAT(create_time,'%Y-%m') AS ym, COUNT(*) AS count
         FROM student_info
-        WHERE deleted = 0 AND create_time &gt;= #{startDate}
-        GROUP BY DATE_FORMAT(create_time, '%Y-%m')
-        ORDER BY ym
+        WHERE deleted=0 AND create_time &gt;= #{startDate} AND create_time &lt; #{endDate}
+        GROUP BY DATE_FORMAT(create_time,'%Y-%m') ORDER BY ym
     </select>
 
-    <select id="selectUserDistribution" resultType="java.util.HashMap">
-        SELECT
-            CASE user_type
-                WHEN 0 THEN '行政人员'
-                WHEN 1 THEN '教师'
-                WHEN 2 THEN '学生'
-                ELSE '其他'
-            END as name,
-            COUNT(*) as value
-        FROM sys_user
-        WHERE deleted = 0 AND status = 1
-        GROUP BY user_type
+    <select id="selectPortraitDistribution" resultType="java.util.HashMap">
+        SELECT '教师' AS name, COUNT(*) AS `value` FROM teacher_info WHERE deleted=0 AND status=1
+        UNION ALL
+        SELECT '学生' AS name, COUNT(*) AS `value` FROM student_info WHERE deleted=0 AND status=1
     </select>
-
     <select id="selectRecentLogins" resultType="java.util.HashMap">
-        SELECT
-            username,
-            role,
-            ip,
-            DATE_FORMAT(login_time, '%Y-%m-%d %H:%i') as time
-        FROM sys_login_log
-        WHERE status = 1
-        ORDER BY login_time DESC
-        LIMIT 10
+        SELECT username,role,ip,DATE_FORMAT(login_time,'%Y-%m-%d %H:%i') AS time
+        FROM sys_login_log WHERE status=1 ORDER BY login_time DESC,id DESC LIMIT 10
     </select>
 
+    <!-- Pending assessment states and terminal Agent exceptions are source facts, not invented events. -->
+    <sql id="mentalPendingWhere">
+        ma.level IN ('中度','重度','高危') AND ma.warning_status IN ('OPEN','IN_PROGRESS') AND s.deleted=0
+    </sql>
+    <sql id="agentExceptionWhere">
+        a.deleted=0 AND a.status IN ('FAILED','REJECTED') AND s.deleted=0
+    </sql>
+    <select id="countTodos" resultType="java.lang.Long">
+        SELECT
+            (SELECT COUNT(*) FROM mental_assessment ma JOIN student_info s ON s.id=ma.student_id
+             WHERE <include refid="mentalPendingWhere" />)
+          + (SELECT COUNT(*) FROM agent_task a JOIN student_info s ON s.id=a.student_id
+             WHERE <include refid="agentExceptionWhere" />)
+    </select>
+    <select id="selectTodos" resultType="com.edu.data.dto.TodoItemDto">
+        SELECT * FROM (
+          SELECT 'MENTAL_WARNING' AS kind,ma.id AS source_id,ma.student_id,
+                 '心理预警待跟进' AS title,ma.warning_status AS status,ma.level,ma.create_time AS event_time
+          FROM mental_assessment ma JOIN student_info s ON s.id=ma.student_id
+          WHERE <include refid="mentalPendingWhere" />
+          UNION ALL
+          SELECT 'AGENT_EXCEPTION' AS kind,a.id AS source_id,a.student_id,
+                 CASE WHEN a.status='REJECTED' THEN 'Agent 审核拒绝，需人工复核' ELSE 'Agent 任务失败，需检查' END AS title,
+                 a.status,NULL AS level,TIMESTAMPADD(HOUR,8,a.updated_at) AS event_time
+          FROM agent_task a JOIN student_info s ON s.id=a.student_id
+          WHERE <include refid="agentExceptionWhere" />
+        ) pending_sources
+        ORDER BY event_time DESC,kind,source_id DESC LIMIT #{limit}
+    </select>
+    <select id="search" resultType="com.edu.data.dto.SearchResultDto">
+        SELECT * FROM (
+          SELECT 'teacher' AS type,id,name,employee_id AS code,dept_name
+          FROM teacher_info
+          WHERE deleted=0 AND (LOCATE(#{query},name)&gt;0 OR LOCATE(#{query},employee_id)&gt;0)
+          UNION ALL
+          SELECT 'student' AS type,id,name,student_id AS code,dept_name
+          FROM student_info
+          WHERE deleted=0 AND (LOCATE(#{query},name)&gt;0 OR LOCATE(#{query},student_id)&gt;0)
+        ) directory
+        ORDER BY type,name,id LIMIT #{limit}
+    </select>
 </mapper>

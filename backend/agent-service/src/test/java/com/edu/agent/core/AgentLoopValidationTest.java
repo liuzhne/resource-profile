@@ -46,19 +46,19 @@ class AgentLoopValidationTest {
     }
 
     @Test
-    void exhaustedRepairBudgetAcceptsLastAnswer() {
+    void exhaustedRepairBudgetFailsClosed() {
         ChatClient cc = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-        // 始终不合格：repair 预算 2 → 第1、2轮修复，第3轮预算耗尽接受
+        // 始终不合格：repair 预算 2 → 第1、2轮修复，第3轮预算耗尽失败
         when(cc.prompt().system(anyString()).user(anyString()).call().content())
                 .thenReturn(fa("bad"), fa("bad"), fa("bad"));
 
         AgentLoopResult r = loop(cc).run(new AgentLoopRequest("s", "u", List.of(), 5, "val"), onlyGood);
 
-        assertThat(r.status()).isEqualTo(AgentLoopStatus.COMPLETED);
-        assertThat(r.finalAnswer()).isEqualTo("bad");
+        assertThat(r.status()).isEqualTo(AgentLoopStatus.VALIDATION_ERROR);
+        assertThat(r.finalAnswer()).isNull();
         assertThat(r.iterations()).isEqualTo(3);
         assertThat(r.traces().stream().filter(t -> "final-answer-invalid".equals(t.parseError())).count())
-                .isEqualTo(2);
+                .isEqualTo(3);
     }
 
     @Test
@@ -68,5 +68,19 @@ class AgentLoopValidationTest {
         AgentLoopResult r = loop(cc).run(new AgentLoopRequest("s", "u", List.of(), 5, "val"));  // run(req) 无校验器
         assertThat(r.status()).isEqualTo(AgentLoopStatus.COMPLETED);
         assertThat(r.iterations()).isEqualTo(1);
+    }
+    @Test
+    void lateSuccessfulResponseCannotCompleteExpiredLoop() {
+        ChatClient cc = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+        when(cc.prompt().system(anyString()).user(anyString()).call().content()).thenAnswer(invocation -> {
+            Thread.sleep(30);
+            return fa("good");
+        });
+        try (var ignored = AgentDeadline.start(10)) {
+            AgentLoopResult r = loop(cc).run(new AgentLoopRequest("s", "u", List.of(), 5, "deadline"), onlyGood);
+            assertThat(r.status()).isEqualTo(AgentLoopStatus.DEADLINE_EXCEEDED);
+            assertThat(r.finalAnswer()).isNull();
+        }
+        assertThat(AgentDeadline.remainingMillis()).isEqualTo(Long.MAX_VALUE);
     }
 }

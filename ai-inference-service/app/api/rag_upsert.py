@@ -15,8 +15,10 @@ POST /api/v1/rag/upsert
 """
 import hashlib
 import hmac
+import json
 import logging
 import time
+import uuid
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -27,6 +29,7 @@ from app.services.embedding_client import get_embedding_client
 from app.services.milvus_client import delete_by_doc_id, insert_chunks
 from app.services.redis_client import cache_get, cache_setex
 from app.services.text_splitter import ChunkParams, MAX_CHUNKS, split
+from app.services.knowledge_provenance import revision_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/rag", tags=["rag"])
@@ -62,11 +65,38 @@ class UpsertResponse(BaseModel):
 
 
 def _hash_key(collection: str, doc_id: str) -> str:
-    return f"edu:rag:upsert:hash:{collection}:{doc_id}"
+    return f"edu:rag:upsert:hash:v2:{collection}:{doc_id}"
 
 
 def _text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
+
+
+def _stored_metadata(metadata: Dict[str, Any]) -> tuple[str, str]:
+    title = metadata.get("title") or ""
+    source = metadata.get("source_url") or metadata.get("source") or ""
+    if not isinstance(title, str) or not isinstance(source, str):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="title/source/source_url 必须是字符串")
+    title, source = title.strip(), source.strip()
+    # Existing Milvus VARCHAR limits are bytes, not Python characters. Never
+    # silently truncate an attribution URL into a different or invalid URL.
+    if len(source.encode("utf-8")) > 64:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="当前 Milvus source 字段上限为64字节，来源不得截断；请使用有效短出处或先迁移集合")
+    if len(title.encode("utf-8")) > 255:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="title 超过当前 Milvus 255字节上限")
+    return title, source
+
+
+def _document_hash(req: UpsertRequest, title: str, source: str) -> str:
+    # Metadata-only corrections and changed splitting must replace existing
+    # chunks too. A text-only hash previously skipped those corrections.
+    payload = json.dumps({"text": req.text, "title": title, "source": source,
+                          "chunk_strategy": req.chunk_strategy.model_dump()},
+                         ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return _text_hash(payload)
 
 
 def _check_admin_token(provided: Optional[str]) -> None:
@@ -94,8 +124,9 @@ async def upsert_knowledge(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail=f"未知 collection: {req.collection}")
 
-    # 幂等短路：相同 doc_id + 相同 text → 直接 skip
-    new_hash = _text_hash(req.text)
+    title, source = _stored_metadata(req.metadata)
+    # 幂等短路：相同文档内容、持久化出处及切片策略 → 直接 skip
+    new_hash = _document_hash(req, title, source)
     hash_key = _hash_key(req.collection, req.doc_id)
     cached_hash = await cache_get(hash_key)
     if cached_hash == new_hash:
@@ -116,6 +147,9 @@ async def upsert_knowledge(
         overlap=req.chunk_strategy.overlap,
         max_chars=req.chunk_strategy.max_chars,
     )
+    if params.name == "none" and len(req.text.strip().encode("utf-8")) > 4096:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="未切片文本超过4096字节，不能截断文档；请启用切片")
     try:
         chunks = split(req.text, params)
     except ValueError as e:
@@ -127,9 +161,9 @@ async def upsert_knowledge(
     if len(chunks) > MAX_CHUNKS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail=f"chunks 数 {len(chunks)} 超过上限 {MAX_CHUNKS}，请用更大的 window/max_chars 或分多次")
-
-    title = str(req.metadata.get("title") or "").strip()
-    source = str(req.metadata.get("source_url") or req.metadata.get("source") or "").strip()[:64]
+    if any(len(chunk.encode("utf-8")) > 4096 for chunk in chunks):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="片段超过当前 Milvus content 的4096字节上限，请使用较小切片")
 
     # 1) 嵌入
     embed_t0 = time.perf_counter()
@@ -148,13 +182,14 @@ async def upsert_knowledge(
     try:
         deleted = delete_by_doc_id(collection_name, req.doc_id)
     except Exception as e:
-        logger.warning("delete_by_doc_id 异常（继续 insert）: %s", e)
-        deleted = 0
+        logger.error("delete_by_doc_id 失败 type=%s", type(e).__name__)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Milvus 文档替换失败；未写入新片段")
 
     rows = [
         {
             "chunk_id": f"{req.doc_id}_{idx:04d}",
-            "title": (title or f"{req.doc_id} #{idx}")[:255],
+            "title": title or f"{req.doc_id} #{idx}",
             "content": chunk,
             "source": source,
             "embedding": vectors[idx],
@@ -164,12 +199,17 @@ async def upsert_knowledge(
     try:
         written = insert_chunks(collection_name, rows)
     except Exception as e:
-        logger.error("insert_chunks 失败: %s", e)
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Milvus 写入失败: {e}")
+        logger.error("insert_chunks 失败 type=%s", type(e).__name__)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Milvus 写入失败")
     milvus_ms = (time.perf_counter() - milvus_t0) * 1000
 
     # 写入 hash，下次同 doc_id+text 直接短路
     await cache_setex(hash_key, settings.UPSERT_HASH_TTL, new_hash)
+    # A unique successful revision invalidates both API and MCP retrieval
+    # caches. Its lifetime outlives all responses using the previous revision.
+    await cache_setex(revision_key(req.collection),
+                      max(settings.RAG_CACHE_TTL + 60, settings.UPSERT_HASH_TTL),
+                      uuid.uuid4().hex)
 
     logger.info(
         "rag.upsert collection=%s doc_id=%s chunks=%d deleted_first=%d embed_ms=%.0f milvus_ms=%.0f",

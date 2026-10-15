@@ -77,16 +77,20 @@ public class StudentDataTools {
             @ToolParam(description = "学生主键 student_info.id") Long studentId,
             @ToolParam(description = "学期，如 '2025-2026-1'；可空表示全部", required = false) String term) {
 
+        if (studentId == null || studentId <= 0) throw new IllegalArgumentException("学生ID无效");
         Result<List<Map<String, Object>>> resp = studentClient.listAcademic(studentId, term);
-        List<Map<String, Object>> rows = resp == null || resp.getData() == null
-                ? Collections.emptyList() : resp.getData();
+        if (resp == null || resp.getCode() != 200 || resp.getData() == null)
+            throw new IllegalStateException("学业历史读取失败，不能视作没有课程");
+        List<Map<String, Object>> rows = resp.getData();
 
         List<AcademicHistoryDto.CourseRecord> records = new ArrayList<>(rows.size());
         BigDecimal weightedScoreSum = BigDecimal.ZERO;
         BigDecimal weightedGpSum = BigDecimal.ZERO;
-        BigDecimal totalCredit = BigDecimal.ZERO;
+        BigDecimal scoreCredit = BigDecimal.ZERO;
+        BigDecimal gpCredit = BigDecimal.ZERO;
 
         for (Map<String, Object> row : rows) {
+            if (row == null) throw new IllegalStateException("学业记录格式无效");
             BigDecimal credit = asBigDecimal(row.get("credit"));
             BigDecimal score  = asBigDecimal(row.get("score"));
             BigDecimal gp     = asBigDecimal(row.get("gradePoint"));
@@ -99,16 +103,22 @@ public class StudentDataTools {
                     .gradePoint(gp)
                     .build());
             if (credit != null) {
-                if (score != null) weightedScoreSum = weightedScoreSum.add(score.multiply(credit));
-                if (gp != null)    weightedGpSum    = weightedGpSum.add(gp.multiply(credit));
-                totalCredit = totalCredit.add(credit);
+                if (credit.signum() < 0) throw new IllegalStateException("课程学分不能为负数");
+                if (score != null) {
+                    weightedScoreSum = weightedScoreSum.add(score.multiply(credit));
+                    scoreCredit = scoreCredit.add(credit);
+                }
+                if (gp != null) {
+                    weightedGpSum = weightedGpSum.add(gp.multiply(credit));
+                    gpCredit = gpCredit.add(credit);
+                }
             }
         }
 
-        BigDecimal avgScore = totalCredit.signum() == 0 ? null
-                : weightedScoreSum.divide(totalCredit, 2, RoundingMode.HALF_UP);
-        BigDecimal avgGp = totalCredit.signum() == 0 ? null
-                : weightedGpSum.divide(totalCredit, 2, RoundingMode.HALF_UP);
+        BigDecimal avgScore = scoreCredit.signum() == 0 ? null
+                : weightedScoreSum.divide(scoreCredit, 2, RoundingMode.HALF_UP);
+        BigDecimal avgGp = gpCredit.signum() == 0 ? null
+                : weightedGpSum.divide(gpCredit, 2, RoundingMode.HALF_UP);
 
         return AcademicHistoryDto.builder()
                 .studentId(studentId)
@@ -122,26 +132,23 @@ public class StudentDataTools {
     // -----------------------------------------------------------------------
     // Tool 3：心理评估指标
     // -----------------------------------------------------------------------
-    @Tool(name = "get_mental_indicators", description = "获取学生最近一次心理评估的因子分与风险等级。" +
+    @Tool(name = "get_mental_indicators", description = "获取学生最近一次心理评估的总分、类型、原始等级与归一化风险等级；因子分仅在数据源真实提供时返回。" +
             "返回 found=false 表示该学生未做过任何评估（不报错）。" +
             "用于 LLM 判断心理风险及是否需要介入。")
     public MentalIndicatorDto getMentalIndicators(
             @ToolParam(description = "学生主键 student_info.id") Long studentId) {
 
-        // mental-service 的查询以 sys_user.userId 为参，需要先取 Student.userId
-        Result<Map<String, Object>> stuResp = studentClient.getStudentById(studentId);
-        Map<String, Object> stu = stuResp == null ? null : stuResp.getData();
-        Long userId = stu == null ? null : asLong(stu.get("userId"));
-        if (userId == null) {
-            log.warn("getMentalIndicators: studentId={} 未找到对应 userId", studentId);
-            return MentalIndicatorDto.builder().studentId(studentId).found(false).build();
+        if (studentId == null || studentId <= 0) throw new IllegalArgumentException("学生ID无效");
+        Result<List<Map<String, Object>>> assResp = mentalClient.historyByStudent(studentId);
+        if (assResp == null || assResp.getCode() != 200 || assResp.getData() == null) {
+            throw new IllegalStateException("心理历史读取失败，不能视作没有测评");
         }
-
-        Result<List<Map<String, Object>>> assResp = mentalClient.myHistory(userId);
-        List<Map<String, Object>> list = assResp == null || assResp.getData() == null
-                ? Collections.emptyList() : assResp.getData();
+        List<Map<String, Object>> list = assResp.getData();
         if (list.isEmpty()) {
             return MentalIndicatorDto.builder().studentId(studentId).found(false).build();
+        }
+        if (list.stream().anyMatch(row -> row == null || !studentId.equals(asLong(row.get("studentId"))))) {
+            throw new IllegalStateException("心理历史归属与请求学生不一致");
         }
 
         // 取最近一次：mental-service 返回顺序未明确，显式按 assessTime（缺则 createTime）倒序取首条
@@ -152,9 +159,11 @@ public class StudentDataTools {
         return MentalIndicatorDto.builder()
                 .studentId(studentId)
                 .found(true)
-                .assessmentType(asStr(latest.getOrDefault("questionnaireType", latest.get("type"))))
+                .assessmentType(asStr(latest.get("questionnaireType")))
                 .assessedAt(asStr(latest.getOrDefault("assessTime", latest.get("createTime"))))
-                .riskLevel(asStr(latest.get("riskLevel")))
+                .riskLevel(normalizeMentalLevel(asStr(latest.get("level"))))
+                .assessmentLevel(asStr(latest.get("level")))
+                .totalScore(asBigDecimal(latest.get("score")))
                 .factorScores(extractFactorScores(latest))
                 .build();
     }
@@ -254,5 +263,15 @@ public class StudentDataTools {
         if (v instanceof BigDecimal b) return b;
         if (v instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
         try { return new BigDecimal(v.toString()); } catch (Exception e) { return null; }
+    }
+    private static String normalizeMentalLevel(String level) {
+        if (level == null) return null;
+        return switch (level.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "正常", "无风险", "normal", "none" -> "none";
+            case "轻度", "低危", "low" -> "low";
+            case "中度", "中危", "medium" -> "medium";
+            case "重度", "高危", "high" -> "high";
+            default -> null;
+        };
     }
 }

@@ -1,21 +1,34 @@
 import request from '@/utils/request'
+import { loginRequestOptions } from '@/utils/retry'
 
-// 登录是冷启动后的第一个请求，必然撞上服务唤醒。
-// Render 会把首个请求挂住约 114s 才返回 429，客户端超时必须留出余量，
-// 否则 axios 会先于 Render 放弃，连那次「触发唤醒」的机会都拿不到。
-// POST 但重放无害（仅重新签发 token），故显式开启 retryUnsafe。
+// Login creates a session; a timeout/429 does not authorize replaying that POST.
 export const login = (data) => {
-  return request.post('/auth/login', data, { timeout: 180000, retryUnsafe: true })
+  return request.post('/auth/login', data, loginRequestOptions(import.meta.env))
 }
 
-export const getUserInfo = () => {
-  return request.get('/auth/userInfo')
+export const getUserInfo = (sessionToken) => {
+  return request.get('/auth/userInfo', {
+    headers: { Authorization: `Bearer ${sessionToken}` }
+  })
 }
 
-export const logout = () => {
-  return request.post('/auth/logout')
+export const logout = (sessionToken) => {
+  return request.post('/auth/logout', null, {
+    // 注销只属于发起时的会话，不能在重试期间撤销后来登录的新令牌。
+    retry: false,
+    headers: { Authorization: `Bearer ${sessionToken}` }
+  })
 }
 
-export const refreshToken = () => {
-  return request.post('/auth/refresh')
+export const refreshToken = (token) => {
+  return request.post('/auth/refresh', null, {
+    withCredentials: true,
+    retry: false,
+    ...(token ? { headers: { 'X-Refresh-Token': token } } : {})
+  })
 }
+
+export const updateProfile = (data) => request.put('/auth/profile', data)
+export const changePassword = (data) => request.post('/auth/password', data, { retry: false })
+
+export const submitAccountRequest = (data) => request.post('/auth/support', data, { retry: false })

@@ -32,7 +32,7 @@ class EmbeddingClient:
         self._client = httpx.AsyncClient(
             base_url=settings.EMBEDDING_BASE_URL,
             timeout=30.0,
-            headers={"Authorization": f"Bearer {settings.LLM_API_KEY}"},
+            headers={"Authorization": f"Bearer {settings.EMBEDDING_API_KEY or settings.LLM_API_KEY}"},
         )
 
     async def embed(self, text: str) -> List[float]:

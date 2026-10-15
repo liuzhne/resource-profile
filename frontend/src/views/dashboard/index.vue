@@ -1,24 +1,29 @@
 <template>
   <div class="dashboard-container">
     <!-- 统计卡片 -->
-    <div v-loading="statsLoading" class="stats-grid">
-      <StatisticCard
-        v-for="s in statCards"
-        :key="s.title"
-        :title="s.title"
-        :value="s.value"
-        :icon="s.icon"
-        :color="s.color"
-        :tint="s.tint"
-        :suffix="s.suffix"
-      />
-    </div>
+    <ChartState :loading="statsLoading" :error="statsError" height="120px" @retry="loadStatistics">
+      <div class="stats-grid">
+        <StatisticCard
+          v-for="s in statCards"
+          :key="s.title"
+          :title="s.title"
+          :value="s.value"
+          :icon="s.icon"
+          :color="s.color"
+          :tint="s.tint"
+          :suffix="s.suffix"
+        />
+      </div>
+    </ChartState>
+    <p class="stat-scope">
+      今日按学校时间（{{ statsTimezone }}）计算；分布统计在职教师与在读学生档案。
+    </p>
 
     <!-- 趋势 + 分布 -->
     <div class="chart-grid">
       <section class="glass-panel">
         <header class="panel-head">
-          <span class="panel-title">师生增长趋势</span>
+          <span class="panel-title">新增师生档案</span>
           <div class="seg-control">
             <button
               v-for="p in periods"
@@ -72,7 +77,7 @@
               <div ref="pieChartRef" class="donut"></div>
               <div class="donut-center">
                 <span class="total tnum">{{ distTotal.toLocaleString('en-US') }}</span>
-                <span class="total-label">在册总人数</span>
+                <span class="total-label">在职/在读档案数</span>
               </div>
             </div>
 
@@ -131,17 +136,37 @@
           <span class="panel-title">待处理事项</span>
         </header>
         <div class="panel-body todo-body">
-          <div v-for="(a, index) in activities" :key="index" class="todo-item">
-            <span
-              class="dot"
-              :style="{ background: a.color, boxShadow: `0 0 0 3px ${a.halo}` }"
-            ></span>
-            <div class="todo-main">
-              <div class="todo-content">{{ a.content }}</div>
-              <div class="todo-time">{{ a.time }}</div>
-            </div>
-            <el-icon :size="11" class="todo-arrow"><ArrowRight /></el-icon>
-          </div>
+          <ChartState
+            :loading="todosLoading"
+            :error="todosError"
+            :empty="!activities.length"
+            empty-text="暂无待跟进事项"
+            height="220px"
+            @retry="loadTodos"
+          >
+            <button
+              v-for="a in activities"
+              :key="`${a.kind}:${a.sourceId}`"
+              type="button"
+              class="todo-item"
+              @click="openTodo(a)"
+            >
+              <span
+                class="dot"
+                :style="{
+                  background:
+                    a.kind === 'MENTAL_WARNING' ? 'var(--warning-deep)' : 'var(--error-deep)'
+                }"
+              ></span>
+              <div class="todo-main">
+                <div class="todo-content">{{ a.title }} #{{ a.sourceId }}</div>
+                <div class="todo-time">
+                  {{ todoStatusLabel(a.status) }} · {{ formatEventTime(a.eventTime) }}
+                </div>
+              </div>
+              <el-icon :size="11" class="todo-arrow"><ArrowRight /></el-icon>
+            </button>
+          </ChartState>
         </div>
       </section>
     </div>
@@ -153,28 +178,37 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import StatisticCard from './components/StatisticCard.vue'
 import ChartState from './components/ChartState.vue'
-import { getStatistics, getTrendData, getDistributionData, getRecentLogins } from '@/api/dashboard'
+import {
+  getStatistics,
+  getTrendData,
+  getDistributionData,
+  getRecentLogins,
+  getDashboardTodos
+} from '@/api/dashboard'
+import { useRouter } from 'vue-router'
+import { todoTarget, todoStatusLabel, formatEventTime } from './todoContract.js'
+const router = useRouter()
 
 const PIE_COLORS = ['#007aff', '#34c759', '#ff9500', '#ff3b30', '#5856d6']
 
 const periods = [
-  { key: 'week', label: '本周' },
-  { key: 'month', label: '本月' },
-  { key: 'year', label: '全年' }
+  { key: 'week', label: '近7天' },
+  { key: 'month', label: '近30天' },
+  { key: 'year', label: '近12个月' }
 ]
 
 // 统计数据
 const stats = ref({
-  teacherCount: 0,
-  studentCount: 0,
-  questionnaireCount: 0,
-  warningCount: 0
+  teacherCount: null as number | null,
+  studentCount: null as number | null,
+  todayCompletionCount: null as number | null,
+  warningCount: null as number | null
 })
 
 // 卡片配色对齐原型：胶囊底用 tint，图标前景用 -deep 变体
 const statCards = computed(() => [
   {
-    title: '教师总数',
+    title: '在职教师',
     value: stats.value.teacherCount,
     icon: 'UserFilled',
     color: 'var(--primary-color)',
@@ -182,7 +216,7 @@ const statCards = computed(() => [
     suffix: '人'
   },
   {
-    title: '学生总数',
+    title: '在读学生',
     value: stats.value.studentCount,
     icon: 'Reading',
     color: 'var(--success-deep)',
@@ -191,14 +225,14 @@ const statCards = computed(() => [
   },
   {
     title: '今日问卷完成',
-    value: stats.value.questionnaireCount,
+    value: stats.value.todayCompletionCount,
     icon: 'DocumentChecked',
     color: 'var(--warning-deep)',
     tint: 'var(--warning-tint)',
     suffix: '份'
   },
   {
-    title: '预警关注',
+    title: '未关闭预警',
     value: stats.value.warningCount,
     icon: 'WarningFilled',
     color: 'var(--error-deep)',
@@ -229,55 +263,51 @@ const recentLogins = ref([] as { username: string; role: string; time: string; i
 
 // 各区块的加载 / 错误态
 const statsLoading = ref(false)
+const statsError = ref(false)
+const statsTimezone = ref('Asia/Shanghai')
 const trendLoading = ref(false)
+let trendVersion = 0
 const trendError = ref(false)
 const distLoading = ref(false)
 const distError = ref(false)
 const loginsLoading = ref(false)
 const loginsError = ref(false)
 
-// 待处理事项（暂用静态数据，后端无对应接口）
-const activities = ref([
-  {
-    content: '新增5份心理健康预警',
-    time: '10分钟前',
-    color: '#ff9500',
-    halo: 'rgba(255,149,0,0.14)'
-  },
-  {
-    content: '张三老师提交了科研项目',
-    time: '30分钟前',
-    color: '#34c759',
-    halo: 'rgba(52,199,89,0.14)'
-  },
-  {
-    content: '系统检测到异常登录',
-    time: '1小时前',
-    color: '#ff3b30',
-    halo: 'rgba(255,59,48,0.14)'
-  },
-  {
-    content: '李四同学完成了心理问卷',
-    time: '2小时前',
-    color: '#007aff',
-    halo: 'rgba(0,122,255,0.13)'
+const activities = ref([])
+const todosLoading = ref(false),
+  todosError = ref(false)
+const loadTodos = async () => {
+  todosLoading.value = true
+  todosError.value = false
+  try {
+    activities.value = (await getDashboardTodos()).data?.items || []
+  } catch {
+    activities.value = []
+    todosError.value = true
+  } finally {
+    todosLoading.value = false
   }
-])
+}
+const openTodo = (item) => router.push(todoTarget(item, import.meta.env.VITE_AI_ENABLED === 'true'))
 
 // 加载统计数据
 const loadStatistics = async () => {
   statsLoading.value = true
+  statsError.value = false
   try {
     const res = await getStatistics()
     if (res.data) {
+      statsTimezone.value = res.data.timezone || 'Asia/Shanghai'
       stats.value = {
-        teacherCount: res.data.teacherCount || 0,
-        studentCount: res.data.studentCount || 0,
-        questionnaireCount: res.data.questionnaireCount || 0,
-        warningCount: res.data.warningCount || 0
+        teacherCount: res.data.teacherCount == null ? null : Number(res.data.teacherCount),
+        studentCount: res.data.studentCount == null ? null : Number(res.data.studentCount),
+        todayCompletionCount:
+          res.data.todayCompletionCount == null ? null : Number(res.data.todayCompletionCount),
+        warningCount: res.data.warningCount == null ? null : Number(res.data.warningCount)
       }
     }
   } catch (error) {
+    statsError.value = true
     console.error('加载统计数据失败', error)
   } finally {
     statsLoading.value = false
@@ -286,10 +316,12 @@ const loadStatistics = async () => {
 
 // 加载趋势数据
 const loadTrendData = async () => {
+  const version = ++trendVersion
   trendLoading.value = true
   trendError.value = false
   try {
     const res = await getTrendData(trendPeriod.value)
+    if (version !== trendVersion) return
     if (res.data) {
       trendData.value = {
         days: res.data.days || [],
@@ -298,12 +330,14 @@ const loadTrendData = async () => {
       }
     }
   } catch (error) {
+    if (version !== trendVersion) return
     console.error('加载趋势数据失败', error)
     trendError.value = true
   } finally {
-    trendLoading.value = false
+    if (version === trendVersion) trendLoading.value = false
   }
 
+  if (version !== trendVersion) return
   // ChartState 用 v-if 控制插槽，容器要等 loading 落下、DOM 挂载后才存在
   await nextTick()
   if (!trendError.value && trendData.value.days.length) updateTrendChart()
@@ -473,6 +507,7 @@ onMounted(() => {
     loadTrendData()
     loadDistributionData()
     loadRecentLogins()
+    loadTodos()
   })
   window.addEventListener('resize', handleResize)
 })
@@ -489,6 +524,12 @@ watch(trendPeriod, () => {
 </script>
 
 <style scoped lang="scss">
+.stat-scope {
+  margin: 0;
+  color: var(--text-color-secondary);
+  font-size: 12px;
+}
+
 .dashboard-container {
   display: flex;
   flex-direction: column;
@@ -648,6 +689,11 @@ watch(trendPeriod, () => {
 }
 
 .todo-item {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font: inherit;
   display: flex;
   gap: 12px;
   padding: 11px 10px;

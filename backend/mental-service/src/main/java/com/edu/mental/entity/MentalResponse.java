@@ -20,6 +20,9 @@ public class MentalResponse {
 
     private String answers;
 
+    /** Submission-time respondent template; never reconstruct old answers from current questions. */
+    private String questionnaireSnapshot;
+
     private Integer score;
 
     private Integer status;

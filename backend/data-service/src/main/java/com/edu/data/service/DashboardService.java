@@ -1,5 +1,6 @@
 package com.edu.data.service;
 
+import com.edu.data.dto.*;
 import java.util.List;
 import java.util.Map;
 
@@ -15,4 +16,7 @@ public interface DashboardService {
     Map<String, Object> getDistribution();
 
     List<Map<String, Object>> getRecentLogins();
+    TodoPageDto getTodos(int limit);
+
+    List<SearchResultDto> search(String query, int limit);
 }

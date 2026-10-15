@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from app.services.json_parser import extract_json
 from app.services.llm_client import chat_completion_raw
+from app.services.llm_request_policy import LlmProviderError
 from app.services.prompt_guard import sanitize, wrap
 
 SAFETY_PREAMBLE = (
@@ -81,8 +82,11 @@ async def _call_llm_json(system: str, user: str, route: str) -> Dict[str, Any]:
         )
         content = data["choices"][0]["message"]["content"]
         return extract_json(content)
+    except LlmProviderError as exc:
+        logger.warning("LLM provider failure route=%s marker=%s", route, exc)
+        raise HTTPException(status_code=503, detail=str(exc)) from None
     except Exception as exc:
-        logger.error("LLM 调用失败 (route=%s): %s", route, exc)
+        logger.error("LLM 调用失败 (route=%s) errorType=%s", route, type(exc).__name__)
         return {}
 
 

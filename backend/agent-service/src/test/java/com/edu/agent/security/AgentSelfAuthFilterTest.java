@@ -1,6 +1,5 @@
 package com.edu.agent.security;
 
-import com.edu.common.util.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,16 +18,17 @@ import static org.mockito.Mockito.when;
  */
 class AgentSelfAuthFilterTest {
 
-    private JwtUtil jwtUtil;
+    private AgentSessionVerifier sessions;
     private AgentSelfAuthFilter filter;
 
     @BeforeEach
     void setUp() {
-        jwtUtil = mock(JwtUtil.class);
+        sessions = mock(AgentSessionVerifier.class);
+        when(sessions.verify(null)).thenReturn(new AgentSessionVerifier.Verification(AgentSessionVerifier.Status.UNAUTHORIZED, null));
         // 与 Spring 托管 ObjectMapper 对齐：注册 jsr310，使 Result.timestamp(LocalDateTime) 可序列化
         ObjectMapper om = new ObjectMapper();
         om.findAndRegisterModules();
-        filter = new AgentSelfAuthFilter(jwtUtil, om);
+        filter = new AgentSelfAuthFilter(sessions, om);
         ReflectionTestUtils.setField(filter, "enabled", true);
     }
 
@@ -54,7 +54,7 @@ class AgentSelfAuthFilterTest {
 
     @Test
     void businessPath_invalidToken_returns401() throws Exception {
-        when(jwtUtil.validateToken("bad")).thenReturn(false);
+        when(sessions.verify("bad")).thenReturn(new AgentSessionVerifier.Verification(AgentSessionVerifier.Status.UNAUTHORIZED, null));
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/agent/api/v1/task/list");
         req.addHeader("Authorization", "Bearer bad");
         assertThat(run(req).getStatus()).isEqualTo(401);
@@ -62,7 +62,7 @@ class AgentSelfAuthFilterTest {
 
     @Test
     void businessPath_validBearer_passes() throws Exception {
-        when(jwtUtil.validateToken("good")).thenReturn(true);
+        when(sessions.verify("good")).thenReturn(new AgentSessionVerifier.Verification(AgentSessionVerifier.Status.VALID, null));
         MockHttpServletRequest req = new MockHttpServletRequest("POST", "/agent/api/v1/task/trigger/1");
         req.addHeader("Authorization", "Bearer good");
         assertThat(passedThrough(req)).isTrue();
@@ -70,7 +70,7 @@ class AgentSelfAuthFilterTest {
 
     @Test
     void businessPath_validTokenParam_passes_forSse() throws Exception {
-        when(jwtUtil.validateToken("good")).thenReturn(true);
+        when(sessions.verify("good")).thenReturn(new AgentSessionVerifier.Verification(AgentSessionVerifier.Status.VALID, null));
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/agent/api/v1/warning/stream");
         req.addParameter("token", "good");
         assertThat(passedThrough(req)).isTrue();
@@ -93,5 +93,14 @@ class AgentSelfAuthFilterTest {
         ReflectionTestUtils.setField(filter, "enabled", false);
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/agent/api/v1/task/list");
         assertThat(passedThrough(req)).isTrue();
+    }
+
+    @Test
+    void redisUnavailable_returns503AndDoesNotPassThrough() throws Exception {
+        when(sessions.verify("good")).thenReturn(new AgentSessionVerifier.Verification(AgentSessionVerifier.Status.UNAVAILABLE, null));
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/agent/api/v1/task/list");
+        req.addHeader("Authorization", "Bearer good");
+        assertThat(run(req).getStatus()).isEqualTo(503);
+        assertThat(passedThrough(req)).isFalse();
     }
 }

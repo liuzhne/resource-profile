@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Java全局生成计数；运行期间必须隔离其它生成请求，避免把其它路由的token计入。
 # G-1.6 验收脚本：连续两次相同 /api/v1/agent/risk 调用，对比第二次的
 # 增量 cached_n / prompt_n 是否 ≥ THRESHOLD（默认 0.8）。
 #
@@ -13,6 +14,7 @@
 set -e
 
 AI_INFERENCE=${AI_INFERENCE:-http://localhost:8090}
+: "${EDUCARE_INTERNAL_TOKEN:?Set the internal credential for the Java knowledge facade}"
 THRESHOLD=${THRESHOLD:-0.8}
 ROUTE=${ROUTE:-risk}
 
@@ -27,10 +29,8 @@ echo "  服务：$AI_INFERENCE"
 echo "============================================================"
 
 snap_route() {
-    curl -s "$AI_INFERENCE/api/v1/diagnostics/llm-metrics" | \
-        jq --arg r "$ROUTE" '
-            .by_route[$r] // {calls: 0, prompt_tokens: 0, cached_tokens: 0}
-        '
+    curl -fsS -H "X-Internal-Token: $EDUCARE_INTERNAL_TOKEN" "$AI_INFERENCE/api/v1/diagnostics/llm-metrics" | \
+        jq '{calls, prompt_tokens, cached_tokens}'
 }
 
 PAYLOAD=$(cat <<'JSON'
@@ -57,14 +57,14 @@ echo "$BEFORE" | jq .
 
 echo
 echo "[1/3] 第一次调用 /api/v1/agent/risk..."
-curl -s -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" \
+curl -fsS -H "X-Internal-Token: $EDUCARE_INTERNAL_TOKEN" -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" \
     "$AI_INFERENCE/api/v1/agent/$ROUTE" > /dev/null
 AFTER1=$(snap_route)
 echo "$AFTER1" | jq .
 
 echo
 echo "[2/3] 第二次调用（相同 payload，期望命中 prefix cache）..."
-curl -s -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" \
+curl -fsS -H "X-Internal-Token: $EDUCARE_INTERNAL_TOKEN" -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" \
     "$AI_INFERENCE/api/v1/agent/$ROUTE" > /dev/null
 AFTER2=$(snap_route)
 echo "$AFTER2" | jq .

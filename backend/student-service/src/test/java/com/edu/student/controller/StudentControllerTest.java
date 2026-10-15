@@ -5,6 +5,7 @@ import com.edu.common.security.AccessGuard;
 import com.edu.common.security.InternalCallCredential;
 import com.edu.common.util.JwtUtil;
 import com.edu.student.entity.Student;
+import com.edu.student.dto.StudentWriteRequest;
 import com.edu.student.service.StudentService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -145,7 +146,9 @@ class StudentControllerTest {
         when(jwtUtil.getSubject("tok")).thenReturn("9");
         when(jwtUtil.parseRoles("tok")).thenReturn(Set.of("admin"));
 
-        Result<Void> r = controller.update(5L, new Student(), AUTH);
+        StudentWriteRequest request = new StudentWriteRequest();
+        request.setUserId(3L); request.setStudentId("S-5"); request.setName("测试学生");
+        Result<Void> r = controller.update(5L, request, AUTH);
 
         assertThat(r.getCode()).isEqualTo(200);
         verify(studentService).update(any(Student.class));

@@ -7,7 +7,7 @@ RAG 检索路由：/api/v1/rag/retrieve
   3. 若 RERANKER_ENABLED：用首路 query 调 Cross-Encoder 精排，返回 top_k
   4. 否则按 milvus 分数降序截断 top_k
 
-Milvus 集合未初始化时返回示例数据，保障端到端链路不断。
+Milvus 空召回时明确返回空片段，不用虚构案例或政策替代知识。
 
 D 阶段新增：相同请求的 1 小时 Redis 缓存。命中时日志输出 X-Cache: HIT 便于排查。
 """
@@ -24,12 +24,13 @@ from app.services.embedding_client import get_embedding_client
 from app.services.milvus_client import search as milvus_search
 from app.services.reranker_client import get_reranker_client
 from app.services.redis_client import cache_get, cache_setex
+from app.services.knowledge_provenance import corpus_revision, provenance
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/rag", tags=["rag"])
 
 
-def _rag_cache_key(top_k: int, sources: List[str], queries: List[str], risk_type: Optional[str]) -> str:
+def _rag_cache_key(top_k: int, sources: List[str], queries: List[str], risk_type: Optional[str], revision: str = "") -> str:
     h = hashlib.sha256()
     h.update(str(top_k).encode())
     h.update(b"|")
@@ -38,7 +39,10 @@ def _rag_cache_key(top_k: int, sources: List[str], queries: List[str], risk_type
     h.update("\x1f".join(q.strip().lower() for q in queries).encode("utf-8"))
     h.update(b"|")
     h.update((risk_type or "").encode("utf-8"))
-    return "edu:rag:" + h.hexdigest()[:32]
+    h.update(b"|")
+    h.update(revision.encode("utf-8"))
+    # v2 excludes cached v1 responses which had already discarded provenance.
+    return "edu:rag:v2:" + h.hexdigest()[:32]
 
 
 class RetrieveRequest(BaseModel):
@@ -54,6 +58,9 @@ class RetrieveRequest(BaseModel):
 class KnowledgeChunk(BaseModel):
     chunk_id: str
     source_db: str
+    source: Optional[str] = None
+    doc_id: Optional[str] = None
+    source_url: Optional[str] = None
     title: Optional[str] = None
     content: Optional[str] = None
     score: float = 0.0
@@ -62,33 +69,8 @@ class KnowledgeChunk(BaseModel):
 
 class RetrieveResponse(BaseModel):
     chunks: List[KnowledgeChunk]
-    fallback: bool = Field(default=False, description="true 表示使用了示例数据降级")
+    fallback: bool = Field(default=False, description="true 表示空召回，未提供知识依据")
     reranked: bool = Field(default=False, description="是否经过 Cross-Encoder 精排")
-
-
-_FALLBACK_CHUNKS = [
-    KnowledgeChunk(
-        chunk_id="seed-case-001",
-        source_db="case",
-        title="多维风险综合干预案例",
-        content="某 GPA 骤降学生通过班主任周谈话+学业互助小组+家长沟通，4 周内成绩回升。",
-        score=0.85,
-    ),
-    KnowledgeChunk(
-        chunk_id="seed-psy-001",
-        source_db="psychology",
-        title="动机访谈法 (Motivational Interviewing) 要点",
-        content="以倾听—澄清—唤起—承诺四步引导学生自主表达改变意愿，避免说教。",
-        score=0.82,
-    ),
-    KnowledgeChunk(
-        chunk_id="seed-policy-001",
-        source_db="policy",
-        title="校内勤工助学与困难补助政策摘要",
-        content="经济困难学生可申请 A 类(800/月) / B 类(500/月) / C 类(300/月) 补助。",
-        score=0.78,
-    ),
-]
 
 
 @router.post("/retrieve", response_model=RetrieveResponse)
@@ -97,15 +79,16 @@ async def retrieve_knowledge(req: RetrieveRequest) -> RetrieveResponse:
     sources = req.sources or list(settings.MILVUS_COLLECTIONS.keys())
     recall_per_route = top_k * settings.RAG_RECALL_EXPAND
 
-    cache_key = _rag_cache_key(top_k, sources, req.queries, req.risk_type)
+    cache_key = _rag_cache_key(top_k, sources, req.queries, req.risk_type,
+                             await corpus_revision(sources))
     cached = await cache_get(cache_key)
     if cached:
         try:
             payload = json.loads(cached)
-            logger.info("X-Cache: HIT key=%s queries=%s", cache_key, req.queries[:1])
+            logger.info("X-Cache: HIT key=%s query_count=%d", cache_key, len(req.queries))
             return RetrieveResponse(**payload)
         except Exception as exc:
-            logger.warning("RAG 缓存反序列化失败 key=%s: %s", cache_key, exc)
+            logger.warning("RAG 缓存反序列化失败 key=%s type=%s", cache_key, type(exc).__name__)
 
     embed_client = get_embedding_client()
     all_hits: List[Dict[str, Any]] = []
@@ -127,8 +110,8 @@ async def retrieve_knowledge(req: RetrieveRequest) -> RetrieveResponse:
                 all_hits.append(h)
 
     if not all_hits:
-        logger.info("Milvus 无召回结果，返回示例数据降级")
-        return RetrieveResponse(chunks=_FALLBACK_CHUNKS[:top_k], fallback=True)
+        logger.info("Milvus 无召回结果，返回空知识片段")
+        return RetrieveResponse(chunks=[], fallback=True)
 
     # chunk_id 去重，保留最高 milvus 分数
     by_id: Dict[str, Dict[str, Any]] = {}
@@ -170,6 +153,7 @@ async def retrieve_knowledge(req: RetrieveRequest) -> RetrieveResponse:
         KnowledgeChunk(
             chunk_id=str(h.get("chunk_id") or "unknown"),
             source_db=str(h.get("source_db") or "unknown"),
+            **provenance(h),
             title=h.get("title"),
             content=h.get("content"),
             score=float(h.get("score") or 0.0),

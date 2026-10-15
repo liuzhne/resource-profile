@@ -22,8 +22,8 @@ mcp = FastMCP(name="knowledge-rag", version="1.0.0")
     name="search_cases",
     description=(
         "检索教育介入案例库（edu_cases collection）。"
-        "返回 top_k 条相似案例片段，含 chunk_id / title / content / 召回分数 / 可选 rerank 分数。"
-        "用于 Agent Loop 评估学生风险或撰写介入建议时找历史可参考案例。"
+        "返回 top_k 条片段，含 chunk_id / doc_id / source / source_url / title / content / 召回分数。"
+        "明确标注的演示场景是虚构支持流程，不能视为真实个案或已验证成功结局；引用仅支持出处中的原则。"
     ),
 )
 async def search_cases(query: str, top_k: int = 5) -> Dict[str, Any]:
@@ -34,7 +34,7 @@ async def search_cases(query: str, top_k: int = 5) -> Dict[str, Any]:
     name="search_policies",
     description=(
         "检索校规/教育政策文档库（edu_policies collection）。"
-        "返回 top_k 条政策片段，供 Agent 在生成处理建议时引用具体规章依据，避免凭空主张。"
+        "返回 top_k 条政策片段及原始 source / source_url / doc_id，供 Agent 引用具体依据；缺失来源不得编造。"
     ),
 )
 async def search_policies(query: str, top_k: int = 5) -> Dict[str, Any]:
@@ -45,7 +45,7 @@ async def search_policies(query: str, top_k: int = 5) -> Dict[str, Any]:
     name="search_psychology",
     description=(
         "检索心理学/咨询知识库（edu_psychology collection）。"
-        "返回 top_k 条心理学条目，供 Agent 评估心理风险或给出介入策略时引用专业依据。"
+        "返回 top_k 条心理支持条目及原始 source / source_url / doc_id，供 Agent 引用依据；不替代专业诊断。"
     ),
 )
 async def search_psychology(query: str, top_k: int = 5) -> Dict[str, Any]:

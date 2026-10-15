@@ -102,10 +102,29 @@ public class AccessGuard {
         Set<String> roles = currentRoles(authHeader);
         for (String r : anyRoles) {
             if (roles.contains(r)) {
-                return true;
+                return roles.contains(Roles.ADMIN) || hasRequestPermission(authHeader);
             }
         }
         return false;
+    }
+
+    // Canonical roles remain the upper bound for field and endpoint authorization.
+    // The editable permission catalog can further restrict staff operations, never elevate a role.
+    private boolean hasRequestPermission(String authHeader) {
+        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs)) return true;
+        try {
+            var claims = jwtUtil.parseToken(bearer(authHeader));
+            Object raw = claims.get("permissions");
+            if (raw == null) return true; // pre-migration sessions retain their original role boundary
+            if (!(raw instanceof java.util.Collection<?> permissions)) return false;
+            String path = attrs.getRequest().getRequestURI();
+            if (path.startsWith("/api/")) path=path.substring(4);
+            String domain = path.split("/",3).length>1 ? path.split("/",3)[1] : "";
+            if (!Set.of("teacher","student","mental","data","agent","user").contains(domain)) return true;
+            String method=attrs.getRequest().getMethod();
+            String code=domain + (Set.of("GET","HEAD","OPTIONS").contains(method) ? ":read" : ":write");
+            return permissions.contains(code);
+        } catch(Exception e) { return false; }
     }
 
     private String bearer(String authHeader) {

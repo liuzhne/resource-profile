@@ -34,6 +34,7 @@ def _run(enable_rerank, reranker_enabled, store, rerank_scores=None):
         {"index": 0, "relevance_score": 0.5},
     ])
     with patch.object(settings, "RERANKER_ENABLED", reranker_enabled), \
+         patch.object(rag_pipeline, "corpus_revision", new=AsyncMock(return_value="fixture-revision")), \
          patch.object(rag_pipeline, "cache_get", side_effect=fake_get), \
          patch.object(rag_pipeline, "cache_setex", side_effect=fake_setex), \
          patch.object(rag_pipeline, "get_embedding_client", return_value=embed), \

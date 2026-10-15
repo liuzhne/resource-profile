@@ -140,8 +140,8 @@ wait_http() { # url name timeout_s
 preflight() {
   hd "0. 环境体检"
   need docker; need curl; need node; need npm; need mvn; need python3
-  select_java
-  configure_shared_env
+  select_java || return 1
+  configure_shared_env || return 1
   ok "JDK $("$JAVA_HOME/bin/java" -version 2>&1 | head -1 | awk '{print $3}' | tr -d '\"')"
   ok "Node $(node -v)"
   docker info >/dev/null 2>&1 || { er "Docker daemon 未运行，先启动 Docker Desktop"; exit 1; }
@@ -154,28 +154,32 @@ infra_up() {
   [ "$CORE_ONLY" = false ] && svcs="$svcs etcd minio milvus-standalone attu ai-inference-service knowledge-rag-mcp"
   (cd docker && docker compose up -d $svcs) || { er "docker compose 失败"; exit 1; }
   wait_http "http://localhost:8848/nacos" Nacos 120 || wn "Nacos 未确认（首次启动较慢，可继续）"
+  local mysql_ready=false
   for i in $(seq 1 60); do
-    docker exec edu-portrait-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqladmin ping -uroot' >/dev/null 2>&1 && { ok "MySQL 就绪"; break; }
+    docker exec edu-portrait-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqladmin ping -uroot' >/dev/null 2>&1 && { mysql_ready=true; ok "MySQL 就绪"; break; }
     sleep 2
   done
-  docker exec edu-portrait-redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping' >/dev/null 2>&1 && ok "Redis 就绪"
+  [ "$mysql_ready" = true ] || { er "MySQL 未就绪，停止启动"; return 1; }
+  docker exec edu-portrait-redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping' >/dev/null 2>&1 \
+    || { er "Redis 未就绪，停止启动"; return 1; }
+  ok "Redis 就绪"
   if [ "$CORE_ONLY" = false ]; then
     wait_http "http://localhost:8090/health" ai-inference-service 120 || wn "ai-inference 未就绪（AI 链会降级）"
   fi
 }
 
 seed_sql() {
-  hd "2. 灌初始化 SQL（幂等，缺表才补）"
-  # 卷已存在时 docker-entrypoint 不会重放 sql/init，这里显式补齐
+  hd "2. 校验基础表并执行版本化增量迁移（保留已有数据）"
   local n
-  n=$(docker exec edu-portrait-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B edu_portrait -e "$1"' sh \
-        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='edu_portrait'" 2>/dev/null || echo 0)
-  if [ "${n:-0}" -ge 10 ]; then ok "已有 $n 张表，跳过"; return; fi
-  for f in 01_init 03_agent_init 04_student_extras 05_intervention_feedback; do
-    [ -f "sql/init/$f.sql" ] || continue
-    docker exec -i edu-portrait-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot edu_portrait' < "sql/init/$f.sql" \
-      2>>"$LOGDIR/sql.err" && ok "loaded $f" || wn "$f 执行有告警，见 $LOGDIR/sql.err"
-  done
+  n=$(docker exec edu-portrait-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -N -B edu_portrait -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()"' 2>/dev/null) \
+    || { er "无法检查数据库，停止启动"; return 1; }
+  [[ "$n" =~ ^[0-9]+$ ]] || { er "数据库完整性检查返回无效值，停止启动"; return 1; }
+  if [ "${n:-0}" -eq 0 ]; then
+    python3 scripts/apply-sql-migrations.py --transport docker --initialize || return 1
+  else
+    python3 scripts/apply-sql-migrations.py --transport docker || return 1
+  fi
+  ok "数据库初始化/增量迁移已完成"
 }
 
 build() {
@@ -236,9 +240,9 @@ java_up() {
   local list=("${CORE_SVCS[@]}")
   [ "$CORE_ONLY" = false ] && list+=("${AI_SVCS[@]}")
   list+=("${GW_SVCS[@]}")
-  local failed=0
-  for e in "${list[@]}"; do start_java "${e%%:*}" "${e##*:}" || failed=$((failed+1)); done
-  [ "$failed" -gt 0 ] && wn "$failed 个服务未起来（其余可用）"
+  for e in "${list[@]}"; do
+    start_java "${e%%:*}" "${e##*:}" || { er "Java 服务未就绪，停止启动前端"; return 1; }
+  done
   return 0
 }
 
@@ -323,7 +327,16 @@ for a in "$@"; do case "$a" in
   --all) DOWN_ALL=true;; *) TARGET="$a";; esac; done
 
 case "$CMD" in
-  up)     preflight; infra_up; seed_sql; build; llm_check; java_up; front_up; summary;;
+  up)
+    preflight || exit 1
+    infra_up || exit 1
+    seed_sql || exit 1
+    build || exit 1
+    llm_check || exit 1
+    java_up || exit 1
+    front_up || exit 1
+    summary
+    ;;
   down)   cmd_down;;
   status) cmd_status;;
   smoke)  cmd_smoke;;

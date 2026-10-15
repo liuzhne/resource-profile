@@ -9,6 +9,8 @@ import com.edu.mental.entity.Questionnaire;
 import com.edu.mental.mapper.QuestionMapper;
 import com.edu.mental.mapper.QuestionnaireMapper;
 import com.edu.mental.service.QuestionService;
+import com.edu.mental.service.MentalAnswerContract;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -54,6 +56,7 @@ public class QuestionServiceImpl implements QuestionService {
         QuestionnaireFullDto dto = new QuestionnaireFullDto();
         dto.setQuestionnaire(q);
         dto.setQuestions(listByQuestionnaire(questionnaireId));
+        q.setQuestions(dto.getQuestions().size());
         dto.setLevelRules(parseLevelRules(q.getLevelRules()));
         return dto;
     }
@@ -62,23 +65,20 @@ public class QuestionServiceImpl implements QuestionService {
     public QuestionnaireFullDto getForRespondent(Long questionnaireId) {
         QuestionnaireFullDto dto = getFull(questionnaireId);
         Integer status = dto.getQuestionnaire().getStatus();
-        // 已结束的仍要下发：结果页按题目回显本人作答
+        // 可读作答模板沿用状态边界；历史回显通过本人详情的提交时快照获取。
         if (status == null || status == STATUS_NOT_STARTED) {
             throw new BusinessException(403, "问卷当前未开放");
         }
         // 作答者拿到「哪个选项几分、几分算高危」就能按分挑选项躲过筛查；计分在 submit 时按库内原题完成，
         // 作答页与结果页只用题干和选项文字
-        dto.getQuestionnaire().setLevelRules(null);
-        dto.setLevelRules(Collections.emptyList());
-        for (Question question : dto.getQuestions()) {
-            question.setOptions(stripOptionScores(question.getOptions()));
-            question.setScoringRules(null);
-        }
-        return dto;
+        return MentalAnswerContract.respondentSnapshot(dto.getQuestionnaire(), dto.getQuestions());
     }
 
     @Override
     public Question save(Question question) {
+        if(questionnaireMapper.selectById(question.getQuestionnaireId())==null) throw new BusinessException(404,"问卷不存在");
+        MentalAnswerContract.validateQuestion(question);
+        question.setId(null);
         if (question.getSortOrder() == null) {
             Long count = questionMapper.selectCount(
                     new LambdaQueryWrapper<Question>().eq(Question::getQuestionnaireId, question.getQuestionnaireId())
@@ -95,7 +95,22 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Override
     public void update(Question question) {
-        questionMapper.updateById(question);
+        Question current=questionMapper.selectById(question.getId());
+        if(current==null) throw new BusinessException(404,"题目不存在");
+        if(question.getQuestionnaireId()!=null && !question.getQuestionnaireId().equals(current.getQuestionnaireId()))
+            throw new BusinessException(400,"题目不能移动到其他问卷");
+        question.setQuestionnaireId(current.getQuestionnaireId());
+        MentalAnswerContract.validateQuestion(question);
+        var update=new LambdaUpdateWrapper<Question>().eq(Question::getId,question.getId())
+                .set(Question::getOptions,question.getOptions()).set(Question::getScoringRules,question.getScoringRules())
+                .set(Question::getScaleMin,question.getScaleMin()).set(Question::getScaleMax,question.getScaleMax())
+                .set(Question::getScaleLabels,question.getScaleLabels());
+        Question patch = new Question();
+        org.springframework.beans.BeanUtils.copyProperties(question, patch);
+        patch.setOptions(null); patch.setScoringRules(null); patch.setScaleMin(null);
+        patch.setScaleMax(null); patch.setScaleLabels(null);
+        questionMapper.update(patch,update);
+        syncQuestionCount(current.getQuestionnaireId());
     }
 
     @Override
@@ -159,7 +174,7 @@ public class QuestionServiceImpl implements QuestionService {
         try {
             return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
-            log.warn("解析等级规则失败: {}", e.getMessage());
+            log.warn("等级规则格式无效");
             return Collections.emptyList();
         }
     }
@@ -181,7 +196,7 @@ public class QuestionServiceImpl implements QuestionService {
             }
             return objectMapper.writeValueAsString(options);
         } catch (JsonProcessingException e) {
-            log.warn("作答视图剥离选项分值失败，不下发该题选项: {}", e.getMessage());
+            log.warn("作答视图选项格式无效，不下发该题选项");
             return null;
         }
     }

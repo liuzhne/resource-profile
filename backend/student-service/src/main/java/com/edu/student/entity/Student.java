@@ -24,39 +24,48 @@ public class Student {
 
     private String name;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Integer gender;
 
-    @TableField("birth_date")
+    @TableField(value = "birth_date", updateStrategy = FieldStrategy.ALWAYS)
     @SensitiveField(Sensitivity.HIGH)
     private LocalDate birthDate;
+
+    /** DTO field-presence marker; never persisted or returned to clients. */
+    @TableField(exist = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private boolean clearBirthDate;
 
     @TableField("dept_id")
     private Long deptId;
 
-    @TableField("dept_name")
+    @TableField(value = "dept_name", updateStrategy = FieldStrategy.ALWAYS)
     private String deptName;
 
     @TableField("major_id")
     private Long majorId;
 
-    @TableField("major_name")
+    @TableField(value = "major_name", updateStrategy = FieldStrategy.ALWAYS)
     private String majorName;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String grade;
 
-    @TableField("class_name")
+    @TableField(value = "class_name", updateStrategy = FieldStrategy.ALWAYS)
     private String className;
 
-    @TableField("enrollment_date")
+    @TableField(value = "enrollment_date", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate enrollmentDate;
 
-    @TableField("expected_graduation")
+    @TableField(value = "expected_graduation", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate expectedGraduation;
 
     @SensitiveField(Sensitivity.MEDIUM)
+    @TableField(insertStrategy = FieldStrategy.ALWAYS, updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal gpa;
 
     @SensitiveField(Sensitivity.MEDIUM)
+    @TableField(insertStrategy = FieldStrategy.ALWAYS, updateStrategy = FieldStrategy.ALWAYS)
     private Integer credits;
 
     private Integer status;
