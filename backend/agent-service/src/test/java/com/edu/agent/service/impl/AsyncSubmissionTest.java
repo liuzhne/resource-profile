@@ -23,6 +23,14 @@ import static org.mockito.Mockito.*;
 
 /** Regression: submission must return without executing the model or PDF on the caller thread. */
 class AsyncSubmissionTest {
+    @org.junit.jupiter.api.BeforeEach
+    void initializeMapperMetadata() {
+        // Mock mappers do not bootstrap MyBatis; this test must not depend on another class running first.
+        com.baomidou.mybatisplus.core.metadata.TableInfoHelper.initTableInfo(
+                new org.apache.ibatis.builder.MapperBuilderAssistant(
+                        new com.baomidou.mybatisplus.core.MybatisConfiguration(), "async-submission"), AgentTask.class);
+    }
+
     @Test
     void triggerOnlyEnqueuesAndWorkerExecutesLater() {
         List<Runnable> queue = new ArrayList<>();

@@ -902,3 +902,5 @@ RT-05属追踪关联能力改善：循环开始先生成真实trace/root span，
 - 验证：`mvn -q -pl agent-service -am test`（JDK 21）通过，agent-service 96 例 0 失败。
 
 2026-10-15 / BUSINESS-INTEGRATION-20261015 补充：整合门禁发现Vue/server-renderer和source-map-js高危公告，选择兼容范围内修复锁文件并完整复跑前端，而不强制跨主版本升级开发工具。前端生产依赖审计已归零；以已通过Maven验证的JAR加官方JRE完成真实容器回归，明确区分运行镜像通过与生产多阶段源码镜像尚未构建完成。
+
+2026-10-15 / BUSINESS-INTEGRATION-20261015 CI修复：PR30首轮CI暴露AsyncSubmissionTest的隐式MyBatis缓存前置条件，单独执行在本机同样失败。选择在该测试BeforeEach建立元数据，不放宽QUEUE_FULL/FAILED/异步不执行等业务断言，不靠重跑碰运气或跳过测试。

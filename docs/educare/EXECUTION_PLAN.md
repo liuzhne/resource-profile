@@ -4,7 +4,7 @@
 >
 > **设计源**：`IMPROVEMENT_2026_MAY.md`（v1.1，2026-05-12 拍板）
 > **创建日期**：2026-05-13
-> **最近更新**：2026-10-15（JAVA-AI-MIGRATION-20261015：按用户确认扩展为全部Java运行时；真实Docker Redis/Milvus联调完成，修复成功码与读一致性；Java镜像下载受阻，生产退役及R-5/R-6仍待验收）
+> **最近更新**：2026-10-15（JAVA-AI-MIGRATION-20261015：按用户确认扩展为全部Java运行时；真实Docker Redis/Milvus联调完成，修复成功码与读一致性；生产多阶段镜像下载受阻、Java运行容器已通过，生产退役及R-5/R-6仍待验收）
 > **历史最近更新（内部鉴权）**：2026-09-14（**安全修复 INTERNAL-AUTH-20260914**：Render 上下游服务公网可达，「无 token = 内网」不成立 → 新增 `X-Internal-Token` 正向内部凭证 + common `ServiceAuthFilter` 服务入口门；`AccessGuard`/字段权限对匿名 fail-closed；网关剥头；preflight 硬门。全后端 222 例通过。见 §6 与 DECISIONS ADR-029；§1 指针不变，仍为 R-5.1）
 > **历史最近更新（R-1~R-4）**：2026-08-27（**R-1~R-4 完结**：JDK 17 Enforcer fail-fast；补 user/teacher 授权并将两控制器与 MCP token filter 纳入 ≥80% JaCoCo 门；Python 新增 RAG/upsert/MCP ASGI 集成测试；Redis/MCP 凭据改为生产硬门且 Redis requirepass/消费者接线闭环。全后端 177 例、Python 25 例通过；下一步 R-5 真 AI/可观测验收）
 > **历史最近更新（进度审计）**：2026-08-26（**进度审计（纯文档回写，零代码变更）**：对照本文件 §1-§11 与仓库实际产物逐项复核。确认完结面：Phase G/H/I/J 全部 `[x]` + 四阶段审查路线图（PROJECT_REVIEW_2026_06_10 §5.1-5.4）+ 安全增量（A3 MCP token 全链 client+8094+8095 / 8087 自鉴权 / 字段权限 list-page 漏脱敏修复 / backend-ci 测试门禁）+ 上线前工程化；产物在位核验通过：`.github/workflows/{backend-ci,eval-gate}.yml`、`docker/docker-compose.{prod,monitoring}.yml`、`scripts/preflight-prod.sh`、`backend/mcp-student-data` 与 `ai-inference-service/app/mcp/` 双端 server、`eval/run_eval.py`。剩余项收敛为三类——① 用户侧 e2e 实跑验证（GPU/Docker 环境）、② CI 覆盖率 % 门（唯一非环境依赖项）、③ Phase I 储备项 I-2/I-4/I-6 不排期）

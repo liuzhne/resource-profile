@@ -12,4 +12,6 @@
 
 **Java容器运行验收通过**：通过 `scripts/local-java-ai/Dockerfile` 将已经Maven验证的JAR打入官方Temurin21 JRE镜像。真实Docker Redis/Milvus/API/MCP从空合成库执行37检查全部通过；全部重启后12检查通过（重启未就绪窗口首次503，依赖就绪后再验通过）。镜像JAR与宿主机测试制品SHA256均为`633fd9ee87fb56d2ffac6aaec33420c3ee617d41e4a31cbfc272923de4453b78`。一次内存快照API288.6MiB、MCP246MiB，不当作容量/压测结论。完整生产多阶段Dockerfile仍因JDK基础层下载缓慢未完成，其构建验证不能由运行镜像替代。
 
-状态：本地验收已完成，整合分支待推送及PR CI；生产未手动部署，完整模型/PDF/反馈及Python线上退役仍待独立验收。
+状态：本地验收已完成，已推送并创建[PR30](https://github.com/liuzhne/resource-profile/pull/30)，合并状态以PR为准；生产未手动部署，完整模型/PDF/反馈及Python线上退役仍待独立验收。
+
+PR30首轮远端Java CI因AsyncSubmissionTest依赖其他测试类初始化MyBatis元数据而失败；本机单类执行已复现。已添加测试自身的BeforeEach初始化，保留原业务断言；修复后单类3项通过，全量clean verify 732项通过且JaCoCo门通过；远端复验见PR最新检查。
