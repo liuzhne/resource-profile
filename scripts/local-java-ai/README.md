@@ -26,3 +26,5 @@ python3 scripts/local-java-ai/smoke.py --output /tmp/rp-java-smoke.json
 ```
 
 重启 Redis/Milvus 和 Java 服务后执行 `smoke.py --persist` 验证持久化。停止时只操作上述测试项目；测试卷保留，重复从空库验证时才能删除本项目的合成测试卷。当前实际执行结果见 `docs/educare/LOCAL_JAVA_AI_TEST_20261015.md`。
+
+可用Maven已验证JAR构建运行测试镜像：`docker build -f scripts/local-java-ai/Dockerfile -t resource-profile-knowledge:local-migration-20261015 .`。该入口用于运行时验收，不能替代生产多阶段Dockerfile的源码构建验证。

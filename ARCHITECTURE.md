@@ -624,3 +624,5 @@ v1/v2验收未过已真实回滚，v3在loopback预览通过生产API后发布�
 ## 维护记录：AGENT-RUNNER-20261013（2026-10-13）
 
 agent-service 内部新增抽象层：`AgentTaskServiceImpl → AgentRunner（接口）→ AgentLoop（实现）`。服务边界、外部调用链与数据流不变。详见 DECISIONS.md 同标识条目。
+
+2026-10-15 / BUSINESS-INTEGRATION-20261015 补充：无业务边界变化：前端锁文件修复Vue/source-map-js的生产依赖漏洞；新增本地运行镜像验证入口（scripts/local-java-ai/Dockerfile），生产多阶段Dockerfile保持独立。Java容器运行已验证，生产多阶段源码镜像构建仍受JDK基础层下载限制。

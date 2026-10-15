@@ -6,4 +6,10 @@
 
 远端main新增AgentRunner和旧Python RAG缓存修复，须保留。六个其他未合并迁移PR不在本次自动合并范围。截图和原始JSON/CSV结果留本地，仅保留源代码、可复跑测试和叙述文档。
 
-状态：整合与PR CI待完成。Java标准镜像构建重试中，下载受网络限制；未声明完整容器验收或生产发布完成。
+整合后结果：全后端clean verify **732测试通过**；保留Python兼容实现的pytest **63通过、1可选Langfuse SDK跳过、9 subtests通过**。AgentTaskServiceImpl仍依赖AgentRunner，保留实际RAG快照落库；Python兼容缓存键同时包含语料revision和rerank开关，失败精排不缓存。
+
+前端生产依赖审计发现Vue/server-renderer与source-map-js高危公告，兼容更新锁文件（Vue3.5.44、source-map-js1.2.2及相关修复）；更新后npm ci、test、lint、build、size均通过，`npm audit --omit=dev --audit-level=high`为**0漏洞**。开发工具仍有审计提示，未为此强制升级ESLint等主版本。
+
+**Java容器运行验收通过**：通过 `scripts/local-java-ai/Dockerfile` 将已经Maven验证的JAR打入官方Temurin21 JRE镜像。真实Docker Redis/Milvus/API/MCP从空合成库执行37检查全部通过；全部重启后12检查通过（重启未就绪窗口首次503，依赖就绪后再验通过）。镜像JAR与宿主机测试制品SHA256均为`633fd9ee87fb56d2ffac6aaec33420c3ee617d41e4a31cbfc272923de4453b78`。一次内存快照API288.6MiB、MCP246MiB，不当作容量/压测结论。完整生产多阶段Dockerfile仍因JDK基础层下载缓慢未完成，其构建验证不能由运行镜像替代。
+
+状态：本地验收已完成，整合分支待推送及PR CI；生产未手动部署，完整模型/PDF/反馈及Python线上退役仍待独立验收。

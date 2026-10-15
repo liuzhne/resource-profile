@@ -900,3 +900,5 @@ RT-05属追踪关联能力改善：循环开始先生成真实trace/root span，
 - 放弃方案：直接迁 Spring AI Alibaba Graph（当前无流程类需求，收益不足）。
 - 约束：容器内只能有一个 `AgentRunner` bean；新增实现时需用 `@Primary`/`@Qualifier` 或配置开关选择。`SubAgentToolCallback` / `SubAgentRegistry` 也改为依赖 `AgentRunner`；`run(req)` 只保留接口默认方法。
 - 验证：`mvn -q -pl agent-service -am test`（JDK 21）通过，agent-service 96 例 0 失败。
+
+2026-10-15 / BUSINESS-INTEGRATION-20261015 补充：整合门禁发现Vue/server-renderer和source-map-js高危公告，选择兼容范围内修复锁文件并完整复跑前端，而不强制跨主版本升级开发工具。前端生产依赖审计已归零；以已通过Maven验证的JAR加官方JRE完成真实容器回归，明确区分运行镜像通过与生产多阶段源码镜像尚未构建完成。

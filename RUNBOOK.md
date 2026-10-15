@@ -1580,3 +1580,5 @@ docker compose -f scripts/local-java-ai/compose.yaml stop
 - 验证：`cd backend && mvn -q -pl agent-service -am test`（JDK 21），通过判据为 0 失败，含 `AgentRunnerContractTest`。
 - 排错：启动报 `expected single matching bean of type AgentRunner` 说明出现了第二个实现，需指定 `@Primary` 或 `@Qualifier`。
 - 回滚：回退本提交即可，无配置或数据变更。
+
+2026-10-15 / BUSINESS-INTEGRATION-20261015 补充：补充已执行结果：整合后732 Java回归、63 Python兼容测试（1可选SDK跳过）通过；修复前端锁文件后test/lint/build/size及生产依赖audit（0漏洞）通过。运行镜像验证命令：`docker build -f scripts/local-java-ai/Dockerfile -t resource-profile-knowledge:local-migration-20261015 .`（先执行JDK21 Maven verify）；37容器检查、12重启检查通过。重启时先等Milvus就绪，启动窗口503不是持久化失败。生产多阶段Dockerfile的源码构建仍待网络恢复后单独验证。

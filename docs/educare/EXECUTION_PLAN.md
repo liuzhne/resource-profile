@@ -47,7 +47,7 @@
 
 ## 1. 下一步指针（Next Action）
 
-**2026-10-15 最新指针**：按用户明确授权执行全部 Java 化；本轮源码/本地回归见 [JAVA-AI-MIGRATION-20261015](./JAVA_AI_MIGRATION_20261015.md)。真实Redis/Milvus与宿主机Java联调已通过（见[本地测试报告](./LOCAL_JAVA_AI_TEST_20261015.md)）；下一步完成受镜像下载阻塞的Java容器构建/运行，再执行 R-5.2~5.4/R-6；已有生产 JSON_GENERATION400 与 B-2 不因重构自动解除。下方10月11/13指针保留作历史运行证据，Python优先扩展政策已被本次用户选择取代。
+**2026-10-15 最新指针**：按用户明确授权执行全部 Java 化；本轮源码/本地回归见 [JAVA-AI-MIGRATION-20261015](./JAVA_AI_MIGRATION_20261015.md)。真实Redis/Milvus与宿主机Java联调已通过（见[本地测试报告](./LOCAL_JAVA_AI_TEST_20261015.md)）；Java运行镜像37项检查及12项重启检查已通过；下一步完成受JDK基础层下载阻塞的生产多阶段镜像源码构建，再执行 R-5.2~5.4/R-6；已有生产 JSON_GENERATION400 与 B-2 不因重构自动解除。下方10月11/13指针保留作历史运行证据，Python优先扩展政策已被本次用户选择取代。
 
 - [x] **JVM-1 生成与审核迁移**：Spring AI plan/audit/兼容risk，严格输出与最小元信息，保留失败拒绝。
   - 完成于 2026-10-15：AgentGenerationService、内部鉴权生成端点及回归已落地。
@@ -57,6 +57,8 @@
   - 完成于 2026-10-15：默认运行包排除旧Python源码；Python仅用于运维/eval与历史对照，未改线上工作负载。
 - [x] **JVM-4a 本地真实依赖联调**：宿主机Java21连接隔离Docker Redis/Milvus，模型为本地协议桩。
   - 完成于 2026-10-15：27项Java回归、37项完整HTTP/MCP检查、12项重启持久化检查及两项依赖故障503通过；修复Milvus2.4.1成功码与REST有界一致性。Java镜像构建因基础层下载截断未完成，不能替代全容器/真实模型验收。[报告](./LOCAL_JAVA_AI_TEST_20261015.md)。
+- [x] **JVM-4b Java运行容器验收**：已验证JAR + 官方JRE21，真实Redis/Milvus/API/MCP全容器联调。
+  - 完成于 2026-10-15：37完整检查与12重启检查通过，容器/本机JAR哈希一致；整合后732后端测试通过，前端安全锁文件更新后全套验证与生产依赖0漏洞通过。生产多阶段源码构建仍受网络限制。[整合报告](./BUSINESS_INTEGRATION_20261015.md)。
 - [ ] **JVM-4 生产退役验收**：真实Milvus/RAG持久化、镜像构建、JVM资源、全链Agent/PDF/反馈，确认线上两个旧Python进程被Java替换并保留回滚证据。
 
 
@@ -428,6 +430,7 @@ H-4 (ModelRouter) ──► H-2 (Loop 选模型)
 
 | 日期 | 变更 | 原因 |
 |------|------|------|
+| 2026-10-15 | BUSINESS-INTEGRATION-20261015：整合全部授权业务改动及远端AgentRunner/缓存修复，修复前端依赖漏洞，排除私密与原始测试产物 | 732后端 + 63Python兼容通过（1可选跳过）；前端全套通过/生产依赖0漏洞；37容器+12重启通过，生产源码镜像下载仍受限 |
 | 2026-10-15 | LOCAL-JAVA-AI-TEST-20261015：真实Docker依赖联调、成功码兼容和SDK强一致性读取；三根文档同步 | 27 Java回归 + 37 HTTP/MCP + 12重启检查及Redis/Milvus故障503；Java镜像下载失败，生产未变，JVM-4/R-5/R-6/B-2仍待验收 |
 | 2026-10-15 | JAVA-AI-MIGRATION-20261015：Spring AI生成/审核与Java knowledge-service承接RAG/导入/MCP；构建、部署、打包、CI和三根文档同步，JVM-1~3完成 | 用户明确全部Java化；全后端首轮724通过，最终受影响模块486通过、当前汇总728无失败；部署32项通过，真实Milvus/容器/生产退役待JVM-4，不勾R-5/R-6/B-2 |
 | 2026-10-11 | GROQ-SCHEMA-FIX-20261011：两次授权协议诊断复现strict schema400，展平action工具分支及固定400/nullcode分类；387后端回归、Agent v3部署/实际JAR核验及17/17只读复验通过，三根文档同步 | 用户明确授权MCP/system诊断；最小结构修复后真实200且输出schema有效，无学生资料/工具执行/新业务任务。完整学生/trace/PDF仍待具体资料授权，R-5/R-6/B-2不勾选 |
